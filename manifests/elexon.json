@@ -1,0 +1,69 @@
+{
+  "toolkit": {
+    "id": "elexon",
+    "name": "Elexon Insights",
+    "description": "Public GB grid generation, demand and forecast datasets.",
+    "runtime": "http",
+    "status": "stable",
+    "auth_required": false,
+    "docs_url": "https://developer.data.elexon.co.uk/"
+  },
+  "tools": [
+    {
+      "name": "elexon.get_grid_data",
+      "toolkit": "elexon",
+      "description": "Read public Elexon Insights generation, demand or forecast datasets in MW.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "enum": [
+              "FUELHH",
+              "FUELINST",
+              "INDDEM",
+              "INDGEN",
+              "INDO",
+              "NDF",
+              "NDFD",
+              "TSDF",
+              "TSDFD",
+              "WINDFOR"
+            ],
+            "default": "FUELHH"
+          },
+          "start": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "end": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "fuel_type": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_generation",
+        "get_current_power",
+        "grid",
+        "generation",
+        "demand",
+        "forecast",
+        "MW"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true
+    }
+  ]
+}

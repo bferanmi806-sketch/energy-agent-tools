@@ -1,0 +1,59 @@
+{
+  "toolkit": {
+    "id": "csv",
+    "name": "Local energy CSV",
+    "description": "Read operator-approved CSV files with declared semantics",
+    "runtime": "native",
+    "status": "stable",
+    "auth_required": false,
+    "docs_url": null
+  },
+  "tools": [
+    {
+      "name": "CSV_READ_TIMESERIES",
+      "toolkit": "csv",
+      "description": "Import local meter consumption, PV, battery, tariff or building telemetry CSV.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "metered",
+              "calculated",
+              "estimated",
+              "simulated",
+              "forecast"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "kind",
+          "unit",
+          "timezone"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_energy_consumption",
+        "get_generation",
+        "get_storage_state",
+        "import_timeseries"
+      ],
+      "actions": [
+        "read-only"
+      ],
+      "idempotent": true
+    }
+  ]
+}

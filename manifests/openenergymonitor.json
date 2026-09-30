@@ -1,0 +1,62 @@
+{
+  "toolkit": {
+    "id": "openenergymonitor",
+    "name": "OpenEnergyMonitor",
+    "description": "Read Emoncms feed values and time-series data.",
+    "runtime": "http",
+    "status": "requires credentials",
+    "auth_required": true,
+    "docs_url": "https://openenergymonitor.org/docs/emoncms/feed.html"
+  },
+  "tools": [
+    {
+      "name": "openenergymonitor.get_feed",
+      "toolkit": "openenergymonitor",
+      "description": "Read an OpenEnergyMonitor Emoncms feed value or bounded time series.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "feed_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "start": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "end": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "interval": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400,
+            "default": 60
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_current_power",
+        "get_energy_consumption",
+        "get_generation",
+        "get_storage_state",
+        "telemetry",
+        "feed",
+        "consumption",
+        "generation",
+        "time series"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true
+    }
+  ]
+}

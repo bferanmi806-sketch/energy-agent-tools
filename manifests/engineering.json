@@ -1,0 +1,767 @@
+{
+  "toolkit": {
+    "id": "engineering",
+    "name": "Energy Engineering",
+    "description": "Local pvlib, pandapower, and native engineering calculations",
+    "runtime": "python",
+    "status": "experimental",
+    "auth_required": false,
+    "docs_url": null
+  },
+  "tools": [
+    {
+      "name": "engineering.estimate_solar_generation",
+      "toolkit": "engineering",
+      "description": "Estimate fixed-tilt PV AC output from timezone-aware irradiance and weather rows",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "elevation_m": {
+            "type": "number",
+            "minimum": -500,
+            "maximum": 10000
+          },
+          "surface_tilt_deg": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 180
+          },
+          "surface_azimuth_deg": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 360
+          },
+          "dc_capacity_kw": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "inverter_capacity_kw": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "weather_source": {
+            "type": "string"
+          },
+          "weather_kind": {
+            "enum": [
+              "metered",
+              "calculated",
+              "estimated",
+              "simulated",
+              "forecast"
+            ]
+          },
+          "albedo": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "losses_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "gamma_pdc_per_c": {
+            "type": "number",
+            "maximum": 0
+          },
+          "interval_hours": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "weather_rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "ghi_w_m2": {
+                  "type": "number"
+                },
+                "ghi": {
+                  "type": "number"
+                },
+                "dni_w_m2": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "dni": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "dhi_w_m2": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "dhi": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "temp_air_c": {
+                  "type": "number"
+                },
+                "temperature_c": {
+                  "type": "number"
+                },
+                "temp_cell_c": {
+                  "type": "number"
+                },
+                "wind_speed_m_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "duration_hours": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "timestamp"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 10000
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "ghi_w_m2": {
+                  "type": "number"
+                },
+                "ghi": {
+                  "type": "number"
+                },
+                "dni_w_m2": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "dni": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "dhi_w_m2": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "dhi": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "temp_air_c": {
+                  "type": "number"
+                },
+                "temperature_c": {
+                  "type": "number"
+                },
+                "temp_cell_c": {
+                  "type": "number"
+                },
+                "wind_speed_m_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "duration_hours": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "timestamp"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 10000
+          },
+          "timestamps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "maxItems": 10000
+          },
+          "irradiance": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 10000
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "timezone",
+          "dc_capacity_kw"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "solar generation",
+        "PV estimate",
+        "pvlib",
+        "irradiance",
+        "weather",
+        "estimate_solar_generation"
+      ],
+      "actions": [
+        "simulation",
+        "calculation"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "engineering.run_power_flow",
+      "toolkit": "engineering",
+      "description": "Run an AC power flow on explicit buses, lines, loads, generators, and external grids",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "network": {
+            "type": "object",
+            "properties": {
+              "sn_mva": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "f_hz": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "buses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "vn_kv": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "vn_kv"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 500
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "from_bus": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "to_bus": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "length_km": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "r_ohm_per_km": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "x_ohm_per_km": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "c_nf_per_km": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "max_i_ka": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "max_loading_percent": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "from_bus",
+                    "to_bus",
+                    "length_km",
+                    "r_ohm_per_km",
+                    "x_ohm_per_km"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 2000
+              },
+              "loads": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "bus": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "p_mw": {
+                      "type": "number"
+                    },
+                    "q_mvar": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "bus",
+                    "p_mw"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 5000
+              },
+              "ext_grid": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "bus": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "vm_pu": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "va_degree": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "bus"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 32
+              },
+              "external_grids": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "bus": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "vm_pu": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "va_degree": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "bus"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 32
+              },
+              "slack_bus": {
+                "type": [
+                  "string",
+                  "integer"
+                ]
+              },
+              "generators": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "bus": {
+                      "type": [
+                        "string",
+                        "integer"
+                      ]
+                    },
+                    "p_mw": {
+                      "type": "number"
+                    },
+                    "vm_pu": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "q_mvar": {
+                      "type": "number"
+                    },
+                    "min_q_mvar": {
+                      "type": "number"
+                    },
+                    "max_q_mvar": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "bus",
+                    "p_mw"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 5000
+              }
+            },
+            "required": [
+              "buses"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "power flow",
+        "AC network",
+        "pandapower",
+        "voltage",
+        "line losses",
+        "run_power_flow",
+        "run_simulation"
+      ],
+      "actions": [
+        "simulation"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "engineering.calculate_heat_loss",
+      "toolkit": "engineering",
+      "description": "Calculate steady-state envelope, ventilation, and thermal-bridge heat loss",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "area_m2": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "u_value_w_m2k": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "area_m2",
+                "u_value_w_m2k"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1
+          },
+          "geometry": {
+            "type": "object"
+          },
+          "indoor_temp_c": {
+            "type": "number"
+          },
+          "outdoor_temp_c": {
+            "type": "number"
+          },
+          "volume_m3": {
+            "type": "number",
+            "minimum": 0
+          },
+          "air_changes_per_hour": {
+            "type": "number",
+            "minimum": 0
+          },
+          "heat_recovery_efficiency": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "thermal_bridge_w_per_k": {
+            "type": "number",
+            "minimum": 0
+          },
+          "internal_gains_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "solar_gains_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "duration_hours": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "design_margin_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "indoor_temp_c",
+          "outdoor_temp_c"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "heat loss",
+        "building physics",
+        "HVAC sizing",
+        "thermal",
+        "perform_engineering_calculation"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "engineering.schedule_battery_charging",
+      "toolkit": "engineering",
+      "description": "Optimize a feasible battery charge and discharge schedule against price or carbon",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "intervals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "duration_hours": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "load_kw": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "pv_kw": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "price_per_kwh": {
+                  "type": "number"
+                },
+                "export_price_per_kwh": {
+                  "type": "number"
+                },
+                "carbon_intensity_g_per_kwh": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "timestamp",
+                "duration_hours",
+                "load_kw",
+                "pv_kw",
+                "price_per_kwh"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 672
+          },
+          "battery": {
+            "type": "object",
+            "properties": {
+              "capacity_kwh": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "initial_soc_kwh": {
+                "type": "number",
+                "minimum": 0
+              },
+              "min_soc_kwh": {
+                "type": "number",
+                "minimum": 0
+              },
+              "max_charge_kw": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "max_discharge_kw": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "charge_efficiency": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "discharge_efficiency": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "target_final_soc_kwh": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "capacity_kwh",
+              "initial_soc_kwh",
+              "max_charge_kw",
+              "max_discharge_kw"
+            ],
+            "additionalProperties": false
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "objective": {
+            "enum": [
+              "cost",
+              "carbon",
+              "cost_and_carbon"
+            ]
+          },
+          "carbon_price_gbp_per_tonne": {
+            "type": "number",
+            "minimum": 0
+          },
+          "carbon_weight": {
+            "type": "number",
+            "minimum": 0
+          },
+          "allow_grid_charging": {
+            "type": "boolean"
+          },
+          "allow_grid_export": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "intervals",
+          "battery"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "battery",
+        "charging schedule",
+        "tariff optimization",
+        "carbon optimization",
+        "storage",
+        "plan_battery_charging",
+        "perform_engineering_calculation"
+      ],
+      "actions": [
+        "simulation",
+        "calculation"
+      ],
+      "idempotent": true
+    }
+  ]
+}

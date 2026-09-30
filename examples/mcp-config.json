@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "energy-agent-tools": {
+      "command": "uv",
+      "args": ["--directory", "/absolute/path/to/energy-agent-tools", "run", "energy-agent", "serve", "--config", "examples/config.json"]
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "toolkit": {
+    "id": "octopus-energy-account",
+    "name": "Octopus Energy Account",
+    "description": "Octopus smart meter consumption for a connected account.",
+    "runtime": "http",
+    "status": "requires credentials",
+    "auth_required": true,
+    "docs_url": "https://docs.octopus.energy/rest/guides/endpoints/"
+  },
+  "tools": [
+    {
+      "name": "octopus_energy.get_consumption",
+      "toolkit": "octopus-energy-account",
+      "description": "Read Octopus electricity meter consumption using meter identifiers from the connected account.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "end": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2500,
+            "default": 2500
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_energy_consumption",
+        "consumption",
+        "meter",
+        "smart meter",
+        "electricity"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true
+    }
+  ]
+}

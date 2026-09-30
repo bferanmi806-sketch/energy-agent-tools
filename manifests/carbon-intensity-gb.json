@@ -1,0 +1,61 @@
+{
+  "toolkit": {
+    "id": "carbon-intensity-gb",
+    "name": "Carbon Intensity GB",
+    "description": "NESO Great Britain carbon intensity actuals and forecasts.",
+    "runtime": "http",
+    "status": "stable",
+    "auth_required": false,
+    "docs_url": "https://api.carbonintensity.org.uk/"
+  },
+  "tools": [
+    {
+      "name": "carbon_intensity_gb.get_intensity",
+      "toolkit": "carbon-intensity-gb",
+      "description": "Get current or historical Great Britain carbon intensity, including actual and forecast rows.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "end": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "horizon_hours": {
+            "type": "integer",
+            "enum": [
+              24,
+              48
+            ],
+            "default": 24
+          },
+          "region_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 17
+          },
+          "postcode": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_carbon_intensity",
+        "carbon intensity",
+        "forecast",
+        "generation mix",
+        "GB grid"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true
+    }
+  ]
+}

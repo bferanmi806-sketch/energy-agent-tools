@@ -1,0 +1,83 @@
+{
+  "toolkit": {
+    "id": "home-assistant",
+    "name": "Home Assistant",
+    "description": "Read Home Assistant entity telemetry and history.",
+    "runtime": "http",
+    "status": "requires credentials",
+    "auth_required": true,
+    "docs_url": "https://developers.home-assistant.io/docs/api/rest/"
+  },
+  "tools": [
+    {
+      "name": "home_assistant.get_state",
+      "toolkit": "home-assistant",
+      "description": "Read one Home Assistant entity state and its measurement attributes.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity_id"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_current_power",
+        "telemetry",
+        "home",
+        "building",
+        "sensor"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "home_assistant.get_history",
+      "toolkit": "home-assistant",
+      "description": "Read Home Assistant historical state changes for one entity and a bounded UTC range.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "end": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          }
+        },
+        "required": [
+          "entity_id",
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_energy_consumption",
+        "get_generation",
+        "get_storage_state",
+        "telemetry",
+        "history",
+        "time series",
+        "building"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true
+    }
+  ]
+}

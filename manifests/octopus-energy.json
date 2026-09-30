@@ -1,0 +1,57 @@
+{
+  "toolkit": {
+    "id": "octopus-energy",
+    "name": "Octopus Energy",
+    "description": "Octopus smart meter consumption and published electricity tariffs.",
+    "runtime": "http",
+    "status": "stable",
+    "auth_required": false,
+    "docs_url": "https://docs.octopus.energy/rest/guides/endpoints/"
+  },
+  "tools": [
+    {
+      "name": "octopus_energy.get_tariffs",
+      "toolkit": "octopus-energy",
+      "description": "Read Octopus published electricity unit rates using product and tariff settings.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "product_code": {
+            "type": "string"
+          },
+          "tariff_code": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "end": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2500,
+            "default": 2500
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_tariff",
+        "tariff",
+        "price",
+        "electricity",
+        "time of use"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true
+    }
+  ]
+}

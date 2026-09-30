@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "energy-agent-tools"
+version = "0.1.0"
+description = "A self-hostable, search-first gateway to energy data and engineering tools"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "pydantic>=2.10,<3",
+    "httpx>=0.28,<1",
+    "mcp>=1.26,<2",
+    "jsonschema>=4.23,<5",
+    "pandas>=2.2,<3",
+    'cryptography>=43,<46; sys_platform == "darwin" and platform_machine == "x86_64"',
+]
+
+[project.optional-dependencies]
+engineering = ["pvlib>=0.13,<0.17", "pandapower>=3.1,<4"]
+dev = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "ruff>=0.11", "mypy>=1.15", "types-jsonschema", "pandas-stubs", "build"]
+
+[project.urls]
+Repository = "https://github.com/bferanmi806-sketch/energy-agent-tools"
+Issues = "https://github.com/bferanmi806-sketch/energy-agent-tools/issues"
+Documentation = "https://github.com/bferanmi806-sketch/energy-agent-tools/tree/main/docs"
+
+[project.scripts]
+energy-agent = "energy_agent_tools.cli:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/energy_agent_tools"]
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/energy_agent_tools"]

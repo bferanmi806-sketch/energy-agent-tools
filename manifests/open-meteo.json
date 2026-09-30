@@ -1,0 +1,71 @@
+{
+  "toolkit": {
+    "id": "open-meteo",
+    "name": "Open-Meteo",
+    "description": "Hourly weather and solar radiation forecasts.",
+    "runtime": "http",
+    "status": "stable",
+    "auth_required": false,
+    "docs_url": "https://open-meteo.com/en/docs"
+  },
+  "tools": [
+    {
+      "name": "open_meteo.get_forecast",
+      "toolkit": "open-meteo",
+      "description": "Get hourly weather and solar radiation forecast values for a latitude and longitude.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "start": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "end": {
+            "type": "string",
+            "description": "UTC offset-aware ISO timestamp."
+          },
+          "forecast_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16,
+            "default": 1
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_weather",
+        "weather",
+        "solar radiation",
+        "forecast",
+        "wind",
+        "temperature"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true
+    }
+  ]
+}

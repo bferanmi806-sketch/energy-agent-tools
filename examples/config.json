@@ -1,0 +1,8 @@
+{
+  "user_id": "local",
+  "site_id": "home",
+  "data_root": "examples/data",
+  "sites": [{"id": "home", "user_id": "local", "name": "Home", "timezone": "Europe/London", "latitude": 51.5, "longitude": -0.12}],
+  "assets": [{"id": "meter", "site_id": "home", "kind": "meter", "name": "Electricity meter"}],
+  "accounts": []
+}

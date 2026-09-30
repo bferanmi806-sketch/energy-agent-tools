@@ -1,0 +1,205 @@
+{
+  "toolkit": {
+    "id": "workbench",
+    "name": "Local workbench",
+    "description": "Private time-series artifact analysis",
+    "runtime": "native",
+    "status": "stable",
+    "auth_required": false,
+    "docs_url": null
+  },
+  "tools": [
+    {
+      "name": "WORKBENCH_SUMMARIZE",
+      "toolkit": "workbench",
+      "description": "Summarize interval energy consumption, weather, tariff or carbon time series locally.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "artifact_id",
+          "column"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "analyse_timeseries",
+        "get_energy_consumption"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "WORKBENCH_RESAMPLE",
+      "toolkit": "workbench",
+      "description": "Aggregate or resample energy/weather series in its local timezone with explicit DST offsets.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1
+          },
+          "frequency": {
+            "enum": [
+              "15min",
+              "30min",
+              "1h",
+              "1D"
+            ]
+          },
+          "aggregation": {
+            "enum": [
+              "sum",
+              "mean"
+            ]
+          }
+        },
+        "required": [
+          "artifact_id",
+          "timestamp",
+          "column",
+          "frequency",
+          "aggregation"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "analyse_timeseries"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "WORKBENCH_PIVOT",
+      "toolkit": "workbench",
+      "description": "Pivot long-form weather/telemetry into one row per timestamp with separate variable columns.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1
+          },
+          "variable": {
+            "type": "string",
+            "minLength": 1
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "artifact_id",
+          "timestamp",
+          "variable",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "analyse_timeseries"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "WORKBENCH_JOIN",
+      "toolkit": "workbench",
+      "description": "Compare consumption against weather and tariff data by exact UTC timestamp join.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "left": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "right": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "left",
+          "right",
+          "timestamp"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "compare_energy_data"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true
+    },
+    {
+      "name": "WORKBENCH_ANOMALY",
+      "toolkit": "workbench",
+      "description": "Investigate abnormal building consumption spike using robust statistical anomaly screening.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1
+          },
+          "threshold": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 20
+          }
+        },
+        "required": [
+          "artifact_id",
+          "column"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "detect_anomaly"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true
+    }
+  ]
+}
