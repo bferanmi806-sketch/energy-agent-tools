@@ -312,9 +312,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the local energy benchmark MCP fixture")
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--state-dir", type=Path, required=True)
+    parser.add_argument("--scenario")
     args = parser.parse_args()
-    agent = build_fixture_agent(args.root.resolve(), args.state_dir.resolve())
-    session = agent.session(FIXTURE_USER, FIXTURE_SITE)
+    if args.scenario:
+        from .environments import build_environment
+
+        built = build_environment(args.scenario, args.root.resolve(), args.state_dir.resolve())
+        agent = built.agent
+        session = agent.session(built.context.user_id, built.context.site_id)
+    else:
+        agent = build_fixture_agent(args.root.resolve(), args.state_dir.resolve())
+        session = agent.session(FIXTURE_USER, FIXTURE_SITE)
     create_server(agent, session).run(transport="stdio")
 
 

@@ -35,7 +35,9 @@ def test_qualified_set_is_explicit_and_does_not_promote_scenarios() -> None:
 
 def test_unsupported_and_heldout_cases_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(EnvironmentUnavailable):
-        build_environment("holdout_consumption_provider_swap", tmp_path / "root", tmp_path / "state")
+        build_environment(
+            "holdout_consumption_provider_swap", tmp_path / "root", tmp_path / "state"
+        )
     with pytest.raises(EnvironmentUnavailable):
         build_environment("dev_tariff_pence_to_gbp", tmp_path / "root", tmp_path / "state")
     with pytest.raises(EnvironmentUnavailable):
@@ -44,9 +46,7 @@ def test_unsupported_and_heldout_cases_fail_closed(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_daily_csv_is_complete_and_sums_42_5_kwh(tmp_path: Path) -> None:
-    built = build_environment(
-        "dev_consumption_daily_csv", tmp_path / "root", tmp_path / "state"
-    )
+    built = build_environment("dev_consumption_daily_csv", tmp_path / "root", tmp_path / "state")
     try:
         context = built.context
         assert context.timezone == "Europe/London"
@@ -92,9 +92,7 @@ async def test_daily_csv_is_complete_and_sums_42_5_kwh(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_current_power_uses_fresh_home_assistant_state_in_kw(tmp_path: Path) -> None:
-    built = build_environment(
-        "dev_current_power_snapshot", tmp_path / "root", tmp_path / "state"
-    )
+    built = build_environment("dev_current_power_snapshot", tmp_path / "root", tmp_path / "state")
     try:
         context = built.context
         session = built.agent.session(context.user_id, context.site_id)
@@ -125,9 +123,7 @@ async def test_current_power_uses_fresh_home_assistant_state_in_kw(tmp_path: Pat
 
 @pytest.mark.asyncio
 async def test_octopus_adapter_and_workbench_report_six_missing_intervals(tmp_path: Path) -> None:
-    built = build_environment(
-        "dev_consumption_interval_gap", tmp_path / "root", tmp_path / "state"
-    )
+    built = build_environment("dev_consumption_interval_gap", tmp_path / "root", tmp_path / "state")
     try:
         context = built.context
         session = built.agent.session(context.user_id, context.site_id)
@@ -173,9 +169,7 @@ async def test_octopus_adapter_and_workbench_report_six_missing_intervals(tmp_pa
 
 @pytest.mark.asyncio
 async def test_two_octopus_accounts_are_ambiguous_until_asset_selected(tmp_path: Path) -> None:
-    built = build_environment(
-        "dev_two_account_selection", tmp_path / "root", tmp_path / "state"
-    )
+    built = build_environment("dev_two_account_selection", tmp_path / "root", tmp_path / "state")
     try:
         context = built.context
         session = built.agent.session(context.user_id, context.site_id)

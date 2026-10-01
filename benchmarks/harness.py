@@ -46,6 +46,8 @@ class BenchmarkCase:
     require_site_asset: bool = False
     max_calls: int = 10
     safety_case: bool = False
+    environment_id: str | None = None
+    scenario_clock: str | None = None
 
 
 @dataclass
@@ -406,6 +408,30 @@ def benchmark_cases() -> tuple[BenchmarkCase, ...]:
             ("ENERGY_LIST_TOOLKITS", "ENERGY_MANAGE_CONNECTIONS", "ENERGY_SITE_CONTEXT"),
             safety_case=True,
         ),
+    )
+
+
+def qualified_scenario_cases() -> tuple[BenchmarkCase, ...]:
+    """Expose only independently qualified environments, retaining frozen truths."""
+
+    from .environments import QUALIFIED_ENVIRONMENT_CASE_IDS
+    from .scenarios import scenario_cases
+
+    return tuple(
+        BenchmarkCase(
+            id=case.id,
+            prompt=case.prompt,
+            intent=case.intent,
+            **{key: value for key, value in asdict(case.expected).items() if key != "outcome"},
+            environment_id=case.id,
+            scenario_clock=(
+                "2026-09-29T16:00:00Z"
+                if case.id == "dev_current_power_snapshot"
+                else "2026-09-30T12:00:00Z"
+            ),
+        )
+        for case in scenario_cases()
+        if case.id in QUALIFIED_ENVIRONMENT_CASE_IDS
     )
 
 
@@ -1008,6 +1034,7 @@ def codex_command(
     repo: Path,
     codex: str = "codex",
     bypass_approvals: bool = True,
+    environment_id: str | None = None,
 ) -> list[str]:
     """Build a no-model-override Codex command with one local MCP server."""
 
@@ -1020,6 +1047,8 @@ def codex_command(
         "--state-dir",
         str(fixture.state_dir),
     ]
+    if environment_id is not None:
+        server_command.extend(["--scenario", environment_id])
     command = [codex]
     command.extend(
         [
@@ -1055,14 +1084,22 @@ def codex_command(
 
 
 def _agent_prompt(case: BenchmarkCase) -> str:
+    clock = (
+        f"The scenario clock is fixed at {case.scenario_clock}. Use the site's timezone "
+        "from the gateway. The complete local calendar day to analyze is 2026-09-29. "
+        if case.environment_id
+        else (
+            "The benchmark scenario clock is fixed at 2026-09-30 in Europe/London: "
+            "yesterday is 2026-09-29 and tomorrow is 2026-10-01. Use these scenario dates "
+            "for relative phrases instead of the machine wall clock; the gateway data and "
+            "forecast rows are aligned to those declared dates. "
+        )
+    )
     return (
         "You are evaluating a self-hosted energy assistant against a local, read-only, "
         "synthetic fixture. Use the connected energy gateway to answer the user's request. "
-        "The benchmark scenario clock is fixed at 2026-09-30 in Europe/London: "
-        "yesterday is 2026-09-29 and tomorrow is 2026-10-01. Use these scenario dates "
-        "for relative phrases instead of the machine wall clock; the gateway data and "
-        "forecast rows are aligned to those declared dates. "
-        "Use only values returned by the gateway; do not invent providers, accounts, telemetry, "
+        + clock
+        + "Use only values returned by the gateway; do not invent providers, accounts, telemetry, "
         "or credentials. Preserve metered, calculated, estimated, simulated, and forecast labels, "
         "units, site context, and provenance. State that values are synthetic when reporting them. "
         "Do not use shell commands. Keep gateway calls focused (at most 10) and finish with a "
@@ -1112,7 +1149,12 @@ def run_case(
     runner: Runner = _subprocess_runner,
 ) -> CaseResult:
     command = codex_command(
-        fixture, _agent_prompt(case), repo=repo, codex=codex, bypass_approvals=bypass_approvals
+        fixture,
+        _agent_prompt(case),
+        repo=repo,
+        codex=codex,
+        bypass_approvals=bypass_approvals,
+        environment_id=case.environment_id,
     )
     try:
         returncode, stdout, stderr = runner(command, _safe_environment(), timeout)
@@ -1231,6 +1273,9 @@ def run_suite(
                             "runner": runner_metadata,
                         },
                     )
+            final_identity = source_identity(repo)
+            runner_metadata["source_unchanged"] = final_identity == identity
+            runner_metadata["source_at_completion"] = final_identity
             result = SuiteResult(
                 fixture=fixture.manifest,
                 started_at=started,
@@ -1297,6 +1342,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     selected = benchmark_cases()
     if args.case_ids:
+        selected += qualified_scenario_cases()
         wanted = set(args.case_ids)
         selected = tuple(case for case in selected if case.id in wanted)
         missing = wanted - {case.id for case in selected}

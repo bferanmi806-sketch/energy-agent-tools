@@ -248,7 +248,9 @@ def _mock_transport(case_id: str, context: ScenarioContext) -> httpx.MockTranspo
         path = request.url.path
         if case_id == "dev_current_power_snapshot":
             if not request.headers.get("authorization", "").startswith("Bearer "):
-                return httpx.Response(401, json={"message": "authentication required"}, request=request)
+                return httpx.Response(
+                    401, json={"message": "authentication required"}, request=request
+                )
             if path == "/api/states/sensor.school_power":
                 sampled_at = context.scenario_clock - timedelta(seconds=45)
                 return httpx.Response(
@@ -267,7 +269,9 @@ def _mock_transport(case_id: str, context: ScenarioContext) -> httpx.MockTranspo
         if case_id in {"dev_consumption_interval_gap", "dev_two_account_selection"}:
             if request.url.host == "api.octopus.energy" and path.endswith("/consumption/"):
                 if not request.headers.get("authorization", "").startswith("Basic "):
-                    return httpx.Response(401, json={"message": "authentication required"}, request=request)
+                    return httpx.Response(
+                        401, json={"message": "authentication required"}, request=request
+                    )
                 if case_id == "dev_two_account_selection":
                     amount = 1.0 if "MPAN-HOME" in path else 2.0
                     start = _local_slots(context)[0]
@@ -285,7 +289,9 @@ def _mock_transport(case_id: str, context: ScenarioContext) -> httpx.MockTranspo
                     json={"results": rows, "next": None},
                     request=request,
                 )
-        return httpx.Response(404, json={"message": "fixture route not configured"}, request=request)
+        return httpx.Response(
+            404, json={"message": "fixture route not configured"}, request=request
+        )
 
     return httpx.MockTransport(handler)
 

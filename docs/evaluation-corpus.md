@@ -1,9 +1,9 @@
 # Energy Agent Tools evaluation corpus
 
 This directory adds a reviewed scenario corpus for the next evaluation
-milestone. It is intentionally separate from `benchmarks/harness.py` and the
-existing synthetic fixture so that a larger task set can be reviewed before it
-is connected to live-model execution.
+milestone. The frozen corpus stays separate from execution readiness. The runner now
+accepts four additional development cases through independently checked
+environments, without rewriting their expected truths or touching held-out cases.
 
 The corpus currently contains 141 distinct scenarios:
 
@@ -123,3 +123,33 @@ corresponding fixture per `environment_requirements`, translate
 `harness_kwargs()` to `BenchmarkCase`, and retain the corpus metadata beside
 the model transcript. A pending case must not be counted as a pass, fail, or
 partial result merely because its prompt resembles an executable case.
+
+## Qualified development environments
+
+`benchmarks/environments.py` builds four production-runtime environments with
+local provider-shaped HTTP responses and encrypted fixture credentials:
+
+* `dev_consumption_daily_csv`: 48 half-hour readings totaling 42.5 kWh.
+* `dev_current_power_snapshot`: a Home Assistant reading of 12.75 kW, 45 seconds old.
+* `dev_consumption_interval_gap`: Octopus consumption with six missing half-hour intervals.
+* `dev_two_account_selection`: two Octopus accounts with distinct home and annex assets.
+
+The qualification registry is explicit. The original corpus status stays
+pending, so an export cannot silently count environment tests as actual agent
+results. `qualified_scenario_cases()` exposes only these checked environments
+to the live runner and copies every original scoring field unchanged.
+
+```sh
+python -m benchmarks.harness --repo . --output evaluation-run \
+  --case dev_consumption_daily_csv \
+  --case dev_current_power_snapshot \
+  --case dev_consumption_interval_gap \
+  --case dev_two_account_selection --timeout 180
+```
+
+The MCP subprocess receives the selected environment and its scoped user/site.
+Its clock matches the prompt, including the current-power snapshot. Use an
+immutable checkout for recorded runs. The report compares source identity at
+start and completion and records `source_unchanged`; a changed source must not
+be treated as a qualified release run. Provider responses here are fixtures,
+not evidence of an installed physical meter.

@@ -445,3 +445,28 @@ def test_source_identity_hashes_dirty_source_paths(tmp_path: Path):
     assert identity["source_commit"] is None
     assert identity["source_dirty"] is True
     assert isinstance(identity["dirty_source_sha256"], str)
+
+
+def test_qualified_scenarios_preserve_frozen_truth_and_select_environment(tmp_path: Path):
+    from dataclasses import asdict
+
+    from benchmarks.harness import qualified_scenario_cases
+    from benchmarks.scenarios import scenario_cases
+
+    scenarios = {case.id: case for case in scenario_cases()}
+    qualified = qualified_scenario_cases()
+    assert len(qualified) == 4
+    fixture = write_fixture(tmp_path / "fixture")
+    for case in qualified:
+        expected = asdict(scenarios[case.id].expected)
+        observed = asdict(case)
+        for key, value in expected.items():
+            if key != "outcome":
+                assert observed[key] == value
+        command = codex_command(
+            fixture, _agent_prompt(case), repo=tmp_path, environment_id=case.environment_id
+        )
+        assert any('"--scenario"' in item and case.id in item for item in command)
+        assert case.scenario_clock in _agent_prompt(case)
+    power = next(case for case in qualified if case.id == "dev_current_power_snapshot")
+    assert power.scenario_clock == "2026-09-29T16:00:00Z"
