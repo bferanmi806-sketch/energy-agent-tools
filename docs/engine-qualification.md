@@ -46,6 +46,32 @@ documentation](https://dss-extensions.org/OpenDSSDirect.py/), the [OpenDSSDirect
 repository](https://github.com/dss-extensions/OpenDSSDirect.py), and the
 [DSS-Extensions Python API overview](https://github.com/dss-extensions/dss-extensions/blob/main/docs/python_apis.md).
 
-EnergyPlus remains outside this qualification. Its existing connector has a
-trusted executable boundary, but this work did not install or claim a real
-EnergyPlus engine/model run.
+## EnergyPlus qualification
+
+The existing fixed-executable EnergyPlus adapter has also been qualified against
+the official EnergyPlus 26.2.0 macOS x86_64 release. The archive was downloaded
+from the [NREL EnergyPlus release](https://github.com/NatLabRockies/EnergyPlus/releases/tag/v26.2.0)
+and its SHA-256 matched the GitHub release digest before extraction. The run used
+the release's published `1ZoneUncontrolled3SurfaceZone.idf` example and its
+bundled Golden, Colorado TMY3 EPW. The binary reported
+`EnergyPlus, Version 26.2.0-4bd7a1f26f`.
+
+The adapter completed with `--readvars`, emitted 8,808 CSV rows, and returned
+finite values with explicit source fields. The official example includes equal and
+opposite monthly `Other Equipment` loads. Across 14 monthly rows, the positive and
+negative energy sums were `11,161,497,600 J` and `-11,161,497,600 J`; the maximum
+absolute net was `0 J`. The evidence also records finite zone temperatures and
+surface-convection and air-storage rates in `C` and `W`.
+
+The committed evidence was generated with:
+
+```shell
+uv run python scripts/qualify_engines.py \
+  --energyplus-root /path/to/EnergyPlus-26.2.0-... \
+  --energyplus-archive /path/to/EnergyPlus-26.2.0-...tar.gz
+```
+
+The EnergyPlus qualification covers one official steady-state/annual example
+through the existing bounded executable boundary. It does not establish accuracy
+for arbitrary building models, HVAC designs, weather locations, or operational
+decisions.

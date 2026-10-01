@@ -1,6 +1,6 @@
 {
   "adapter": "opendss.power_flow",
-  "captured_at": "2026-10-01T14:56:17.236104+00:00",
+  "captured_at": "2026-10-01T15:06:00.667868+00:00",
   "cases": [
     {
       "checks": {
@@ -169,7 +169,7 @@
         "provider": null,
         "quality": "converged-power-flow",
         "resolution": "steady-state snapshot",
-        "retrieved_at": "2026-10-01T14:56:17.196834Z",
+        "retrieved_at": "2026-10-01T15:05:53.955474Z",
         "site_id": null,
         "source": "opendssdirect",
         "time_end": null,
@@ -350,7 +350,7 @@
         "provider": null,
         "quality": "converged-power-flow",
         "resolution": "steady-state snapshot",
-        "retrieved_at": "2026-10-01T14:56:17.235931Z",
+        "retrieved_at": "2026-10-01T15:05:54.015135Z",
         "site_id": null,
         "source": "opendssdirect",
         "time_end": null,
@@ -366,6 +366,158 @@
   ],
   "distribution": "opendssdirect.py",
   "distribution_version": "0.9.4",
+  "energyplus": {
+    "adapter_result": {
+      "files": [
+        "eplusmtr.csv",
+        "eplusout.audit",
+        "eplusout.bnd",
+        "eplusout.csv",
+        "eplusout.dxf",
+        "eplusout.eio",
+        "eplusout.end",
+        "eplusout.err",
+        "eplusout.eso",
+        "eplusout.mdd",
+        "eplusout.mtd",
+        "eplusout.mtr",
+        "eplusout.rdd",
+        "eplusout.rvaudit",
+        "eplusout.shd",
+        "eplustbl.csv",
+        "eplustbl.htm",
+        "eplustbl.tab",
+        "eplustbl.txt",
+        "eplustbl.xml"
+      ],
+      "kind": "simulated",
+      "quality": "simulation-completed",
+      "row_count": 8808,
+      "source": "energyplus",
+      "unit": "provider-defined"
+    },
+    "binary": {
+      "path": "energyplus-26.2.0",
+      "version_stdout": "EnergyPlus, Version 26.2.0-4bd7a1f26f"
+    },
+    "checks": {
+      "adapter_completed": true,
+      "adapter_emitted_readvars_rows": true,
+      "binary_version_is_26_2_0": true,
+      "heat_balance_outputs_finite": true,
+      "monthly_energy_balance_abs_net_lt_1e-6_j": true,
+      "temperature_outputs_finite": true
+    },
+    "monthly_energy_balance": {
+      "count": 14,
+      "maximum_absolute_net_j": 0.0,
+      "negative_field": "TEST 352 MINUS:Other Equipment Total Heating Energy [J](Monthly)",
+      "positive_field": "TEST 352A:Other Equipment Total Heating Energy [J](Monthly)",
+      "sample_pairs_j": [
+        [
+          30412800.0,
+          -30412800.0
+        ],
+        [
+          30412800.0,
+          -30412800.0
+        ],
+        [
+          942796800.0,
+          -942796800.0
+        ]
+      ],
+      "sum_negative_j": -11161497600.0,
+      "sum_positive_j": 11161497600.0,
+      "unit": "J"
+    },
+    "numeric_outputs": {
+      "test_352_minus_other_equipment_heating_energy": {
+        "count": 14,
+        "field": "TEST 352 MINUS:Other Equipment Total Heating Energy [J](Monthly)",
+        "maximum": -30412800.0,
+        "minimum": -942796800.0,
+        "sample": [
+          -30412800.0,
+          -30412800.0,
+          -942796800.0
+        ],
+        "sum": -11161497600.0,
+        "unit": "J"
+      },
+      "test_352a_other_equipment_heating_energy": {
+        "count": 14,
+        "field": "TEST 352A:Other Equipment Total Heating Energy [J](Monthly)",
+        "maximum": 942796800.0,
+        "minimum": 30412800.0,
+        "sample": [
+          30412800.0,
+          30412800.0,
+          942796800.0
+        ],
+        "sum": 11161497600.0,
+        "unit": "J"
+      },
+      "zone_air_heat_balance_air_energy_storage_rate": {
+        "count": 8808,
+        "field": "ZONE ONE:Zone Air Heat Balance Air Energy Storage Rate [W](Hourly)",
+        "maximum": 1101.4478404606175,
+        "minimum": -661.5214842757138,
+        "sample": [
+          -0.025445045768188446,
+          -0.02503673546008728,
+          -0.024634983797884452
+        ],
+        "sum": 15311.98904376123,
+        "unit": "W"
+      },
+      "zone_air_heat_balance_surface_convection_rate": {
+        "count": 8808,
+        "field": "ZONE ONE:Zone Air Heat Balance Surface Convection Rate [W](Hourly)",
+        "maximum": 1167.1486772259298,
+        "minimum": -689.2102345982811,
+        "sample": [
+          -0.025393624882305676,
+          -0.024986140598393547,
+          -0.024585201669718337
+        ],
+        "sum": 16712.032170192364,
+        "unit": "W"
+      },
+      "zone_mean_air_temperature": {
+        "count": 8808,
+        "field": "ZONE ONE:Zone Mean Air Temperature [C](Hourly)",
+        "maximum": 34.07371491777137,
+        "minimum": -18.226185319225568,
+        "sample": [
+          -18.22470297697739,
+          -18.224779536112408,
+          -18.224854866712384
+        ],
+        "sum": 139891.0522859175,
+        "unit": "C"
+      }
+    },
+    "official_example": {
+      "model": "ExampleFiles/1ZoneUncontrolled3SurfaceZone.idf",
+      "weather": "WeatherData/USA_CO_Golden-NREL.724666_TMY3.epw"
+    },
+    "passed": true,
+    "real_engine": true,
+    "release_asset": {
+      "actual_sha256": "4746bb63f8419c3666fb1e390e2a387a0300474113694ebcd14b3c9745d3b68f",
+      "asset_name": "EnergyPlus-26.2.0-4bd7a1f26f-Darwin-macOS13.3-x86_64.tar.gz",
+      "expected_sha256": "4746bb63f8419c3666fb1e390e2a387a0300474113694ebcd14b3c9745d3b68f",
+      "release_url": "https://github.com/NatLabRockies/EnergyPlus/releases/tag/v26.2.0",
+      "sha256_matches_release": true
+    },
+    "status": "qualified-real-engine",
+    "upstream_sources": [
+      "https://github.com/NatLabRockies/EnergyPlus/releases/tag/v26.2.0",
+      "https://energyplus.readthedocs.io/en/stable/quick_start/quick_start.html",
+      "https://energyplus.readthedocs.io/en/latest/api.html"
+    ]
+  },
   "engine": "DSS-Extensions",
   "engine_version": "DSS C-API Library version 0.14.5 revision 87d85c2622c8281b92255335bc7c09b11191b21d based on OpenDSS SVN 3723 [FPC 3.2.2] (64-bit build) MVMULT INCREMENTAL_Y CONTEXT_API PM 20240329033719; License Status: Open \nDSS-Python version: 0.15.7\nOpenDSSDirect.py version: 0.9.4",
   "qualification": {
