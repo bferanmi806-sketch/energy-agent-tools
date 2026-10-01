@@ -226,6 +226,7 @@ def main() -> None:
             max_sessions_per_user=options.get("max_sessions_per_user", 10),
             session_idle_timeout=options.get("session_idle_timeout", 1800.0),
             max_sessions_global=options.get("max_sessions_global", 1000),
+            close_agent_on_shutdown=True,
         )
         try:
             uvicorn.run(application, host=args.bind_host, port=args.port, access_log=False)

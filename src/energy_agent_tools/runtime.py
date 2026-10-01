@@ -17,6 +17,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 from .jobs import JobError, JobManager, SimulationOperation
 from .models import (
+    Action,
     Asset,
     ConnectedAccount,
     EnergyError,
@@ -192,6 +193,8 @@ class EnergyAgent:
                 "resume",
             }:
                 raise EnergyError("invalid_operation", "Unknown job operation.")
+            if operation != "submit" and Action.READ not in session.allowed_actions:
+                raise EnergyError("policy_denied", "Reading job state requires read permission.")
             if operation == "submit":
                 if simulation not in tools:
                     raise EnergyError(
@@ -234,10 +237,10 @@ class EnergyAgent:
             else:
                 if not job_id:
                     raise EnergyError("job_required", "Provide a job identifier.")
+                scope = manager.resume_scope(job_id, session.user_id)
+                if scope["site_id"] != session.site_id:
+                    raise EnergyError("site_forbidden", "Job belongs to a different site.")
                 if operation == "resume":
-                    scope = manager.resume_scope(job_id, session.user_id)
-                    if scope["site_id"] != session.site_id:
-                        raise EnergyError("site_forbidden", "Job belongs to a different site.")
                     result = {"scope": scope}
                 elif operation == "result":
                     result = manager.result(job_id, session.user_id, session.id)

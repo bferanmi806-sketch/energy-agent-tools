@@ -484,3 +484,14 @@ def test_principal_requires_digest_and_token_digest_is_not_reversible() -> None:
     assert "operator-token" not in digest
     with pytest.raises(ValueError):
         Principal("u", set(), "raw-token")
+
+
+@pytest.mark.asyncio
+async def test_owned_host_closes_agent_inside_its_lifespan(tmp_path: Path) -> None:
+    agent = _agent(tmp_path)
+    host = create_host(agent, _principals(), close_agent_on_shutdown=True)
+    async with _Lifespan(host):
+        assert not agent._closed
+    assert agent._closed
+    assert agent.http.is_closed
+    await agent.close()

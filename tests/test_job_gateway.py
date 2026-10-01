@@ -45,6 +45,8 @@ async def test_job_policy_schema_and_sdk_mcp_scope(tmp_path):
         outsider = energy.session("bob")
         assert not (await outsider.job("resume", job_id=job_id))["ok"]
         assert not (await energy.session("alice", "other").job("resume", job_id=job_id))["ok"]
+        wrong_site = energy.session("alice", "other", id=session.id)
+        assert (await wrong_site.job("result", job_id=job_id))["error"]["code"] == "site_forbidden"
         await asyncio.wait_for(energy.agent._job_task, timeout=30)
         result = await session.job("result", job_id=job_id)
         assert result["ok"], result

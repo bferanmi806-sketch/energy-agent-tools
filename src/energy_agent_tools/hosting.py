@@ -291,6 +291,7 @@ class AuthenticatedHost:
         max_sessions_per_user: int,
         session_idle_timeout: float,
         max_sessions_global: int,
+        close_agent_on_shutdown: bool,
     ) -> None:
         if max_requests_per_minute <= 0:
             raise ValueError("max_requests_per_minute must be positive.")
@@ -348,6 +349,8 @@ class AuthenticatedHost:
                     async with self._mcp_lock:
                         self._mcp_sessions.clear()
                         self._mcp_pending.clear()
+                    if close_agent_on_shutdown:
+                        await self.agent.close()
 
         self._app = Starlette(routes=routes, lifespan=lifespan)
 
@@ -885,6 +888,7 @@ def create_host(
     max_sessions_per_user: int = 10,
     session_idle_timeout: float = 1_800.0,
     max_sessions_global: int = 1_000,
+    close_agent_on_shutdown: bool = False,
 ) -> AuthenticatedHost:
     """Build an authenticated multi-user ASGI host.
 
@@ -902,6 +906,7 @@ def create_host(
         max_sessions_per_user=max_sessions_per_user,
         session_idle_timeout=session_idle_timeout,
         max_sessions_global=max_sessions_global,
+        close_agent_on_shutdown=close_agent_on_shutdown,
     )
 
 

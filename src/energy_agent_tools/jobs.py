@@ -321,9 +321,11 @@ class JobManager:
         self._closing = False
         self._closed = False
         self._lock_handle: Any | None = None
-        self._initialize_storage()
+        self.root.mkdir(parents=True, exist_ok=True)
+        _chmod_private(self.root, stat.S_IRWXU)
         self._acquire_root_lock()
         try:
+            self._initialize_storage()
             self._rebase_paths()
             self.recover()
         except BaseException:
