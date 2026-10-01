@@ -28,3 +28,19 @@ jobs:
       - run: docker build --tag energy-agent-tools:ci .
       - run: docker run --rm --entrypoint python energy-agent-tools:ci scripts/deployment_smoke.py
       - run: uv run --no-dev python scripts/container_host_smoke.py --image energy-agent-tools:ci
+  home-assistant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --frozen --no-dev
+      - run: uv run --no-dev python scripts/qualify_home_assistant.py > ha-qualification.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: home-assistant-protocol-qualification
+          path: ha-qualification.json
+          if-no-files-found: error
