@@ -232,7 +232,16 @@ class EnergyAgent:
                 result: Json = {"job": record.as_dict()}
             elif operation == "list":
                 result = {
-                    "jobs": [item.as_dict() for item in manager.list(session.user_id, session.id)]
+                    "jobs": [
+                        item.as_dict()
+                        for item in manager.list(session.user_id, session.id)
+                        if item.site_id == session.site_id
+                        and (
+                            session.toolkits is None
+                            or self.registry.get(tools[item.operation.value]).toolkit
+                            in session.toolkits
+                        )
+                    ]
                 }
             else:
                 if not job_id:
@@ -240,6 +249,8 @@ class EnergyAgent:
                 scope = manager.resume_scope(job_id, session.user_id)
                 if scope["site_id"] != session.site_id:
                     raise EnergyError("site_forbidden", "Job belongs to a different site.")
+                record = manager.status(job_id, session.user_id, scope["session_id"] or "")
+                self.get_tool(session, tools[record.operation.value])
                 if operation == "resume":
                     result = {"scope": scope}
                 elif operation == "result":

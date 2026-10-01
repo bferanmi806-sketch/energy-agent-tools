@@ -92,3 +92,19 @@ async def test_rest_recovers_completed_job_after_restart(tmp_path):
             assert result["result"]["data"]["gross_heat_loss_kw"] == 0.38
     finally:
         await agent.close()
+
+
+async def test_completed_jobs_obey_current_toolkit_and_site_scope(tmp_path):
+    async with EnergyAgentTools(tmp_path, CONFIG) as energy:
+        session = energy.session("alice", "home")
+        submitted = await session.job("submit", simulation="heat_loss", arguments=ARGS)
+        job_id = submitted["job"]["job_id"]
+        await asyncio.wait_for(energy.agent._job_task, timeout=30)
+        limited = energy.session("alice", "home", id=session.id, toolkits={"workbench"})
+        for operation in ("status", "result", "cancel", "delete", "resume"):
+            response = await limited.job(operation, job_id=job_id)
+            assert response["error"]["code"] == "tool_forbidden", response
+        assert (await limited.job("list"))["jobs"] == []
+        wrong_site = energy.session("alice", "other", id=session.id)
+        assert (await wrong_site.job("list"))["jobs"] == []
+        assert (await session.job("result", job_id=job_id))["ok"]
