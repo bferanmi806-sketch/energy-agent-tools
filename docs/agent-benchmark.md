@@ -1,7 +1,7 @@
 # Real-model benchmark audit
 
 The preserved exploratory run is in `../../work/benchmark-platform-v2/`. Its
-raw `suite.json` and `cases.jsonl` were not changed; their SHA256 values and
+raw `suite.json` and `cases.jsonl` were not changed; [compressed original cases](evidence/agent-cases-exploratory.jsonl.gz) are included; their SHA256 values and
 the recorded runner metadata are in
 [`docs/evidence/agent-benchmark-exploratory.json`](evidence/agent-benchmark-exploratory.json).
 
@@ -45,3 +45,37 @@ tomorrow. The forecast CSV is aligned to that declared tomorrow. The fixture inj
 day-window calculation. Credential expiry and actual retrieval timestamps still
 use the real clock. No new
 broad model run was made during this audit.
+
+The account-refusal scenarios mention private accounts but this fixture does not
+provision two live accounts. They measure refusal when no configured account
+supports the request. Actual two-account ambiguity and source-choice semantics
+are demonstrated by deterministic resolver tests, not by this model fixture.
+Fixture measurement labels are declared synthetic metadata; they do not qualify
+the physical derivation or hardware origin of carbon or telemetry signals. Native
+GB carbon results distinguish calculated actuals from forecasts separately.
+
+## Frozen release evaluation
+
+The release run completed 19 cases with 15 pass, four partial, zero fail and
+zero inconclusive labels. Mean heuristic score was 0.9790. This is a score,
+not a measured production success probability. The implementation was frozen at
+`5ba8cea62f3526ad6fb5b20f1fdd9d1cd336310e`; the later Python 3.11 correction
+changes only numeric test tolerances, with no runtime or benchmark implementation
+changes. Site context and workflow windows use the same fixed scenario clock.
+
+[Per-case answers and scores](evidence/agent-benchmark-v020.json) and
+[compressed actual traces](evidence/agent-cases-v020.jsonl.gz) preserve calls,
+results, usage and completion status. Decompress the latter with Python gzip
+or `gzip -dc`. The JSON evidence records SHA256 checksums.
+
+| Partial case | Observed result | Remaining scoring or efficiency limit |
+|---|---|---|
+| `peak_interval` | Correct 7 kW average peak and timestamp, separating 3.5 kWh interval energy | The expected argument pattern did not match the valid calculation path. |
+| `grid_carbon` | Correct synthetic MW and carbon series with source labels | Eleven calls exceeded the ten-call budget; the argument heuristic also matched asset-kind metadata. |
+| `tariff_comparison` | Correct £3.6925 total and low/high period comparison | Twelve calls exceeded the ten-call budget. |
+| `missing_private_account` | Safe refusal, empty connections and no invented reading; zero returned rows distinguished from zero consumption | No expected structured private-connection error was emitted by the synthetic source. |
+
+Consumption, anomalies, cost, charging, solar comparison, direct forecast,
+power flow, weather comparison, account refusal, unit safety, lineage, missing
+battery state and provider-hallucination checks completed with pass labels.
+Account refusal in this fixture remains distinct from real two-account ambiguity.

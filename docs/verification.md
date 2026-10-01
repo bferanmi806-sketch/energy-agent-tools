@@ -7,9 +7,10 @@ Remote CI is a separate release gate from local results.
 ## Local implementation evidence
 
 The integrated platform suite currently passes 161 tests. Ruff lint and mypy
-pass across 27 source files. The release gate also requires the final formatter,
-package build, isolated base-wheel installation and remote matrix; final results
-are recorded in `evidence/release-v020.json` when verification is complete.
+pass across 27 source files. The release gate also requires formatting,
+package build and isolated base-wheel installation all pass. The Linux matrix
+passes all 161 tests on Python 3.11, 3.12 and 3.13. Raw results appear in
+[CI evidence](evidence/ci-v020.json) and [release evidence](evidence/release-v020.json).
 
 Tests execute real pandapower, pvlib, windpowerlib, PyPSA, pandapipes and SciPy
 when the optional extras are installed. The PyPSA two-bus test compares voltage,
@@ -51,8 +52,9 @@ gateway. Sources are synthetic and results retain that qualification. The first
 failures, clock mismatch, safe refusals and scoring issues were inspected from
 actual calls and answers. See [the audit](agent-benchmark.md).
 
-The release run freezes the scenario dates, records source SHA256 and Git
-identity, saves incremental traces, and uses scoped approval for the local
+The frozen release run completed 19 cases with 15 pass and four partial labels,
+zero fail and zero inconclusive. Mean heuristic score was 0.9790. It records source
+SHA256 and Git identity, saves incremental traces, and uses scoped approval for the local
 fixture MCP server. Native shell tools are disabled. It does not use a global
 sandbox/approval bypass. Heuristic scores and one fixture do not establish
 multi-provider or production agent reliability.

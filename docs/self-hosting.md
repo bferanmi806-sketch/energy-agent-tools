@@ -213,7 +213,7 @@ Workbench artifacts have separate defaults: 16,000 bytes for inline results,
 1,000,000,000 bytes globally, and seven days of retention. Expired artifacts are
 ignored by reads and listings and are deleted during a later persist operation.
 Use `DELETE /sessions/{session_id}/artifacts/{artifact_id}` for immediate cleanup.
-Deleting an idle session does not run artifact cleanup automatically, so use the
+Expiring an idle session does not run artifact cleanup automatically, so use the
 artifact route or the session delete route when you need immediate deletion.
 
 ## Put the loopback host behind a reverse proxy
@@ -234,7 +234,8 @@ server {
     location / {
         proxy_pass http://127.0.0.1:8765;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host 127.0.0.1:8765;
+        proxy_buffering off;
         proxy_set_header Authorization $http_authorization;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_read_timeout 60s;
@@ -262,3 +263,8 @@ configuration. This implementation does not coordinate a shared vault or
 principal database across multiple host replicas. If you run more than one host,
 provision and rotate each instance deliberately, and keep its state and master key
 permissions separate.
+
+The MCP transport validates its upstream host against its loopback allowlist.
+The example therefore sends the loopback Host header. Server MCP clients normally
+omit Origin. Browser-origin access requires an explicitly reviewed origin policy;
+do not strip or rewrite arbitrary Origin headers to bypass that check.

@@ -58,14 +58,14 @@ handler)` validates the schema and binds one async handler.
 Capability labels are search and binding keys, not interchangeable provider
 schemas. A `CapabilityBinding` names the exact tool and can constrain account,
 asset, measurement kind, unit, resolution, coverage interval, quality,
-argument defaults/mapping, preference, review state and binding version.
+argument defaults/mapping, fixed semantic selectors, preference, review state and binding version.
 `CapabilityResolver` filters candidates by session toolkit and site scope,
 asset/account compatibility, optional dependency availability, provider
 status, connection state and credential availability. It then checks requested
 kind, unit, resolution, coverage and the exact tool schema. It returns ranked
 candidates with reasons; a tie remains `ambiguous` and requires an explicit
 tool or account choice. Execution is allowed only for one available reviewed
-binding and passes its expected kind, unit and asset into the normal runtime.
+binding and passes its expected kind, unit, resolution, asset and fixed arguments into the normal runtime.
 
 The resolver does not translate unlike provider schemas by label. For example,
 a cumulative counter is not interval consumption, and power is not energy
@@ -77,8 +77,8 @@ bindings.
 Every connector uses one pipeline: validate user/site/toolkit scope, enforce
 action policy, validate arguments, run before hooks, validate transformed
 arguments, resolve the account, obtain a credential only at the connector
-boundary, execute, check expected kind/unit semantics when a reviewed binding
-supplies them, run after hooks, validate the output, redact known secrets,
+boundary, execute, check reviewed semantics, run after hooks, recheck kind/unit/resolution,
+bound scope and original evidence, then redact the current user's known secrets,
 append execution and input provenance, then
 compact or persist the result. Ordered batches return independent failures and
 are bounded to twenty calls. The runtime does not retry actions automatically.
@@ -93,7 +93,7 @@ permissions or turn derived data into metered data.
 site, asset, timezone, resolution, time bounds, original unit, field units,
 quality, assumptions, warnings and provenance. Derived results retain input
 artifact IDs, kinds, units and source lineage. Hooks cannot relabel derived
-output as metered.
+output as metered, change bound scope, or remove original provenance.
 
 ## Workbench and artifacts
 

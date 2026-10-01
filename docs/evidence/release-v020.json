@@ -1,0 +1,64 @@
+{
+  "verified_at": "2026-10-01T13:38:04.624588+00:00",
+  "version": "0.2.0",
+  "implementation_commit": "fe5ac46bfd61c87beb487983e9bf685d41a6acb4",
+  "benchmark_commit": "5ba8cea62f3526ad6fb5b20f1fdd9d1cd336310e",
+  "runtime_changed_between_commits": false,
+  "local": {
+    "checked_at": "2026-10-01T13:19:18.057582+00:00",
+    "version": "0.2.0",
+    "python": "3.12.14",
+    "tests": {
+      "passed": 161,
+      "seconds": 54.34
+    },
+    "ruff": "passed",
+    "format": "passed",
+    "mypy": {
+      "status": "passed",
+      "sources": 27
+    },
+    "build": [
+      "wheel",
+      "sdist"
+    ],
+    "qualification": "Local checks; remote CI and release model evaluation recorded separately"
+  },
+  "base_wheel": {
+    "checked_at": "2026-10-01T13:21:11.708786+00:00",
+    "version": "0.2.0",
+    "installed_wheel": true,
+    "real_stdio_helpers": 10,
+    "missing_optional_dependency": "explicitly_unavailable",
+    "package_origin_in_isolated_environment": true
+  },
+  "ci": {
+    "status": "success",
+    "run_id": 36868786447,
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/36868786447",
+    "python": [
+      "3.11",
+      "3.12",
+      "3.13"
+    ],
+    "tests_passed_per_job": 161
+  },
+  "benchmark": {
+    "cases": 19,
+    "pass": 15,
+    "partial": 4,
+    "fail": 0,
+    "inconclusive": 0,
+    "mean_heuristic_score": 0.979,
+    "evidence": "agent-benchmark-v020.json"
+  },
+  "public_live_probes": "public-live-v020.json",
+  "neso_live_datastore": "neso-datastore-v020.json",
+  "private_provider_qualification": "fixtures only; no legitimate credentials available",
+  "assets": [
+    "energy_agent_tools-0.2.0-py3-none-any.whl",
+    "energy_agent_tools-0.2.0.tar.gz"
+  ],
+  "qualification": "Local, CI and model evidence describe the verified implementation. Documentation-only release commits do not change runtime or benchmark code. Release asset hashes are recorded separately to avoid embedding a source archive hash in itself.",
+  "checksums": "Published release SHA256SUMS"
+}

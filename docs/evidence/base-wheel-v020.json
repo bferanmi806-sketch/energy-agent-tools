@@ -1,0 +1,8 @@
+{
+  "checked_at": "2026-10-01T13:21:11.708786+00:00",
+  "version": "0.2.0",
+  "installed_wheel": true,
+  "real_stdio_helpers": 10,
+  "missing_optional_dependency": "explicitly_unavailable",
+  "package_origin_in_isolated_environment": true
+}

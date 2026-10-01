@@ -10,8 +10,8 @@
 - [x] Add bounded energy time-series operations and executable capability workflows.
 - [x] Expand independently tested connectors using official upstream contracts.
 - [x] Add bound SDK sessions, MCP review/version controls and contributor tooling.
-- [ ] Run broad real-agent evaluation, public probes and any available private test.
-- [ ] Review safety, run the complete verification matrix and publish a coherent release.
+- [x] Run broad real-agent evaluation, public probes and any available private test.
+- [x] Review safety, run the complete verification matrix and publish a coherent release.
 
 ## Completion predicate
 
