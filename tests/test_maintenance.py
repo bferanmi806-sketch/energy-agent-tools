@@ -156,10 +156,9 @@ def test_restore_rejects_hash_mismatch_and_oversized_members(tmp_path: Path) -> 
         inspect_backup(hash_archive)
 
     oversized = tmp_path / "oversized.tar"
-    with tarfile.open(oversized, "w") as archive:
-        info = tarfile.TarInfo("artifacts.sqlite3")
-        info.size = 2_000_000_001
-        archive.addfile(info)
+    info = tarfile.TarInfo("artifacts.sqlite3")
+    info.size = 2_000_000_001
+    oversized.write_bytes(info.tobuf() + b"\0" * 1024)
     with pytest.raises(MaintenanceError, match="too large"):
         inspect_backup(oversized)
 
