@@ -43,6 +43,8 @@ def select_window(
         except (ValueError, TypeError, OverflowError):
             pass
     observed_ends: list[datetime] = []
+    energy_intervals: list[tuple[datetime, datetime | None]] = []
+    is_energy = result.unit in {"Wh", "kWh", "MWh"}
     for row in result.data:
         if not isinstance(row, dict) or timestamp not in row:
             raise EnergyError("timestamp_required", "Every row requires the timestamp column.")
@@ -58,10 +60,23 @@ def select_window(
                 raise EnergyError(
                     "interval_boundary_mismatch", "The end cuts an observed interval."
                 )
+            if is_energy:
+                if point in observed:
+                    raise EnergyError(
+                        "duplicate_interval", "Energy rows contain duplicate interval starts."
+                    )
+                energy_intervals.append((point, finish))
             selected.append(dict(row))
             observed.add(point)
             if finish is not None:
                 observed_ends.append(finish)
+    if is_energy:
+        ordered = sorted(energy_intervals)
+        for previous, current in zip(ordered, ordered[1:], strict=False):
+            if previous[1] is not None and previous[1] > current[0]:
+                raise EnergyError(
+                    "overlapping_intervals", "Energy rows contain overlapping intervals."
+                )
     if not selected:
         raise EnergyError("insufficient_data", "No observations exist in the requested window.")
     coverage: Json = {

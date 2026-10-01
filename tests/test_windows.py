@@ -58,3 +58,24 @@ def test_window_refuses_partial_energy_intervals():
     )
     with pytest.raises(EnergyError, match="cuts an observed interval"):
         select_window(source, "source", "2026-01-01T00:30:00Z", "2026-01-01T01:00:00Z", "timestamp")
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [
+            {"timestamp": "2026-01-01T00:00:00Z", "value": 1},
+            {"timestamp": "2026-01-01T00:00:00+00:00", "value": 1},
+        ],
+        [
+            {"timestamp": "2026-01-01T00:00:00Z", "to": "2026-01-01T01:00:00Z", "value": 1},
+            {"timestamp": "2026-01-01T00:30:00Z", "to": "2026-01-01T01:30:00Z", "value": 1},
+        ],
+    ],
+)
+def test_window_refuses_double_counting_energy_intervals(rows):
+    source = EnergyResult(
+        data=rows, kind=DataKind.METERED, unit="kWh", source="meter", resolution="1h"
+    )
+    with pytest.raises(EnergyError, match="overlap|duplicate"):
+        select_window(source, "source", "2026-01-01T00:00:00Z", "2026-01-01T02:00:00Z", "timestamp")
