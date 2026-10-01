@@ -17,3 +17,14 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest -q
       - run: uv build
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --frozen --no-dev
+      - run: docker build --tag energy-agent-tools:ci .
+      - run: docker run --rm --entrypoint python energy-agent-tools:ci scripts/deployment_smoke.py
+      - run: uv run --no-dev python scripts/container_host_smoke.py --image energy-agent-tools:ci
