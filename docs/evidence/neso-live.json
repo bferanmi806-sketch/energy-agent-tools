@@ -1,0 +1,108 @@
+{
+  "observed_at": "2026-10-01T08:31:57.199842Z",
+  "package": {
+    "metadata_modified": "2026-10-01T08:27:03.872089",
+    "name": "embedded-wind-and-solar-forecasts",
+    "resource_count": 10,
+    "resources": [
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "db6c038f-98af-4570-ab60-24d71ebd0ae5",
+        "last_modified": "2026-10-01T08:25:02.921117",
+        "name": "Embedded Solar and Wind Forecast"
+      },
+      {
+        "datastore_active": false,
+        "format": "DOC",
+        "id": "3808c680-b5c0-4eab-aac4-7abb6345e65b",
+        "last_modified": "2024-10-23T13:11:31.785287",
+        "name": "Embedded Definition"
+      },
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "bc4d1093-ecf2-46d8-b207-7a0e3e8fb957",
+        "last_modified": "2025-05-23T09:32:48.819542",
+        "name": "Embedded Solar and Wind Forecast Archive 2019"
+      },
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "8a7249d4-ee67-45aa-9641-a3e063f54dba",
+        "last_modified": "2025-05-23T10:18:28.096891",
+        "name": "Embedded Solar and Wind Forecast Archive 2020"
+      },
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "794107f5-8567-4b32-ae3a-6817fec73e5c",
+        "last_modified": "2025-05-23T11:08:53.229239",
+        "name": "Embedded Solar and Wind Forecast Archive 2021"
+      },
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "07b0b42c-5152-4fc5-bcd1-e10ec8ec07de",
+        "last_modified": "2025-05-23T11:56:25.476505",
+        "name": "Embedded Solar and Wind Forecast Archive 2022"
+      },
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "26c9ef64-ce43-4e22-b984-ef013636aacb",
+        "last_modified": "2025-05-23T13:50:26.773081",
+        "name": "Embedded Solar and Wind Forecast Archive 2023"
+      },
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "06abd00a-ef6b-488b-9b6d-5e08fdc0c890",
+        "last_modified": "2025-05-23T14:30:16.994795",
+        "name": "Embedded Solar and Wind Forecast Archive 2024"
+      },
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "fc13df13-2dad-4a1c-b9e3-4569efba4955",
+        "last_modified": "2026-01-17T07:00:51.043062",
+        "name": "Embedded Solar and Wind Forecast Archive 2025"
+      },
+      {
+        "datastore_active": true,
+        "format": "CSV",
+        "id": "31861619-0b86-47ba-bac2-d008a760af54",
+        "last_modified": "2026-07-28T16:19:45.553879",
+        "name": "Embedded Solar and Wind Forecast Archive 2026"
+      }
+    ],
+    "title": "Embedded Wind and Solar Forecasts"
+  },
+  "provider": "NESO",
+  "purpose": "Public CKAN catalogue qualification for bounded package/resource discovery",
+  "requests": [
+    {
+      "action": "package_search",
+      "params": {"q": "embedded wind solar", "rows": 3},
+      "status": 200
+    },
+    {
+      "action": "package_show",
+      "params": {"id": "embedded-wind-and-solar-forecasts"},
+      "status": 200
+    }
+  ],
+  "search": {
+    "count": 7,
+    "dataset_names": [
+      "embedded-wind-and-solar-forecasts",
+      "daily-demand-update",
+      "historic-demand-data"
+    ],
+    "success": true
+  },
+  "source": {
+    "base": "https://api.neso.energy/api/3/action",
+    "documentation": "https://www.neso.energy/data-portal/api-guidance"
+  }
+}

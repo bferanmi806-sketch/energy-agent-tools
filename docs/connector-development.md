@@ -1,7 +1,11 @@
 # Connector development
 
-A connector is a toolkit manifest, one or more JSON Schemas and async handlers.
-No HTTP, executable or MCP credential may be an agent tool parameter.
+A connector contributes a `Toolkit`, one or more JSON Schemas, and async
+handlers. The registry is local and the runtime owns scope, credentials,
+action policy, result validation, redaction and provenance. Never put an HTTP,
+executable or MCP credential in an agent-facing tool argument.
+
+## A small native connector
 
 ```python
 from energy_agent_tools.models import Action, DataKind, EnergyResult, Tool, Toolkit, schema
@@ -16,6 +20,7 @@ def register(registry: Registry) -> None:
             description="Local thermal arithmetic",
             runtime="native",
             status="experimental",
+            version="1.0.0",
         )
     )
 
@@ -44,39 +49,79 @@ def register(registry: Registry) -> None:
             ),
             capabilities=["perform_engineering_calculation"],
             actions={Action.CALCULATE},
+            result_kind=DataKind.CALCULATED,
+            result_unit="W",
         ),
         handler,
     )
 ```
 
-The runtime injects `ExecutionContext`, containing the scoped session, selected
-account settings, credential, HTTP client and workbench. HTTP connectors must own
-their fixed provider origin or use an operator-configured account origin. Validate
-provider JSON, preserve nulls and units, limit pages and rows, and forbid
-cross-origin credential forwarding. Raise `EnergyError(code, safe_message)` for
-expected failures. Never include response bodies, authenticated URLs or secrets
-in exceptions.
+Keep the provider contract explicit and bounded. The runtime injects an
+`ExecutionContext` containing the scoped session, selected account, credential
+(only at the boundary), HTTP client and workbench. A handler should return a
+typed `EnergyResult`, preserve original units and timestamps, and add
+assumptions and provider provenance. Raise `EnergyError(code, safe_message)`
+for expected failures; never include response bodies, authenticated URLs or
+secrets in an exception.
 
-Local Python libraries should build models from explicit, bounded parameters and
-report assumptions, model/library version and numerical validity. Do not execute
-agent-supplied code. A simulation must stay `simulated` even if its output resembles
-meter readings. Missing optional libraries produce structured availability errors.
+For a capability that can be selected across providers, add a reviewed
+`CapabilityBinding` with the exact tool, account or asset, measurement kind,
+unit, resolution, coverage interval, quality, argument mapping and version.
+Labels alone do not make schemas compatible. Cumulative counters, interval
+energy and power require different bindings and transformations. Equal
+available candidates remain ambiguous until the caller chooses a source.
+
+Local Python libraries must construct models from explicit bounded parameters,
+report assumptions and library versions, and preserve `simulated` or
+`estimated` kinds. Do not execute agent-supplied Python. Missing optional
+libraries should remain discoverable with `status="unavailable"` or return a
+structured `dependency_unavailable` error at execution time.
+
+## HTTP connectors
+
+HTTP handlers own a fixed provider origin or use an operator-configured account
+origin. Validate provider JSON at the boundary, preserve nulls and provider
+units, bound pages and rows, enforce time ranges, and reject cross-origin
+credential forwarding. Account settings may contain identifiers and public
+configuration, but model validation rejects credential-shaped settings. Use
+the provider's official documentation URL in the toolkit metadata and record
+whether the integration is stable, experimental or credential-gated.
 
 ## Existing MCP servers
 
-Import through the SDK or the `mcp_servers` array in local configuration:
+MCP imports use the official Python client over local stdio or remote
+streamable HTTP. Configure them asynchronously after building the agent:
 
 ```python
-from energy_agent_tools.connectors.mcp_bridge import import_mcp
+from energy_agent_tools.app import build_agent, configure_mcp
+
+agent = build_agent(state_dir, config)
+await configure_mcp(agent, config)
+```
+
+The lower-level bridge can be used directly:
+
+```python
+from energy_agent_tools.connectors.mcp_bridge import inspect_mcp, import_mcp
+
+manifest = await inspect_mcp(
+    "energy_server",
+    command="python",
+    args=["/opt/energy/server.py"],
+    version="2026.10",
+)
 
 await import_mcp(
     registry,
     "energy_server",
     command="python",
-    args=["/path/to/server.py"],
+    args=["/opt/energy/server.py"],
+    version="2026.10",
+    expected_schema_digest=manifest["schema_digest"],
     tool_metadata={
         "read_meter": {
-            "actions": ["read-only"],
+            "reviewed": True,
+            "action": "read-only",
             "kind": "metered",
             "unit": "kWh",
             "capabilities": ["get_energy_consumption"],
@@ -85,48 +130,74 @@ await import_mcp(
 )
 ```
 
-Remote servers use `url="https://your-server.example/mcp"`. For authenticated
-schema discovery, pass `discovery_auth` as an `AuthConfig` or JSON object with an
-environment credential reference. Runtime accounts use their own auth config so
-execution credentials stay user scoped. Stdio credential injection also requires
-`credential_env` naming the child environment variable. Upstream remote OAuth
-login/refresh is not automated. Review schemas and actions before enabling them.
+An imported name is `<toolkit_id>.<upstream_name>` and remains stable across
+provider versions; version metadata is carried on the toolkit and tool. A
+reviewed import requires explicit operator metadata with `reviewed: true`, a
+kind, a unit and `action` or `actions`. Without that complete contract the
+tool remains `reviewed: false`; without an action it defaults to
+`configuration-write`, which a default session rejects. Upstream MCP
+annotations such as `readOnlyHint` are untrusted and never grant permission.
 
-Imported tool names are `<toolkit_id>.<upstream_name>`. Unreviewed actions are
-configuration writes and are denied in default sessions. Upstream MCP annotations
-are not permission grants. Results default to estimated unless reviewed metadata
-specifies a data kind, and carry an unverified-output warning. Import is atomic;
-failed metadata cannot leave a partial toolkit. Connections initialize and close
-on every execution in this release, so long-lived MCP server state is not retained.
+`inspect_mcp` and `inspect_mcp_manifest` produce credential-safe manifests with
+upstream names, per-tool schema hashes, a deterministic SHA-256 aggregate
+digest and the review policy. Import rejects a mismatched
+`expected_schema_digest` atomically. Each execution also re-lists the server's
+tools after initialization and refuses to call a selected tool if its schema
+has changed, disappeared or duplicated. Runtime connections are short-lived;
+the bridge does not retain a long-lived MCP session.
 
-[PowerMCP](https://github.com/Power-Agent/PowerMCP) is a candidate for this import
-path. Its engineering software, licences and platform prerequisites need separate
-validation. This release does not claim that PowerMCP itself was integration tested.
+For authenticated discovery, pass `discovery_auth` with an environment
+credential reference. Runtime accounts use their own scoped auth configuration;
+stdio injection requires `credential_env`. Remote URLs and credentials do not
+enter provenance or inspection manifests. OAuth login and refresh are owned by
+the connection lifecycle, not by the MCP schema importer.
 
 ## Fixed executables
 
-Register a toolkit with `runtime="executable"`, then call
-`register_executable(registry, toolkit_id, tool_name, argv, input_schema=...,
-actions=["simulation"], kind="simulated", unit=...)`. `argv` is operator owned;
-agent inputs go to JSON stdin, never a shell command. JSON stdout can be an
-EnergyResult or plain data wrapped using declared metadata. The adapter bounds
-output, times out, restricts inherited environment and cleans up the process.
-Unreviewed executable actions default to configuration writes and are denied.
+Register an operator-owned command with
+`register_executable(registry, toolkit_id, name, argv, ...)` or the equivalent
+`command=`/`args=` aliases. The adapter sends agent arguments as JSON stdin,
+never through a shell, and bounds output, timeout, inherited environment and
+process cleanup. JSON stdout can be an `EnergyResult` or plain data wrapped by
+declared metadata. Unreviewed executable actions default to
+`configuration-write`; no executable is a physical-control connector by
+default.
 
-## Capabilities and test requirements
+## Workbench and artifact lineage
 
-Use canonical energy capability IDs where physical semantics match. They aid
-search and skill guidance; they do not make unlike provider schemas automatically
-interchangeable. A cumulative energy counter is not interval consumption.
+Use workbench tools for operations over persisted results instead of returning
+unbounded data. The local workbench provides summaries, anomaly screening,
+DST-aware resampling, exact UTC joins, weather pivots and bounded filter,
+missingness, counter, power integration, tariff, carbon, baseline,
+comparison, normalization and alignment operations. Validate explicit offsets,
+duplicate timestamps, compatible units and coverage before calculation. Derived
+results retain input artifact IDs, kinds, units, sources and provenance.
 
-Every connector must include official docs links, status, success tests, malformed
-response tests, credentials behavior where relevant and meaningful numerical or
-protocol assertions. Use the official MCP client for transport tests, not an
-in-process function mock. Separate fixture evidence from live evidence. Regenerate
-manifests with `uv run energy-agent manifests --config examples/config.json`.
+## Plugins, scaffolding and validation
 
-Provider adapters normalize names for OpenAI/Anthropic function-call requirements.
-Use `resolve_provider_name` to map provider aliases back to registry names. Alias
-collisions fail rather than executing the wrong tool. `input_artifacts` on batch
-calls links calculation/simulation outputs to the kinds, units and provenance of
-input datasets when callers translate provider rows into solver inputs.
+Installable connectors register an entry point in the
+`energy_agent_tools.connectors` group. `energy-agent scaffold --output PATH
+--toolkit NAME` creates a starter module. `energy-agent validate` runs
+structural checks for valid JSON Schemas, registered handlers/toolkits,
+nonempty versions, actions and object-shaped arguments. It does not prove live
+provider correctness, numerical validity or production readiness.
+
+Every connector contribution must include official docs links, a declared
+status, successful and malformed-response tests, credential behavior where
+relevant, bounded input/output tests, and meaningful numerical or protocol
+assertions. Use the official MCP client for transport tests and keep fixture,
+public-live and private-provider evidence separate. Run:
+
+```sh
+uv run energy-agent validate --config examples/config.json
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy
+uv run pytest -q
+uv build
+```
+
+Provider adapters format registered helper schemas for OpenAI Chat, OpenAI
+Responses and Anthropic. Use `resolve_provider_name` to map provider aliases
+back to canonical tool names; alias collisions must fail rather than execute
+the wrong tool.

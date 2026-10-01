@@ -243,6 +243,37 @@ def _result(
     warnings: list[str] | None = None,
     quality: str = "provider-reported",
 ) -> EnergyResult:
+    starts: list[datetime] = []
+    ends: list[datetime] = []
+    durations: set[int] = set()
+    field_units: dict[str, str] = {}
+    if isinstance(data, list):
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            start_text = row.get("from") or row.get("timestamp")
+            end_text = row.get("to")
+            if isinstance(start_text, str):
+                try:
+                    start = _parse_time(start_text, "timestamp")
+                    starts.append(start)
+                    if isinstance(end_text, str):
+                        end = _parse_time(end_text, "interval end")
+                        if end > start:
+                            ends.append(end)
+                            durations.add(int((end - start).total_seconds()))
+                except EnergyError:
+                    pass  # Preserve provider warnings; unknown coverage stays unspecified.
+            if isinstance(row.get("variable"), str) and isinstance(row.get("unit"), str):
+                field_units[row["variable"]] = row["unit"]
+    if (
+        resolution in {"provider interval", "provider tariff period"}
+        and len(durations) == 1
+        and len(ends) == len(data)
+    ):
+        resolution = f"{next(iter(durations))}s"
+    if resolution == "30m":
+        resolution = "30min"
     return EnergyResult(
         data=data,
         kind=kind,
@@ -250,6 +281,11 @@ def _result(
         source=source,
         timezone="UTC",
         resolution=resolution,
+        provider=source,
+        original_unit=unit,
+        field_units=field_units,
+        time_start=min(starts) if starts else None,
+        time_end=max(ends) if ends else None,
         assumptions=[],
         warnings=warnings or [],
         quality=quality,
@@ -694,6 +730,10 @@ async def _octopus_consumption(args: dict[str, Any], ctx: ExecutionContext) -> E
             raise _error("malformed_response", "Octopus returned an invalid consumption interval.")
         start = _parse_time(start_text, "interval_start")
         end = _parse_time(end_text, "interval_end")
+        if end <= start:
+            raise _error(
+                "malformed_response", "Octopus returned a non-positive consumption interval."
+            )
         consumption = _json_number(value.get("consumption"), "consumption")
         result_rows.append(
             {
@@ -734,6 +774,8 @@ async def _octopus_tariffs(args: dict[str, Any], ctx: ExecutionContext) -> Energ
             raise _error("malformed_response", "Octopus returned an invalid tariff interval.")
         start = _parse_time(valid_from, "valid_from")
         end = _parse_time(valid_to, "valid_to") if isinstance(valid_to, str) else None
+        if end is not None and end <= start:
+            raise _error("malformed_response", "Octopus returned a non-positive tariff interval.")
         inc = _json_number(value.get("value_inc_vat"), "value_inc_vat", allow_none=True)
         exc = _json_number(value.get("value_exc_vat"), "value_exc_vat", allow_none=True)
         if inc is None and exc is None:

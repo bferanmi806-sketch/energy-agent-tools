@@ -1,45 +1,39 @@
 # Energy Agent Tools
 
-An open, self-hostable integration layer giving AI agents one interoperable gateway
-into energy data, metering, engineering software, simulations and energy tools.
+An MIT-licensed, self-hostable gateway for agents that work with energy data and
+engineering models. Agents discover a few actions at a time, resolve reviewed
+capabilities, and execute through one runtime with user, site, account, asset and
+artifact scope.
 
-Version 0.1 is a local Python service. Agents discover tools by intent through a
-small MCP interface, then execute the selected actions. Every energy result has an
-explicit data kind, unit, source, timezone, assumptions and provenance. Large
-results stay in a private local workbench.
+The platform includes encrypted connections and OAuth PKCE, authenticated HTTP
+and MCP hosting, a bound Python SDK, executable workflows, and local time-series
+analysis. Results retain their physical unit, measurement kind, source, input
+lineage and warnings. A forecast or simulation never becomes a meter reading.
 
-## Quickstart
+## Start locally
 
 Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```sh
 git clone https://github.com/bferanmi806-sketch/energy-agent-tools.git
 cd energy-agent-tools
-uv sync --extra dev --extra engineering
-uv run energy-agent catalogue
+uv sync --all-extras
+uv run energy-agent validate
 uv run energy-agent serve --config examples/config.json
 ```
 
-The default transport is MCP stdio. Public API tools need network access. Private
-meter and telemetry tools need locally configured accounts and environment
-credentials. Engineering dependencies are optional; install the `engineering`
-extra for pvlib and pandapower.
+The default MCP transport is stdio. The `engineering` extra supplies pvlib,
+pandapower and windpowerlib. The `network-solvers` extra supplies PyPSA and
+pandapipes. Missing optional packages produce explicit unavailability.
+Private services need operator-configured credentials; no agent supplies secrets.
 
-See [architecture](docs/architecture.md), [Composio audit](docs/composio-audit.md),
-[connector catalogue](docs/connectors.md), [connector guide](docs/connector-development.md),
-[verification](docs/verification.md), and [limitations](docs/limitations.md).
+The example CSV is synthetic and its measurement label is declared input metadata.
+Run `uv run python examples/reference_agent.py` for a deterministic MCP walkthrough
+or `uv run python examples/bound_sdk.py` for the bound SDK.
 
-## What is included
+## Agent interface
 
-The shipped catalogue covers GB carbon intensity, weather/radiation/wind forecasts,
-Octopus meter intervals and tariffs, Home Assistant and OpenEnergyMonitor
-telemetry, Elexon grid data, pvlib solar estimates, pandapower AC studies, battery
-scheduling and thermal calculations. Local CSV, executable and MCP adapters let
-operators add approved data and existing tools. See the catalogue for status and
-exact test evidence; private integrations require credentials and use fixtures in
-our test suite.
-
-The MCP endpoint exposes seven helpers:
+The endpoint exports ten helpers:
 
 - `ENERGY_SEARCH_TOOLS`
 - `ENERGY_GET_TOOL`
@@ -48,65 +42,55 @@ The MCP endpoint exposes seven helpers:
 - `ENERGY_LIST_TOOLKITS`
 - `ENERGY_LIST_SKILLS`
 - `ENERGY_SITE_CONTEXT`
+- `ENERGY_RESOLVE_CAPABILITY`
+- `ENERGY_EXECUTE_CAPABILITY`
+- `ENERGY_RUN_SKILL`
 
-Only selected search results include action schemas. Batch calls can persist data
-locally and link `input_artifacts` so model results retain their input provenance.
-The workbench supports summaries, resampling, timestamp joins, weather pivots and
-anomaly screening. No tool accepts arbitrary Python code.
+Search returns bounded schemas. Capability resolution checks reviewed argument
+mappings, credentials, account pins, asset scope, kind, unit, resolution and declared
+coverage. Equal candidates require a source choice. Unreviewed telemetry remains
+unavailable to generic execution until an operator defines its physical meaning.
 
-Six independent workflow guides cover yesterday's consumption, building spikes,
-battery economics, solar versus consumption, grid conditions and power flow. The
-Python SDK also exports schemas for OpenAI Chat, OpenAI Responses and Anthropic.
+Large results stay in scoped SQLite artifacts. Analysis includes bounded filtering,
+UTC alignment, missing intervals, counter differences, power integration, cost,
+carbon, baselines, calendar comparison, resampling and anomaly screening.
+Twelve executable recipes combine these operations through the same runtime.
+See [workflows](docs/workflows.md) and [SDK usage](docs/sdk.md).
 
-## Connect an MCP client
+## Connections and hosting
 
-Copy [examples/mcp-config.json](examples/mcp-config.json) into your client's MCP
-configuration and replace the repository path. The equivalent command is:
+For local clients, copy [the MCP configuration](examples/mcp-config.json) and replace
+the repository path. `serve --transport streamable-http` binds a fixed identity to
+loopback. For authenticated multi-user ingress use `energy-agent host`, with
+operator-provisioned bearer-token digests and site permissions.
 
-```sh
-uv --directory /absolute/path/to/energy-agent-tools run energy-agent serve --config examples/config.json
-```
+Connections support environment references or an encrypted local vault. OAuth
+supports one-time PKCE state, a loopback callback, refresh and revocation. The
+operator supplies the vault key and provider configuration. Credentials are absent
+from agent schemas and public connection records.
 
-The example imports a small synthetic CSV. Its metered label is a declared example
-input, not data obtained from real hardware. Run the deterministic reference client:
+Read [authentication](docs/authentication.md) and [self-hosting](docs/self-hosting.md)
+for configuration, lifecycle commands, token rotation, session limits and retention.
 
-```sh
-uv run python examples/reference_agent.py
-uv run python examples/sdk.py
-```
+## Connector coverage
 
-For local streamable HTTP, use `uv run energy-agent serve --transport
-streamable-http --config examples/config.json`. It binds to `127.0.0.1:8765/mcp`.
-One process serves one configured identity. Internet-facing, multi-user hosting
-needs application authentication and isolation outside this initial release.
+Public HTTP adapters cover GB carbon intensity, Open-Meteo, Octopus tariffs,
+Elexon and the NESO data portal. Credentialed adapters cover Octopus meters,
+Home Assistant, Emoncms, Electricity Maps v4 and ENTSO-E. Numerical adapters use
+real pvlib, windpowerlib, pandapower, PyPSA, pandapipes and SciPy. Local CSV,
+read-only SQLite, reviewed MCP imports and fixed executables support operator data.
+An optional EnergyPlus adapter requires a trusted installed executable and models.
 
-## Configure a private account
+[The catalogue](docs/connectors.md) distinguishes live public probes, contract
+fixtures, numerical tests and unavailable engines. Private-provider fixtures do
+not establish access to a real installation.
 
-Copy `examples/config.json` to ignored `local-config.json`, then add an account:
+## Safety and evidence
 
-```json
-{
-  "id": "octopus-home",
-  "user_id": "local",
-  "site_id": "home",
-  "toolkit": "octopus-energy-account",
-  "auth": {"scheme": "basic", "credential_env": "OCTOPUS_API_KEY"},
-  "settings": {"mpan": "YOUR_MPAN", "serial_number": "YOUR_METER_SERIAL"}
-}
-```
-
-Set `OCTOPUS_API_KEY` in the server environment using your preferred secret manager.
-Never supply its value to an agent. Home Assistant uses toolkit `home-assistant`,
-bearer auth and `settings.base_url`. Emoncms uses `openenergymonitor`, API-key auth
-and a base URL. Account settings can declare known units and data kind where a
-provider's feed lacks physical metadata. Credentials stay outside connection lists.
-
-## Safety and verification
-
-Default sessions permit reads, calculations and simulations. Configuration writes,
-physical-control and safety-critical actions require operator policy enablement.
-There are no physical-control connectors in this release. Imported MCP and
-executable actions are denied until their permissions are reviewed.
+Default sessions permit reads, calculations, simulations and external data.
+Configuration changes and physical control require explicit operator policy.
+No connector in this release dispatches a device. Imported MCP schemas are
+fingerprinted; upstream annotations do not grant permissions.
 
 ```sh
 uv run ruff check .
@@ -116,10 +100,12 @@ uv run pytest -q
 uv build
 ```
 
-Public live probes are opt-in: `uv run python examples/live_probe.py`. Offline
-fixtures and real local solver tests run in CI. No autonomous LLM benchmark or
-live private-meter integration is claimed. See the exact evidence in
-[verification](docs/verification.md).
+See [verification](docs/verification.md), [real-agent evaluation](docs/agent-benchmark.md),
+[limitations](docs/limitations.md), [architecture](docs/architecture.md), [sites and assets](docs/sites-and-assets.md),
+[connector development](docs/connector-development.md), and the
+[Composio audit](docs/composio-audit.md). This is a self-hosted platform with bounded
+models and an operator-managed trust boundary. It does not claim Composio's
+connector scale or production service history.
 
-MIT licensed. Provider data and engineering software retain their own terms;
-see [third-party notices](THIRD_PARTY_NOTICES.md).
+Provider datasets and engineering dependencies retain their own terms. See
+[third-party notices](THIRD_PARTY_NOTICES.md).

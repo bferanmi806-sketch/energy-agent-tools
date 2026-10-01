@@ -1,0 +1,89 @@
+{
+  "toolkit": {
+    "id": "entsoe",
+    "name": "ENTSO-E Transparency",
+    "description": "Read bounded ENTSO-E transparency time series with secure XML parsing.",
+    "runtime": "http",
+    "status": "requires credentials",
+    "auth_required": true,
+    "docs_url": "https://transparencyplatform.zendesk.com/hc/en-us/articles/15696677194644-Request-Endpoint",
+    "version": "1.0.0",
+    "categories": [
+      "grid",
+      "generation",
+      "load",
+      "forecast"
+    ]
+  },
+  "tools": [
+    {
+      "name": "entsoe.get_timeseries",
+      "toolkit": "entsoe",
+      "description": "Read one ENTSO-E time series by document, process, area, and UTC interval.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_type": {
+            "type": "string",
+            "enum": [
+              "A65",
+              "A69",
+              "A73",
+              "A75"
+            ],
+            "default": "A65"
+          },
+          "process_type": {
+            "type": "string",
+            "enum": [
+              "A01",
+              "A16",
+              "A31",
+              "A32",
+              "A33"
+            ],
+            "default": "A16"
+          },
+          "domain": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80
+          },
+          "domain_parameter": {
+            "type": "string",
+            "enum": [
+              "in_Domain",
+              "outBiddingZone_Domain"
+            ]
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_grid_load",
+        "entsoe_timeseries"
+      ],
+      "actions": [
+        "read-only",
+        "external-data"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": "MW",
+      "dependencies": []
+    }
+  ]
+}

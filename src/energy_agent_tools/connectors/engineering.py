@@ -1324,6 +1324,7 @@ def register(registry: Registry) -> None:
     registry.add(
         Tool(
             name="engineering.estimate_solar_generation",
+            dependencies=["pvlib"],
             toolkit=_TOOLKIT_ID,
             description="Estimate fixed-tilt PV AC output from timezone-aware irradiance and weather rows",
             input_schema=_pv_schema(),
@@ -1342,6 +1343,7 @@ def register(registry: Registry) -> None:
     registry.add(
         Tool(
             name="engineering.run_power_flow",
+            dependencies=["pandapower"],
             toolkit=_TOOLKIT_ID,
             description="Run an AC power flow on explicit buses, lines, loads, generators, and external grids",
             input_schema=_power_flow_schema(),
@@ -1378,6 +1380,7 @@ def register(registry: Registry) -> None:
     registry.add(
         Tool(
             name="engineering.schedule_battery_charging",
+            dependencies=["scipy"],
             toolkit=_TOOLKIT_ID,
             description="Optimize a feasible battery charge and discharge schedule against price or carbon",
             input_schema=_battery_schema(),

@@ -6,7 +6,9 @@
     "runtime": "http",
     "status": "stable",
     "auth_required": false,
-    "docs_url": "https://open-meteo.com/en/docs"
+    "docs_url": "https://open-meteo.com/en/docs",
+    "version": "1.0.0",
+    "categories": []
   },
   "tools": [
     {
@@ -62,10 +64,15 @@
         "temperature"
       ],
       "actions": [
-        "external-data",
-        "read-only"
+        "read-only",
+        "external-data"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
     }
   ]
 }

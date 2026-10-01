@@ -18,6 +18,9 @@ manager rather than vendored. Consult the installed versions for definitive term
 | cryptography | Apache-2.0 OR BSD-3-Clause |
 | pvlib | BSD-3-Clause |
 | pandapower | BSD-3-Clause |
+| [windpowerlib](https://github.com/wind-python/windpowerlib) | MIT |
+| [PyPSA](https://github.com/pypsa/pypsa) | MIT |
+| [pandapipes](https://github.com/e2nIEE/pandapipes/blob/develop/LICENSE) | BSD-3-Clause |
 
 Fetched data is not covered by this repository's MIT licence. Carbon Intensity
 API data requires CC BY 4.0 attribution to the Carbon Intensity API/NESO. Open-Meteo

@@ -1,0 +1,101 @@
+{
+  "toolkit": {
+    "id": "electricitymaps",
+    "name": "Electricity Maps",
+    "description": "Read v4 carbon intensity, mix, load, net load, and forecast signals.",
+    "runtime": "http",
+    "status": "requires credentials",
+    "auth_required": true,
+    "docs_url": "https://app.electricitymaps.com/docs",
+    "version": "1.0.0",
+    "categories": [
+      "carbon",
+      "grid",
+      "forecast",
+      "generation mix"
+    ]
+  },
+  "tools": [
+    {
+      "name": "electricitymaps.get_signal",
+      "toolkit": "electricitymaps",
+      "description": "Read one fixed Electricity Maps v4 signal with provider units and estimation flags preserved.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "signal": {
+            "type": "string",
+            "enum": [
+              "carbon-intensity",
+              "electricity-mix",
+              "net-load",
+              "total-load",
+              "total-reported-load"
+            ],
+            "default": "carbon-intensity"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "forecast",
+              "history",
+              "latest",
+              "past",
+              "past-range"
+            ],
+            "default": "latest"
+          },
+          "zone": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 32
+          },
+          "temporal_granularity": {
+            "type": "string",
+            "enum": [
+              "15_minutes",
+              "5_minutes",
+              "daily",
+              "hourly"
+            ],
+            "default": "hourly"
+          },
+          "flow_traced": {
+            "type": "boolean"
+          },
+          "data_source": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "flow-traced"
+            ]
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_carbon_intensity",
+        "electricitymaps_signal"
+      ],
+      "actions": [
+        "read-only",
+        "external-data"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    }
+  ]
+}

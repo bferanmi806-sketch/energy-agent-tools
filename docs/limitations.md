@@ -1,39 +1,44 @@
 # Scope and limitations
 
-This is an initial self-hostable release, not an operated integration cloud.
+This project is a self-hosted integration platform. The operator owns credentials,
+provider permissions, approved models, host configuration and backups.
 
-- One MCP process serves one configured user/site. HTTP binds to loopback and has
-  no built-in public ingress authentication. Use stdio locally; a network
-  deployment needs an authenticated gateway and separate user-scoped services.
-- Secrets are environment references, never agent tool arguments. An OS process
-  administrator can read the process environment. No encrypted vault is claimed.
-- OAuth account metadata and externally provisioned tokens are supported as
-  credential inputs; interactive login, refresh, revocation, PKCE, dynamic client
-  registration and per-provider OAuth lifecycle are deferred.
-- Search uses lexical ranking and a small energy synonym map. No learned ranking,
-  capability substitution planner or automatic parameter translation is claimed.
-- Skills are guidance, not an autonomous scheduler. Tools with the same energy
-  capability may require different arguments and represent different physical
-  quantities. Cumulative counters require conversion before interval analysis.
-- Workbench operations are bounded and local. Arbitrary Python runs only through
-  the trusted SDK. Executable and imported MCP processes are trusted operator
-  integrations, not isolated sandboxes. SQLite artifacts have no automatic TTL;
-  operators should delete old state directories or use the scoped deletion API.
-- A time series envelope has one primary unit. Weather and multi-quantity model
-  results carry field-specific units in their data or provenance. Downstream
-  code must check these rather than infer units from column names.
-- Connector contract fixtures prove parsing, auth injection and error handling.
-  They do not prove access to a real private smart meter or Home Assistant
-  installation. Public live probes are separately recorded in verification.
-- Reference agent workflows use a deterministic MCP client. No paid LLM-provider
-  credentials were used, and no autonomous-model benchmark is claimed.
-- Balanced AC power flow is a steady-state study, not protection, transient,
-  unbalanced or switching validation. PV estimates omit system effects described
-  in their assumptions. Charging plans are advice and cannot dispatch devices.
-- Provider licences, data attribution and rate limits still apply. An MIT gateway
-  does not relicense fetched energy datasets or proprietary engineering tools.
+- Authenticated hosting uses operator-provisioned bearer digests and fixed user/site
+  mounts. It has expiry, revocation, rotation, request bounds and session limits.
+  Public TLS, organizational identity, billing and dynamic tenant provisioning
+  require deployment infrastructure. Mount topology changes require a restart.
+- The encrypted vault needs an operator key. It is not a managed KMS. OAuth PKCE,
+  callback, refresh and revocation are implemented; provider registration and
+  entitlement remain operator responsibilities. A failed one-time code exchange
+  requires a new authorization attempt. Dynamic client registration is absent.
+- Generic execution requires reviewed bindings. A matching capability label does
+  not establish interchangeable quantities, windows or arguments. Unit conversion
+  is explicit. Grid generation cannot stand in for a building's PV meter.
+- Search is an indexed lexical system with energy synonyms. The reproducible
+  10,000-action benchmark measures eight curated intents, not universal relevance.
+  Learned ranking, embeddings and automatic translation are absent.
+- Twelve executable workflows use bounded inputs and preserve evidence. They
+  need compatible sources and model parameters. Anomaly screening cannot establish
+  cause. Tariff cost excludes standing charges unless separately supplied.
+- Artifacts are private to user and session, with size quotas, retention and scoped
+  deletion. Processes, plugins and executable adapters remain trusted operator
+  integrations. CPU-heavy numerical work is not an isolated job service.
+- HTTP contract fixtures verify request construction, parsing and failure handling.
+  They do not verify a private installation or paid-service entitlement. Public
+  probes and real local numerical tests are recorded separately.
+- The real-agent benchmark uses actual Codex model calls and synthetic source data.
+  Its automated scoring is heuristic. One model and one small fixture cannot
+  establish reliability across providers, seasons, sites or deployment conditions.
+- PyPSA and pandapower are bounded steady-state AC studies. pandapipes is hydraulic
+  flow. Protection, transients, unbalanced switching, thermal transport and device
+  dispatch are outside these contracts. EnergyPlus has boundary fixtures; a real
+  installed engine/model qualification is still required.
+- OpenDSS, OpenStudio and vendor PowerMCP tools are not validated integrations.
+  An operator may import reviewed MCP tools, but that does not qualify upstream
+  software or physical-control safety.
+- The MIT licence applies to gateway code. Provider licences, data attribution,
+  service limits and dependency licences still apply.
 
-Deferred integrations are listed with reasons in the connector catalogue. Add
-production OAuth and auth-at-ingress before offering this as a multi-user service.
-For engineering, add reviewed exchange models, unbalanced systems and validation
-against published reference networks before expanding solver coverage.
+Broader private-account qualification, published numerical reference models,
+load testing, multiple-model evaluation and long-running operational evidence
+remain necessary before offering a mature managed service.

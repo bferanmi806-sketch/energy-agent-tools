@@ -6,7 +6,9 @@
     "runtime": "http",
     "status": "stable",
     "auth_required": false,
-    "docs_url": "https://docs.octopus.energy/rest/guides/endpoints/"
+    "docs_url": "https://docs.octopus.energy/rest/guides/endpoints/",
+    "version": "1.0.0",
+    "categories": []
   },
   "tools": [
     {
@@ -48,10 +50,15 @@
         "time of use"
       ],
       "actions": [
-        "external-data",
-        "read-only"
+        "read-only",
+        "external-data"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
     }
   ]
 }

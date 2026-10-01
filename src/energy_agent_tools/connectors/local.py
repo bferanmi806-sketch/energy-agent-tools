@@ -148,6 +148,73 @@ def register(registry: Registry) -> None:
             handler,
         )
 
+    async def energy_operation(args: Json, ctx: ExecutionContext) -> EnergyResult:
+        from ..timeseries import operate
+
+        inputs = [
+            (artifact_id, ctx.workbench.read(ctx.session, artifact_id))
+            for artifact_id in args["artifact_ids"]
+        ]
+        return operate(args["operation"], inputs, args.get("parameters", {}))
+
+    parameters = schema(
+        {
+            "timestamp": column,
+            "column": column,
+            "second_timestamp": column,
+            "second_column": column,
+            "frequency": {"enum": ["15min", "30min", "1h", "1D", "daily", "weekly", "monthly"]},
+            "start": {"type": "string", "format": "date-time"},
+            "end": {"type": "string"},
+            "minimum": {"type": "number"},
+            "maximum": {"type": "number"},
+            "window": {"type": "integer", "minimum": 1, "maximum": 10000},
+            "method": {"enum": ["left", "trapezoid"]},
+            "unit": column,
+        }
+    )
+    registry.add(
+        Tool(
+            name="WORKBENCH_ENERGY_OPERATION",
+            toolkit="workbench",
+            description="Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon, align, compare calendar periods or rolling baselines with strict units and lineage.",
+            input_schema=schema(
+                {
+                    "operation": {
+                        "enum": [
+                            "filter",
+                            "missing",
+                            "counter",
+                            "integrate_power",
+                            "cost",
+                            "carbon",
+                            "baseline",
+                            "compare",
+                            "normalize",
+                            "align",
+                        ]
+                    },
+                    "artifact_ids": {
+                        "type": "array",
+                        "items": artifact,
+                        "minItems": 1,
+                        "maxItems": 2,
+                    },
+                    "parameters": parameters,
+                },
+                ["operation", "artifact_ids"],
+            ),
+            capabilities=[
+                "analyse_timeseries",
+                "calculate_energy_cost",
+                "calculate_carbon",
+                "compare_energy_data",
+            ],
+            actions={Action.CALCULATE},
+        ),
+        energy_operation,
+    )
+
 
 def register_csv(registry: Registry, root: Path) -> None:
     """Operator grants access to one directory. Agents cannot read arbitrary host paths."""
@@ -171,7 +238,27 @@ def register_csv(registry: Registry, root: Path) -> None:
         if path.stat().st_size > 10_000_000:
             raise EnergyError("input_too_large", "CSV exceeds the 10 MB import limit.")
         with path.open(newline="") as stream:
-            rows = list(csv.DictReader(stream))
+            rows: list[dict[str, str]] = []
+            for row in csv.DictReader(stream):
+                if len(rows) >= 100000:
+                    raise EnergyError("input_too_large", "CSV exceeds the 100000 row limit.")
+                rows.append(row)
+        if args.get("start") or args.get("end"):
+            import pandas as pd
+
+            timestamp = args.get("timestamp", "timestamp")
+            start = pd.Timestamp(args["start"]) if args.get("start") else None
+            end = pd.Timestamp(args["end"]) if args.get("end") else None
+            if any(value is not None and value.tzinfo is None for value in (start, end)):
+                raise EnergyError("naive_timestamp", "CSV range requires explicit offsets.")
+            filtered = []
+            for row in rows:
+                instant = pd.Timestamp(row[timestamp])
+                if instant.tzinfo is None:
+                    raise EnergyError("naive_timestamp", "CSV timestamps require explicit offsets.")
+                if (start is None or instant >= start) and (end is None or instant < end):
+                    filtered.append(row)
+            rows = filtered
         return EnergyResult(
             data=rows,
             kind=DataKind(args["kind"]),
@@ -199,6 +286,9 @@ def register_csv(registry: Registry, root: Path) -> None:
             input_schema=schema(
                 {
                     "file": {"type": "string"},
+                    "start": {"type": "string", "format": "date-time"},
+                    "end": {"type": "string", "format": "date-time"},
+                    "timestamp": {"type": "string"},
                     "kind": {"enum": [k.value for k in DataKind]},
                     "unit": {"type": "string", "minLength": 1},
                     "timezone": {"type": "string"},

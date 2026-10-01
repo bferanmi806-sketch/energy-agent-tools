@@ -15,6 +15,7 @@ avoids leaking credentials or transport state between sessions.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -48,7 +49,11 @@ from ..registry import Registry
 
 __all__ = [
     "MCPImportError",
+    "inspect_mcp",
+    "inspect_mcp_manifest",
+    "inspect_mcp_manifest_from_server",
     "import_mcp",
+    "mcp_schema_digest",
 ]
 
 
@@ -80,6 +85,13 @@ class MCPImportError(EnergyError):
     """An MCP server could not be discovered or executed safely."""
 
 
+_DEFAULT_VERSION = "1.0.0"
+_REVIEW_POLICY = (
+    "Only explicit operator metadata with reviewed=true, kind, unit, and action/actions "
+    "marks an imported tool reviewed; upstream MCP annotations never grant permission."
+)
+
+
 @dataclass(frozen=True)
 class _Transport:
     kind: Literal["stdio", "streamable-http"]
@@ -109,6 +121,24 @@ class _ImportedToolMetadata:
     assumptions: tuple[str, ...]
     quality: str
     credential_env: str | None
+    reviewed: bool
+
+
+def _validated_version(value: str | None) -> str:
+    """Validate an operator-facing MCP version without imposing a semver dialect.
+
+    MCP servers use a range of version schemes.  Keeping the value opaque makes
+    the bridge compatible with calendar versions and provider build IDs while
+    still preventing whitespace or an empty value from changing a namespace or
+    appearing ambiguously in a manifest.
+    """
+
+    version = _DEFAULT_VERSION if value is None else str(value).strip()
+    if not version or any(char.isspace() for char in version):
+        raise ValueError("MCP version must be a non-empty identifier without whitespace")
+    if len(version) > 128:
+        raise ValueError("MCP version is too long")
+    return version
 
 
 def _as_action(value: Any) -> Action:
@@ -221,7 +251,178 @@ def _metadata_for(
         assumptions=assumptions,
         quality=str(values.get("quality", "unknown")),
         credential_env=values.get("credential_env", default_credential_env),
+        reviewed=(
+            values.get("reviewed") is True
+            and "kind" in values
+            and "unit" in values
+            and ("action" in values or "actions" in values)
+        ),
     )
+
+
+def _input_schema(remote_tool: Any) -> Json:
+    """Extract and validate one upstream MCP input schema.
+
+    The official SDK exposes ``inputSchema`` on a tool object.  Accepting a
+    mapping here as well keeps the inspection helpers useful with captured
+    manifests and makes the digest independent of the SDK's model class.
+    """
+
+    if isinstance(remote_tool, Mapping):
+        raw_schema = remote_tool.get("inputSchema", remote_tool.get("input_schema"))
+    else:
+        raw_schema = getattr(remote_tool, "inputSchema", None)
+        if raw_schema is None:
+            raw_schema = getattr(remote_tool, "input_schema", None)
+    if not isinstance(raw_schema, Mapping):
+        raise MCPImportError(
+            "mcp_schema_invalid", "MCP tool input schema is missing or is not an object."
+        )
+    # Round-tripping through JSON rejects SDK objects or non-JSON values before
+    # they can influence registration or a schema digest.
+    try:
+        normalized = json.loads(
+            json.dumps(raw_schema, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        )
+    except (TypeError, ValueError) as exc:
+        raise MCPImportError(
+            "mcp_schema_invalid", "MCP tool input schema is not valid JSON."
+        ) from exc
+    if not isinstance(normalized, dict):
+        raise MCPImportError("mcp_schema_invalid", "MCP tool input schema must be a JSON object.")
+    return cast(Json, normalized)
+
+
+def _remote_tool_name(remote_tool: Any) -> str:
+    raw_name = (
+        remote_tool.get("name")
+        if isinstance(remote_tool, Mapping)
+        else getattr(remote_tool, "name", None)
+    )
+    name = str(raw_name or "").strip()
+    if not name:
+        raise MCPImportError("mcp_schema_invalid", "MCP server returned a tool without a name.")
+    return name
+
+
+def _schema_records(discovered: Sequence[Any] | Mapping[str, Any]) -> list[Json]:
+    """Return canonical, sorted schema records for hashing and inspection."""
+
+    if isinstance(discovered, Mapping):
+        candidates: list[Any] = [
+            {"name": str(name), "inputSchema": schema} for name, schema in discovered.items()
+        ]
+    else:
+        candidates = list(discovered)
+    records: list[Json] = []
+    seen: set[str] = set()
+    for remote_tool in candidates:
+        name = _remote_tool_name(remote_tool)
+        if name in seen:
+            raise MCPImportError(
+                "mcp_schema_invalid", f"MCP server returned duplicate tool name {name!r}."
+            )
+        seen.add(name)
+        records.append({"name": name, "inputSchema": _input_schema(remote_tool)})
+    records.sort(key=lambda record: str(record["name"]))
+    return records
+
+
+def _canonical_json(value: Any) -> bytes:
+    try:
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise MCPImportError(
+            "mcp_schema_invalid", "MCP schema cannot be represented as JSON."
+        ) from exc
+
+
+def mcp_schema_digest(discovered: Sequence[Any] | Mapping[str, Any]) -> str:
+    """Return the deterministic SHA-256 digest for an MCP tool schema set.
+
+    The digest covers sorted ``name``/``inputSchema`` records only.  Tool
+    descriptions and annotations are deliberately excluded: descriptions are
+    presentation text and annotations are untrusted hints.  Callers can pass
+    SDK tool objects, a mapping of upstream names to schemas, or captured
+    ``{"name", "inputSchema"}`` records.
+    """
+
+    return hashlib.sha256(_canonical_json(_schema_records(discovered))).hexdigest()
+
+
+def _reviewed_metadata(
+    metadata: Mapping[str, Mapping[str, Any]] | None,
+    raw_name: str,
+    namespaced_name: str,
+) -> _ImportedToolMetadata:
+    return _metadata_for(
+        metadata,
+        raw_name,
+        namespaced_name,
+        default_source="mcp:inspection",
+        default_credential_env=None,
+    )
+
+
+def inspect_mcp_manifest(
+    discovered: Sequence[Any] | Mapping[str, Any],
+    *,
+    toolkit_id: str = "mcp",
+    version: str | None = None,
+    tool_metadata: Mapping[str, Mapping[str, Any]] | None = None,
+    metadata: Mapping[str, Mapping[str, Any]] | None = None,
+    secrets: Sequence[str] = (),
+) -> Json:
+    """Build a safe, deterministic inspection manifest for discovered tools.
+
+    The manifest contains names, per-tool schema hashes and the aggregate
+    digest, but never copies upstream schemas, descriptions, URLs or
+    annotations.  This makes it safe to persist for drift review.  ``secrets``
+    is accepted for callers that also render operator metadata; all rendered
+    string fields pass through the bridge redactor.
+    """
+
+    version_value = _validated_version(version)
+    records = _schema_records(discovered)
+    all_metadata = tool_metadata if tool_metadata is not None else metadata
+    tools: list[Json] = []
+    for record in records:
+        raw_name = str(record["name"])
+        namespaced_name = f"{toolkit_id}.{raw_name}"
+        reviewed = _reviewed_metadata(all_metadata, raw_name, namespaced_name)
+        schema_hash = hashlib.sha256(_canonical_json(record["inputSchema"])).hexdigest()
+        tools.append(
+            {
+                "name": _redact(raw_name, secrets),
+                "schema_hash": schema_hash,
+                "reviewed": reviewed.reviewed,
+                "actions": sorted(action.value for action in reviewed.actions),
+                "result_kind": reviewed.kind.value if reviewed.reviewed else None,
+                "result_unit": _redact(reviewed.unit, secrets) if reviewed.reviewed else None,
+                "annotations_untrusted": True,
+            }
+        )
+    digest = hashlib.sha256(_canonical_json(records)).hexdigest()
+    return {
+        "toolkit": _redact(toolkit_id, secrets),
+        "version": _redact(version_value, secrets),
+        "upstream_names": [str(tool["name"]) for tool in tools],
+        "schema_hashes": {str(tool["name"]): tool["schema_hash"] for tool in tools},
+        "schema_digest": digest,
+        # ``digest`` is a short compatibility alias for integrations that
+        # store inspection records under a generic digest field.
+        "digest": digest,
+        "schema_algorithm": "sha256",
+        "annotations_untrusted": True,
+        "reviewed_semantics": _REVIEW_POLICY,
+        "tools": tools,
+    }
 
 
 def _safe_url(value: str) -> str:
@@ -376,6 +577,30 @@ async def _client_session(
                 yield session
 
 
+async def _list_tools(session: Any) -> list[Any]:
+    """List all tools in one initialized session under bounded pagination."""
+
+    result = await session.list_tools()
+    discovered = list(result.tools)
+    cursor = result.nextCursor
+    seen: set[str] = set()
+    while cursor:
+        if cursor in seen or len(discovered) > 500 or len(seen) >= 30:
+            raise MCPImportError(
+                "mcp_discovery_limit",
+                "MCP server returned repeated pagination or too many tools.",
+            )
+        seen.add(cursor)
+        result = await session.list_tools(cursor=cursor)
+        discovered.extend(result.tools)
+        cursor = result.nextCursor
+    if len(discovered) > 500:
+        raise MCPImportError(
+            "mcp_discovery_limit", "MCP server exceeded the 500-tool import limit."
+        )
+    return discovered
+
+
 async def _discover_tools(
     transport: _Transport,
     context: ExecutionContext | None = None,
@@ -384,25 +609,7 @@ async def _discover_tools(
     async with _client_session(
         transport, context=context, credential_env=credential_env
     ) as session:
-        result = await session.list_tools()
-        discovered = list(result.tools)
-        cursor = result.nextCursor
-        seen: set[str] = set()
-        while cursor:
-            if cursor in seen or len(discovered) > 500 or len(seen) >= 30:
-                raise MCPImportError(
-                    "mcp_discovery_limit",
-                    "MCP server returned repeated pagination or too many tools.",
-                )
-            seen.add(cursor)
-            result = await session.list_tools(cursor=cursor)
-            discovered.extend(result.tools)
-            cursor = result.nextCursor
-        if len(discovered) > 500:
-            raise MCPImportError(
-                "mcp_discovery_limit", "MCP server exceeded the 500-tool import limit."
-            )
-        return discovered
+        return await _list_tools(session)
 
 
 def _transport_from_arguments(
@@ -463,6 +670,102 @@ def _transport_from_arguments(
     )
 
 
+async def inspect_mcp(
+    toolkit_id: str = "mcp",
+    *,
+    command: str | Sequence[str] | None = None,
+    args: Sequence[str] | None = None,
+    stdio_command: str | Sequence[str] | None = None,
+    stdio_args: Sequence[str] | None = None,
+    url: str | None = None,
+    remote_url: str | None = None,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
+    headers: Mapping[str, str] | None = None,
+    timeout: float = 30.0,
+    sse_read_timeout: float = 300.0,
+    tool_metadata: Mapping[str, Mapping[str, Any]] | None = None,
+    metadata: Mapping[str, Mapping[str, Any]] | None = None,
+    credential_env: str | None = None,
+    discovery_auth: AuthConfig | Json | None = None,
+    version: str | None = None,
+) -> Json:
+    """Discover an MCP server and return a credential-safe review manifest.
+
+    Inspection opens the same short-lived official MCP client session used by
+    :func:`import_mcp`, but never mutates a registry.  Persist the returned
+    ``schema_digest`` and provide it as ``expected_schema_digest`` on import to
+    reject unreviewed upstream schema drift.
+    """
+
+    if not toolkit_id or any(char.isspace() for char in toolkit_id):
+        raise ValueError("toolkit_id must be a non-empty identifier without whitespace")
+    version_value = _validated_version(version)
+    transport = _transport_from_arguments(
+        command=command,
+        args=args,
+        stdio_command=stdio_command,
+        stdio_args=stdio_args,
+        url=url,
+        remote_url=remote_url,
+        cwd=cwd,
+        env=env,
+        headers=headers,
+        timeout=timeout,
+        sse_read_timeout=sse_read_timeout,
+    )
+    discovery_context = None
+    if discovery_auth is not None:
+        auth = (
+            discovery_auth
+            if isinstance(discovery_auth, AuthConfig)
+            else AuthConfig.model_validate(discovery_auth)
+        )
+        secret = os.environ.get(auth.credential_env or "")
+        if auth.scheme not in {"none", "local"} and not secret:
+            raise MCPImportError(
+                "credential_missing", "MCP discovery credential is absent from the environment."
+            )
+        discovery_context = ExecutionContext(
+            Session(user_id="operator-discovery"),
+            ConnectedAccount(
+                id="discovery", user_id="operator-discovery", toolkit=toolkit_id, auth=auth
+            ),
+            secret,
+            cast(httpx.AsyncClient, None),
+            None,
+        )
+    try:
+        with anyio.fail_after(transport.timeout):
+            discovered = await _discover_tools(transport, discovery_context, credential_env)
+    except TimeoutError as exc:
+        raise MCPImportError(
+            "mcp_timeout",
+            "MCP initialization or tool discovery exceeded its timeout.",
+            retryable=True,
+        ) from exc
+    except MCPImportError:
+        raise
+    except Exception as exc:
+        raise MCPImportError(
+            "mcp_discovery_failed",
+            "MCP initialization or discovery failed; check local transport and authentication configuration.",
+            retryable=True,
+        ) from exc
+    return inspect_mcp_manifest(
+        discovered,
+        toolkit_id=toolkit_id,
+        version=version_value,
+        tool_metadata=tool_metadata,
+        metadata=metadata,
+        secrets=_transport_secrets(transport, discovery_context),
+    )
+
+
+# A descriptive alias for callers that prefer the artifact name in their code.
+inspect_mcp_manifest_from_server = inspect_mcp
+
+
 async def import_mcp(
     registry: Registry,
     toolkit_id: str,
@@ -489,23 +792,32 @@ async def import_mcp(
     ] = "experimental",
     auth_required: bool | None = None,
     docs_url: str | None = None,
+    version: str | None = None,
+    expected_schema_digest: str | None = None,
 ) -> Toolkit:
     """Discover and register an MCP server's tools.
 
     ``tool_metadata`` is intentionally operator supplied.  Its per-tool
     entries may contain ``action``/``actions``, ``capabilities``, ``unit``,
-    ``kind``, ``idempotent``, ``timezone``, ``resolution``, ``assumptions``,
-    ``quality``, ``source`` and ``credential_env``.  Unreviewed tools default
-    to ``configuration-write`` and ``estimated``.
+    ``kind``, ``reviewed``, ``idempotent``, ``timezone``, ``resolution``,
+    ``assumptions``, ``quality``, ``source`` and ``credential_env``.  An
+    imported tool is marked reviewed only when ``reviewed`` is explicitly
+    ``True`` and ``kind``, ``unit`` and ``action``/``actions`` are all present.
+    Other tools default to ``configuration-write`` and ``estimated``.
 
     The returned toolkit contains namespaced tools (``<toolkit_id>.<name>``).
-    The remote URL and credentials are never placed in result provenance.
+    Names remain stable across versions; the toolkit and tools carry the
+    operator supplied ``version`` metadata.  Set ``expected_schema_digest`` to
+    reject an upstream schema drift before anything is committed to the
+    registry.  The remote URL and credentials are never placed in result
+    provenance.
     """
 
     if not toolkit_id or any(char.isspace() for char in toolkit_id):
         raise ValueError("toolkit_id must be a non-empty identifier without whitespace")
     if toolkit_id in registry.toolkits:
         raise ValueError(f"Duplicate toolkit: {toolkit_id}")
+    version_value = _validated_version(version)
 
     transport = _transport_from_arguments(
         command=command,
@@ -557,6 +869,20 @@ async def import_mcp(
             retryable=True,
         ) from exc
 
+    actual_schema_digest = mcp_schema_digest(discovered)
+    if expected_schema_digest is not None:
+        expected = str(expected_schema_digest).strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", expected):
+            raise MCPImportError(
+                "mcp_schema_digest_invalid",
+                "Expected MCP schema digest must be a 64-character SHA-256 hex digest.",
+            )
+        if expected != actual_schema_digest:
+            raise MCPImportError(
+                "mcp_schema_drift",
+                "MCP tool schemas changed since the approved schema digest was recorded.",
+            )
+
     toolkit = Toolkit(
         id=toolkit_id,
         name=name or toolkit_id,
@@ -571,26 +897,28 @@ async def import_mcp(
         # not publish that URL as docs/provenance; callers can set an explicit
         # safe docs_url when they want one.
         docs_url=_safe_url(docs_url) if docs_url else None,
+        version=version_value,
     )
     destination = registry
     registry = Registry()
     registry.add_toolkit(toolkit)
 
     all_metadata = tool_metadata if tool_metadata is not None else metadata
+    discovery_secrets = _transport_secrets(transport, discovery_context)
     for remote_tool in discovered:
-        raw_name = str(remote_tool.name)
+        raw_name = _remote_tool_name(remote_tool)
         namespaced_name = f"{toolkit_id}.{raw_name}"
         try:
-            reviewed = _metadata_for(
+            imported_metadata = _metadata_for(
                 all_metadata,
                 raw_name,
                 namespaced_name,
                 default_source=f"mcp:{toolkit_id}",
                 default_credential_env=credential_env,
             )
-            input_schema = _redact(
-                dict(remote_tool.inputSchema), _transport_secrets(transport, None)
-            )
+            raw_input_schema = _input_schema(remote_tool)
+            input_schema = _redact(raw_input_schema, discovery_secrets)
+            schema_hash = hashlib.sha256(_canonical_json(raw_input_schema)).hexdigest()
         except Exception as exc:
             # Discovery succeeded, but a malformed schema or operator metadata
             # must not leave a half-registered tool behind.
@@ -600,8 +928,14 @@ async def import_mcp(
             ) from exc
 
         remote_description = _redact(
-            remote_tool.description or remote_tool.title or raw_name,
-            _transport_secrets(transport, None),
+            (
+                remote_tool.get("description") or remote_tool.get("title") or raw_name
+                if isinstance(remote_tool, Mapping)
+                else getattr(remote_tool, "description", None)
+                or getattr(remote_tool, "title", None)
+                or raw_name
+            ),
+            discovery_secrets,
         )
 
         # Capture immutable values only.  In particular, never capture an
@@ -611,7 +945,8 @@ async def import_mcp(
             context: ExecutionContext,
             *,
             _raw_name: str = raw_name,
-            _tool_metadata: _ImportedToolMetadata = reviewed,
+            _tool_metadata: _ImportedToolMetadata = imported_metadata,
+            _schema_hash: str = schema_hash,
         ) -> EnergyResult:
             if not _tool_metadata.actions.issubset(context.session.allowed_actions):
                 allowed = ", ".join(
@@ -630,6 +965,43 @@ async def import_mcp(
                         context=context,
                         credential_env=_tool_metadata.credential_env,
                     ) as session:
+                        try:
+                            current_tools = await _list_tools(session)
+                        except MCPImportError as exc:
+                            raise EnergyError(
+                                "mcp_schema_drift",
+                                f"MCP tool {_raw_name!r} could not be revalidated before execution.",
+                            ) from exc
+                        try:
+                            matching_tools = [
+                                tool
+                                for tool in current_tools
+                                if _remote_tool_name(tool) == _raw_name
+                            ]
+                        except MCPImportError as exc:
+                            raise EnergyError(
+                                "mcp_schema_drift",
+                                f"MCP tool {_raw_name!r} could not be revalidated before execution.",
+                            ) from exc
+                        if len(matching_tools) != 1:
+                            raise EnergyError(
+                                "mcp_schema_drift",
+                                f"MCP tool {_raw_name!r} is no longer the approved tool.",
+                            )
+                        try:
+                            current_schema_hash = hashlib.sha256(
+                                _canonical_json(_input_schema(matching_tools[0]))
+                            ).hexdigest()
+                        except MCPImportError as exc:
+                            raise EnergyError(
+                                "mcp_schema_drift",
+                                f"MCP tool {_raw_name!r} schema is no longer valid.",
+                            ) from exc
+                        if current_schema_hash != _schema_hash:
+                            raise EnergyError(
+                                "mcp_schema_drift",
+                                f"MCP tool {_raw_name!r} schema changed after approval.",
+                            )
                         result = await session.call_tool(_raw_name, arguments)
             except TimeoutError as exc:
                 raise EnergyError(
@@ -655,7 +1027,7 @@ async def import_mcp(
                 )
 
             warnings = [_DEFAULT_UNVERIFIED_WARNING]
-            if not _tool_metadata.kind_reviewed:
+            if not _tool_metadata.reviewed:
                 warnings.append(_DEFAULT_ESTIMATED_WARNING)
             data = _result_content(result, secrets)
             return EnergyResult(
@@ -680,9 +1052,13 @@ async def import_mcp(
                     toolkit=toolkit_id,
                     description=remote_description,
                     input_schema=input_schema,
-                    capabilities=list(reviewed.capabilities),
-                    actions=set(reviewed.actions),
-                    idempotent=reviewed.idempotent,
+                    capabilities=list(imported_metadata.capabilities),
+                    actions=set(imported_metadata.actions),
+                    idempotent=imported_metadata.idempotent,
+                    version=version_value,
+                    reviewed=imported_metadata.reviewed,
+                    result_kind=imported_metadata.kind if imported_metadata.reviewed else None,
+                    result_unit=imported_metadata.unit if imported_metadata.reviewed else None,
                 ),
                 handler,
             )

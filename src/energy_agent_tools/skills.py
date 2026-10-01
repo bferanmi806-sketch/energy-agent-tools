@@ -1,6 +1,7 @@
 """Workflow guidance is data, independent of connector implementations."""
 
 from .models import Json
+from .workflows import RECIPES
 
 SKILLS: list[Json] = [
     {
@@ -111,3 +112,39 @@ def search_skills(query: str) -> list[Json]:
             .split()
         )
     ][:3]
+
+
+for skill_id, recipe in RECIPES.items():
+    existing = next((skill for skill in SKILLS if skill["id"] == skill_id), None)
+    details = {
+        "executable": True,
+        "capabilities": recipe["capabilities"],
+        "parameters": {
+            "arguments": "Map capability IDs to their exact reviewed arguments.",
+            "tools": "Map capability IDs to canonical source tool names; do not put tool names in provider arguments.",
+            "account_ids": "Map capability IDs to explicit scoped account selections.",
+            "start/end": "Explicit offset-aware range; yesterday is resolved from site timezone.",
+            "artifacts": "Optional existing capability-to-artifact map in this session.",
+        },
+        "evidence_required": [
+            "Input kinds, units and sources",
+            "Coverage and missing intervals",
+            "Derived artifact lineage",
+        ],
+    }
+    if existing:
+        existing.update(details)
+    else:
+        SKILLS.append(
+            {
+                "id": skill_id,
+                "intent": skill_id.replace("-", " "),
+                "sequence": [
+                    "Resolve reviewed sources",
+                    "Execute with normal policies",
+                    "Process bounded local artifacts",
+                ],
+                "pitfalls": ["Do not infer causation or physical control authority."],
+                **details,
+            }
+        )

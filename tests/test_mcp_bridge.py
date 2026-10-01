@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
+from mcp import types
 
-from energy_agent_tools.connectors.mcp_bridge import import_mcp
+from energy_agent_tools.connectors import mcp_bridge
+from energy_agent_tools.connectors.mcp_bridge import (
+    import_mcp,
+    inspect_mcp,
+    inspect_mcp_manifest,
+    mcp_schema_digest,
+)
 from energy_agent_tools.models import (
     Action,
     AuthConfig,
@@ -155,3 +163,158 @@ async def test_invalid_import_is_atomic():
     assert "atomic" not in registry.toolkits
     assert not any(t.toolkit == "atomic" for t in registry.tools.values())
     assert not any(n.startswith("atomic.") for n in registry.handlers)
+
+
+@pytest.mark.asyncio
+async def test_mcp_review_version_and_schema_manifest_are_explicit() -> None:
+    registry = Registry()
+    await import_mcp(
+        registry,
+        "versioned",
+        command=sys.executable,
+        args=[str(FIXTURE)],
+        version="2026.10",
+        tool_metadata={
+            "energy_sum": {
+                "reviewed": True,
+                "action": "calculation",
+                "kind": "calculated",
+                "unit": "kWh",
+            }
+        },
+    )
+    imported = registry.tools["versioned.energy_sum"]
+    assert imported.version == "2026.10"
+    assert imported.reviewed is True
+    assert imported.result_kind.value == "calculated"
+    assert imported.result_unit == "kWh"
+
+    # Supplying a kind without the explicit review contract retains the safe
+    # result metadata but does not claim that the upstream tool was reviewed.
+    await import_mcp(
+        registry,
+        "unreviewed",
+        command=sys.executable,
+        args=[str(FIXTURE)],
+        tool_metadata={
+            "energy_sum": {"action": "calculation", "kind": "calculated", "unit": "kWh"}
+        },
+    )
+    unreviewed = registry.tools["unreviewed.energy_sum"]
+    assert unreviewed.reviewed is False
+    assert unreviewed.result_kind is None
+    assert unreviewed.result_unit is None
+
+    schemas = {
+        "zeta": {"type": "object", "properties": {"value": {"type": "number"}}},
+        "alpha": {"type": "object", "properties": {"name": {"type": "string"}}},
+    }
+    manifest = inspect_mcp_manifest(
+        schemas,
+        toolkit_id="safe",
+        version="2.0.0",
+        tool_metadata={
+            "alpha": {
+                "reviewed": True,
+                "action": "read-only",
+                "kind": "metered",
+                "unit": "kWh",
+            }
+        },
+    )
+    assert manifest["version"] == "2.0.0"
+    assert manifest["upstream_names"] == ["alpha", "zeta"]
+    assert manifest["schema_digest"] == mcp_schema_digest(schemas)
+    assert manifest["digest"] == manifest["schema_digest"]
+    assert manifest["annotations_untrusted"] is True
+    assert manifest["tools"][0]["reviewed"] is True
+    assert "inputSchema" not in repr(manifest)
+
+    secret = "manifest-private-token"
+    redacted = inspect_mcp_manifest(
+        {secret: {"type": "object"}},
+        toolkit_id="safe",
+        tool_metadata={
+            secret: {
+                "reviewed": True,
+                "action": "read-only",
+                "kind": "metered",
+                "unit": secret,
+            }
+        },
+        secrets=[secret],
+    )
+    assert secret not in repr(redacted)
+    assert "[REDACTED]" in repr(redacted)
+
+
+@pytest.mark.asyncio
+async def test_mcp_inspection_digest_rejects_schema_drift_before_registry_commit() -> None:
+    manifest = await inspect_mcp(
+        "fixture",
+        command=sys.executable,
+        args=[str(FIXTURE)],
+        version="1.2.3",
+    )
+    assert manifest["schema_digest"]
+    assert len(manifest["schema_digest"]) == 64
+
+    registry = Registry()
+    with pytest.raises(EnergyError) as error:
+        await import_mcp(
+            registry,
+            "drifted",
+            command=sys.executable,
+            args=[str(FIXTURE)],
+            expected_schema_digest="0" * 64,
+        )
+    assert error.value.code == "mcp_schema_drift"
+    assert registry.toolkits == {}
+    assert registry.tools == {}
+    assert registry.handlers == {}
+
+
+@pytest.mark.asyncio
+async def test_mcp_runtime_schema_drift_is_rejected_before_call(monkeypatch) -> None:
+    registry = Registry()
+    await import_mcp(
+        registry,
+        "runtime-drift",
+        command=sys.executable,
+        args=[str(FIXTURE)],
+        tool_metadata={"energy_sum": {"action": "calculation"}},
+    )
+    called = False
+
+    @asynccontextmanager
+    async def changed_server(*_args, **_kwargs):
+        class ChangedSession:
+            async def list_tools(self, cursor=None):
+                assert cursor is None
+                return types.ListToolsResult(
+                    tools=[
+                        types.Tool(
+                            name="energy_sum",
+                            description="same name, incompatible schema",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {"left": {"type": "string"}},
+                                "required": ["left"],
+                                "additionalProperties": False,
+                            },
+                        )
+                    ]
+                )
+
+            async def call_tool(self, *_args, **_kwargs):
+                nonlocal called
+                called = True
+                return types.CallToolResult(content=[])
+
+        yield ChangedSession()
+
+    monkeypatch.setattr(mcp_bridge, "_client_session", changed_server)
+    with pytest.raises(EnergyError) as error:
+        await registry.handlers["runtime-drift.energy_sum"]({"left": 2, "right": 3}, _context())
+    assert error.value.code == "mcp_schema_drift"
+    assert called is False

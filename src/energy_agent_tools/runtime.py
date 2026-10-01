@@ -3,7 +3,10 @@ from __future__ import annotations
 import copy
 import json
 import os
+import time
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -40,8 +43,17 @@ class EnergyAgent:
         sites: list[Site] | None = None,
         assets: list[Asset] | None = None,
         http: httpx.AsyncClient | None = None,
+        auth_store: Any = None,
+        bindings: list[Any] | None = None,
+        defer_unknown_bindings: bool = False,
+        calendar_clock: Callable[[], datetime] | None = None,
     ):
         self.registry = registry
+        self.auth_store = auth_store
+        self._closed = False
+        self.calendar_clock = calendar_clock or (lambda: datetime.now(UTC))
+        self.events: list[Json] = []
+        self.event_sink: Callable[[Json], None] | None = None
         self.workbench = Workbench(root)
         self.accounts = {a.id: a for a in accounts or []}
         self.sites = {s.id: s for s in sites or []}
@@ -65,10 +77,77 @@ class EnergyAgent:
         self.before: list[BeforeHook] = []
         self.after: list[AfterHook] = []
         self.schema_hooks: list[SchemaHook] = []
+        for asset in self.assets.values():
+            if asset.parent_id and (
+                asset.parent_id not in self.assets
+                or self.assets[asset.parent_id].site_id != asset.site_id
+            ):
+                raise ValueError("Asset parent must belong to the same site.")
+            visited = {asset.id}
+            parent_id = asset.parent_id
+            while parent_id:
+                if parent_id in visited:
+                    raise ValueError("Asset parent graph contains a cycle.")
+                visited.add(parent_id)
+                parent = self.assets.get(parent_id)
+                if parent is None or parent.site_id != asset.site_id:
+                    raise ValueError("Asset parent must belong to the same site.")
+                parent_id = parent.parent_id
+            for account_id in asset.account_ids:
+                asset_account = self.accounts.get(account_id)
+                if asset_account is None or asset_account.site_id != asset.site_id:
+                    raise ValueError("Asset account must belong to the same site.")
+        from .capabilities import CapabilityResolver
+
+        self.resolver = CapabilityResolver(
+            self, bindings, defer_unknown_tools=defer_unknown_bindings
+        )
+
+    def credential_available(self, account: ConnectedAccount) -> bool:
+        if account.auth.scheme in {"none", "local"}:
+            return True
+        if account.auth.secret_id:
+            try:
+                return bool(
+                    self.auth_store
+                    and self.auth_store.credential(account.user_id, account.id, account.site_id)
+                )
+            except EnergyError:
+                return bool(
+                    self.auth_store
+                    and account.auth.scheme == "oauth"
+                    and self.auth_store.can_refresh(account.user_id, account.id, account.site_id)
+                )
+        return bool(account.auth.credential_env and os.environ.get(account.auth.credential_env))
+
+    def _secrets(self, user_id: str | None = None) -> list[str]:
+        values = [
+            os.environ.get(a.auth.credential_env, "")
+            for a in self.accounts.values()
+            if a.auth.credential_env and (user_id is None or a.user_id == user_id)
+        ]
+        if self.auth_store:
+            values.extend(self.auth_store.redaction_values(user_id))
+        return values
+
+    def _event(self, event: Json) -> None:
+        safe = self._redact(event, self._secrets(event.get("user_id")))
+        self.events.append(safe)
+        del self.events[:-1000]
+        if self.event_sink:
+            try:
+                self.event_sink(safe)
+            except Exception:
+                pass
 
     async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         if self._owns_http:
             await self.http.aclose()
+        if self.auth_store:
+            self.auth_store.close()
 
     def session(self, user_id: str, site_id: str | None = None, **kwargs: Any) -> Session:
         session = Session(user_id=user_id, site_id=site_id, **kwargs)
@@ -91,24 +170,62 @@ class EnergyAgent:
         data = tool.public()
         for hook in self.schema_hooks:
             data = hook(copy.deepcopy(data))
-        secrets = [
-            os.environ.get(a.auth.credential_env, "")
-            for a in self.accounts.values()
-            if a.auth.credential_env
-        ]
+        secrets = self._secrets(session.user_id)
         return self._redact(data, secrets)
 
     def search(self, session: Session, query: str, limit: int = 5) -> list[Json]:
         self._scope(session)
         if not query.strip() or len(query) > 2000 or not 1 <= limit <= 10:
             raise EnergyError("invalid_search", "Provide a query and limit between 1 and 10.")
-        return [
-            self.get_tool(session, t.name)
-            for t in self.registry.search(query, session.toolkits, limit)
+        matches = self.registry.search(query, session.toolkits, max(limit, 10))
+
+        def availability(tool: Tool) -> int:
+            if any(find_spec(dependency) is None for dependency in tool.dependencies):
+                return 0
+            try:
+                account = self._account(session, tool.toolkit)
+                return 1 if account is None or self.credential_available(account) else 0
+            except EnergyError:
+                return 0
+
+        matches.sort(key=lambda tool: -availability(tool))
+        results = [
+            {**self.get_tool(session, t.name), "connection_available": bool(availability(t))}
+            for t in matches[:limit]
         ]
+        self._event(
+            {
+                "event": "search",
+                "session_id": session.id,
+                "user_id": session.user_id,
+                "tools": [t["name"] for t in results],
+            }
+        )
+        return results
+
+    def _sync_connections(self, user_id: str) -> None:
+        if self.auth_store:
+            current = self.auth_store.accounts(user_id)
+            current_ids = {account.id for account in current}
+            for account_id, account in list(self.accounts.items()):
+                if (
+                    account.user_id == user_id
+                    and account.auth.secret_id
+                    and account_id not in current_ids
+                ):
+                    del self.accounts[account_id]
+            for account in current:
+                if account.site_id is not None:
+                    site = self.sites.get(account.site_id)
+                    if site is None or site.user_id != user_id:
+                        raise EnergyError(
+                            "site_forbidden", "Stored connection has an invalid site scope."
+                        )
+                self.accounts[account.id] = account
 
     def connections(self, session: Session) -> list[Json]:
         self._scope(session)
+        self._sync_connections(session.user_id)
         return [
             a.public()
             for a in self.accounts.values()
@@ -120,6 +237,7 @@ class EnergyAgent:
     def _account(
         self, session: Session, toolkit: str, account_id: str | None = None
     ) -> ConnectedAccount | None:
+        self._sync_connections(session.user_id)
         selected = account_id or session.account_ids.get(toolkit)
         candidates = [
             a
@@ -127,6 +245,7 @@ class EnergyAgent:
             if a.toolkit == toolkit
             and a.user_id == session.user_id
             and a.enabled
+            and a.state == "active"
             and (session.site_id is None or a.site_id == session.site_id)
         ]
         if selected:
@@ -195,13 +314,23 @@ class EnergyAgent:
         account_id: str | None = None,
         persist: bool = False,
         input_artifacts: list[str] | None = None,
+        expected_kind: Any = None,
+        expected_unit: str | None = None,
+        asset_id: str | None = None,
+        expected_resolution: str | None = None,
+        expected_arguments: Json | None = None,
     ) -> Json:
         execution_id = uuid4().hex
-        all_secrets = [
-            os.environ.get(a.auth.credential_env, "")
-            for a in self.accounts.values()
-            if a.auth.credential_env
-        ]
+        started = time.monotonic()
+        all_secrets = self._secrets(session.user_id)
+        event: Json = {
+            "event": "execution",
+            "execution_id": execution_id,
+            "user_id": session.user_id,
+            "session_id": session.id,
+            "tool": name,
+            "ok": False,
+        }
         try:
             self.get_tool(session, name)
             tool = self.registry.get(name)
@@ -214,8 +343,28 @@ class EnergyAgent:
             for before in self.before:
                 args = before(tool, args, session)
             self._validate(tool, args)
+            if any(args.get(key) != value for key, value in (expected_arguments or {}).items()):
+                raise EnergyError(
+                    "binding_arguments_changed",
+                    "Execution hooks changed a fixed capability argument.",
+                )
             account = self._account(session, tool.toolkit, account_id)
             credential = None
+            if account and account.auth.secret_id:
+                if not self.auth_store:
+                    raise EnergyError(
+                        "credential_missing", "Encrypted credential store is not configured."
+                    )
+                if (
+                    account.auth.scheme == "oauth"
+                    and account.expires_at
+                    and account.expires_at <= datetime.now(UTC) + timedelta(seconds=60)
+                ):
+                    account = await self.auth_store.refresh(session.user_id, account.id)
+                    self.accounts[account.id] = account
+                credential = self.auth_store.credential(
+                    session.user_id, account.id, session.site_id
+                )
             if account and account.auth.credential_env:
                 credential = os.environ.get(account.auth.credential_env)
                 if not credential:
@@ -229,9 +378,54 @@ class EnergyAgent:
             if len(input_artifacts or []) > 10:
                 raise EnergyError("too_many_inputs", "At most ten input artifacts may be linked.")
             inputs = [(a, self.workbench.read(session, a)) for a in input_artifacts or []]
+            if asset_id:
+                asset = self.assets.get(asset_id)
+                if (
+                    asset is None
+                    or self.sites[asset.site_id].user_id != session.user_id
+                    or (session.site_id and asset.site_id != session.site_id)
+                ):
+                    raise EnergyError("asset_forbidden", "Asset is outside this session scope.")
+                if account and (
+                    account.site_id != asset.site_id
+                    or (asset.account_ids and account.id not in asset.account_ids)
+                ):
+                    raise EnergyError("asset_forbidden", "Account is not connected to this asset.")
             context = ExecutionContext(session, account, credential, self.http, self.workbench)
             result = await self.registry.handlers[name](args, context)
+            if expected_kind is not None and result.kind != expected_kind:
+                raise EnergyError(
+                    "binding_semantics_changed",
+                    "Provider returned a different measurement kind from the reviewed binding.",
+                )
+            if expected_unit is not None and result.unit != expected_unit:
+                raise EnergyError(
+                    "binding_semantics_changed",
+                    "Provider returned a different unit from the reviewed binding.",
+                )
+            if asset_id:
+                result.asset_id = asset_id
+            result.provider = result.provider or tool.toolkit
+            result.site_id = session.site_id or (
+                self.assets[asset_id].site_id
+                if asset_id
+                else account.site_id
+                if account
+                else result.site_id
+            )
+            result.original_unit = result.original_unit or result.unit
+            if len(inputs) == 1:
+                input_result = inputs[0][1]
+                result.site_id = result.site_id or input_result.site_id
+                result.asset_id = result.asset_id or input_result.asset_id
+                result.time_start = result.time_start or input_result.time_start
+                result.time_end = result.time_end or input_result.time_end
+            result.provenance.append(
+                {"site_id": session.site_id, "provider": tool.toolkit, "tool_version": tool.version}
+            )
             original_kind = result.kind
+            original_scope = (result.site_id, result.asset_id, result.original_unit)
+            original_provenance = copy.deepcopy(result.provenance)
             for after in self.after:
                 result = after(tool, result, session)
             if original_kind.value != "metered" and result.kind.value == "metered":
@@ -240,11 +434,38 @@ class EnergyAgent:
                 )
             # Boundary check after hooks, before persisting any result.
             result = EnergyResult.model_validate(result.model_dump())
-            all_secrets = [
-                os.environ.get(a.auth.credential_env, "")
-                for a in self.accounts.values()
-                if a.auth.credential_env
-            ]
+            if (result.site_id, result.asset_id, result.original_unit) != original_scope:
+                raise EnergyError(
+                    "result_scope_changed",
+                    "Execution hooks changed the bound result scope or original unit.",
+                )
+            if result.provenance[: len(original_provenance)] != original_provenance:
+                raise EnergyError(
+                    "provenance_changed",
+                    "Execution hooks removed or changed original source evidence.",
+                )
+            if (expected_kind is not None and result.kind != expected_kind) or (
+                expected_unit is not None and result.unit != expected_unit
+            ):
+                raise EnergyError(
+                    "binding_semantics_changed",
+                    "Execution hooks changed the reviewed measurement kind or unit.",
+                )
+            if expected_resolution is not None:
+                import pandas as pd
+
+                try:
+                    matches_resolution = result.resolution is not None and (
+                        pd.to_timedelta(result.resolution) == pd.to_timedelta(expected_resolution)
+                    )
+                except (TypeError, ValueError):
+                    matches_resolution = result.resolution == expected_resolution
+                if not matches_resolution:
+                    raise EnergyError(
+                        "binding_semantics_changed",
+                        "Provider returned a different resolution from the reviewed binding.",
+                    )
+            all_secrets = self._secrets(session.user_id)
             result = EnergyResult.model_validate(
                 self._redact(result.model_dump(mode="json"), all_secrets)
             )
@@ -272,8 +493,12 @@ class EnergyAgent:
                 data["data"] = self.workbench.persist(session, result)
             else:
                 data = self.workbench.compact(session, result)
+            event.update(
+                ok=True, account_id=account.id if account else None, kind=result.kind.value
+            )
             return {"ok": True, "execution_id": execution_id, "result": data}
         except EnergyError as exc:
+            event["error_code"] = exc.code
             return {
                 "ok": False,
                 "execution_id": execution_id,
@@ -284,6 +509,7 @@ class EnergyAgent:
                 },
             }
         except httpx.TimeoutException:
+            event["error_code"] = "timeout"
             return {
                 "ok": False,
                 "execution_id": execution_id,
@@ -294,6 +520,7 @@ class EnergyAgent:
                 },
             }
         except httpx.HTTPStatusError as exc:
+            event["error_code"] = "provider_http_error"
             code = exc.response.status_code
             return {
                 "ok": False,
@@ -315,13 +542,26 @@ class EnergyAgent:
                     "retryable": False,
                 },
             }
+        finally:
+            if not event["ok"]:
+                event.setdefault("error_code", "execution_failed")
+            event["latency_ms"] = round((time.monotonic() - started) * 1000, 3)
+            self._event(event)
 
     async def multi_execute(self, session: Session, calls: list[Json]) -> list[Json]:
         if not 1 <= len(calls) <= 20:
             raise EnergyError("invalid_batch", "A batch must contain between 1 and 20 calls.")
         # Ordered batches avoid racing local state. Each result carries its own failure.
         outputs = []
-        for call in calls:
+        from .server import ExecutionCall
+
+        for raw in calls:
+            try:
+                call = ExecutionCall.model_validate(raw).model_dump()
+            except ValueError:
+                raise EnergyError(
+                    "invalid_batch", "Batch calls must match the execution contract."
+                ) from None
             outputs.append(
                 await self.execute(
                     session,

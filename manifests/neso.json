@@ -1,0 +1,126 @@
+{
+  "toolkit": {
+    "id": "neso",
+    "name": "NESO Data Portal",
+    "description": "Search and query bounded NESO CKAN datastore resources without arbitrary SQL.",
+    "runtime": "http",
+    "status": "stable",
+    "auth_required": false,
+    "docs_url": "https://www.neso.energy/data-portal/api-guidance",
+    "version": "1.0.0",
+    "categories": [
+      "grid",
+      "forecast",
+      "datasets"
+    ]
+  },
+  "tools": [
+    {
+      "name": "neso.search_datasets",
+      "toolkit": "neso",
+      "description": "Search the NESO public CKAN dataset catalogue.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "rows": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "search_energy_datasets",
+        "neso_dataset_catalogue"
+      ],
+      "actions": [
+        "read-only",
+        "external-data"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    },
+    {
+      "name": "neso.query_dataset",
+      "toolkit": "neso",
+      "description": "Read a bounded NESO datastore resource by package, resource, scalar filters, and row limit.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "resource_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "filters": {
+            "type": "object",
+            "maxProperties": 8,
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 1000
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000,
+            "default": 0
+          }
+        },
+        "required": [
+          "dataset"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "query_energy_dataset",
+        "neso_datastore"
+      ],
+      "actions": [
+        "read-only",
+        "external-data"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    }
+  ]
+}

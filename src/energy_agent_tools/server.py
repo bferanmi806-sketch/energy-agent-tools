@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import EnergyError, Json, Session
+from .models import DataKind, EnergyError, Json, Session
 from .providers import format_tools
 from .runtime import EnergyAgent
 from .skills import SKILLS, search_skills
@@ -108,7 +108,7 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         ids = {s.id for s in sites}
         contexts = []
         for site in sites:
-            local_now = datetime.now(ZoneInfo(site.timezone))
+            local_now = agent.calendar_clock().astimezone(ZoneInfo(site.timezone))
             start, end = day_window(local_now.date() - timedelta(days=1), site.timezone)
             contexts.append(
                 {
@@ -125,13 +125,97 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
             "active_site_id": session.site_id,
         }
 
+    @server.tool(name="ENERGY_RESOLVE_CAPABILITY")
+    async def resolve_capability(
+        capability: str,
+        arguments: Json | None = None,
+        asset_id: str | None = None,
+        kind: str | None = None,
+        account_id: str | None = None,
+        unit: str | None = None,
+        resolution: str | None = None,
+        tool: str | None = None,
+    ) -> Json:
+        """Rank reviewed available sources by site, asset, account, measurement kind, units and coverage. Ambiguity is explicit."""
+        from .capabilities import CapabilityRequest
+
+        try:
+            request = CapabilityRequest(
+                capability=capability,
+                arguments=arguments or {},
+                asset_id=asset_id,
+                kind=DataKind(kind) if kind else None,
+                account_id=account_id,
+                unit=unit,
+                resolution=resolution,
+                tool=tool,
+            )
+            return agent.resolver.resolve(session, request)
+        except (EnergyError, ValueError) as exc:
+            return {
+                "error": {
+                    "code": exc.code if isinstance(exc, EnergyError) else "invalid_request",
+                    "message": "Capability request cannot be resolved in this scope.",
+                }
+            }
+
+    @server.tool(name="ENERGY_EXECUTE_CAPABILITY")
+    async def execute_capability(
+        capability: str,
+        arguments: Json | None = None,
+        asset_id: str | None = None,
+        kind: str | None = None,
+        account_id: str | None = None,
+        persist: bool = False,
+        unit: str | None = None,
+        resolution: str | None = None,
+        tool: str | None = None,
+    ) -> Json:
+        """Execute a uniquely selected reviewed capability binding through normal policies. Never substitutes incompatible schemas."""
+        from .capabilities import CapabilityRequest
+
+        try:
+            request = CapabilityRequest(
+                capability=capability,
+                arguments=arguments or {},
+                asset_id=asset_id,
+                kind=DataKind(kind) if kind else None,
+                account_id=account_id,
+                unit=unit,
+                resolution=resolution,
+                tool=tool,
+            )
+            return await agent.resolver.execute(session, request, persist)
+        except (EnergyError, ValueError) as exc:
+            return {
+                "ok": False,
+                "error": {
+                    "code": exc.code if isinstance(exc, EnergyError) else "invalid_request",
+                    "message": "Capability request is invalid or outside this scope.",
+                },
+            }
+
+    @server.tool(name="ENERGY_RUN_SKILL")
+    async def run_skill(skill_id: str, parameters: Json | None = None) -> Json:
+        """Run a listed executable skill. Inspect ENERGY_LIST_SKILLS first.
+
+        parameters.arguments maps capability IDs to provider arguments only.
+        parameters.tools and parameters.account_ids select canonical sources.
+        start/end are offset-aware ranges; artifacts maps capabilities to scoped
+        artifact IDs. Battery workflows require battery constraints; weather-based
+        solar estimation requires solar model inputs. Missing inputs stay explicit.
+        """
+        from .workflows import run_skill as execute_skill
+
+        return await execute_skill(agent, session, skill_id, parameters or {})
+
     return server
 
 
 async def provider_tools(
     server: FastMCP, provider: Literal["openai", "openai-responses", "anthropic"]
 ) -> list[Json]:
-    """The same seven search-first helpers can be passed to provider function calling."""
+    """The same ten search-first helpers can be passed to provider function calling."""
     tools = await server.list_tools()
     return format_tools(
         [

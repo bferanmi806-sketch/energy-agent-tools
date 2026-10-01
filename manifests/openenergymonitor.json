@@ -6,7 +6,9 @@
     "runtime": "http",
     "status": "requires credentials",
     "auth_required": true,
-    "docs_url": "https://openenergymonitor.org/docs/emoncms/feed.html"
+    "docs_url": "https://openenergymonitor.org/docs/emoncms/feed.html",
+    "version": "1.0.0",
+    "categories": []
   },
   "tools": [
     {
@@ -53,10 +55,15 @@
         "time series"
       ],
       "actions": [
-        "external-data",
-        "read-only"
+        "read-only",
+        "external-data"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
     }
   ]
 }

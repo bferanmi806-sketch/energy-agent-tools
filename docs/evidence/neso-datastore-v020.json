@@ -1,0 +1,201 @@
+{
+  "checked_at": "2026-10-01T09:10:02.497687+00:00",
+  "arguments": {
+    "dataset": "embedded-wind-and-solar-forecasts",
+    "resource_id": "db6c038f-98af-4570-ab60-24d71ebd0ae5",
+    "limit": 3
+  },
+  "result": {
+    "ok": true,
+    "execution_id": "c5351ebb58604160915898318805a4c0",
+    "result": {
+      "data": {
+        "dataset": "embedded-wind-and-solar-forecasts",
+        "resource_id": "db6c038f-98af-4570-ab60-24d71ebd0ae5",
+        "rows": [
+          {
+            "_id": 1,
+            "DATE_GMT": "2026-10-01T00:00:00",
+            "TIME_GMT": "08:30",
+            "SETTLEMENT_DATE": "2026-10-01T00:00:00",
+            "SETTLEMENT_PERIOD": 19,
+            "EMBEDDED_WIND_FORECAST": 1117,
+            "EMBEDDED_WIND_CAPACITY": 6417,
+            "EMBEDDED_SOLAR_FORECAST": 3882,
+            "EMBEDDED_SOLAR_CAPACITY": 23963
+          },
+          {
+            "_id": 2,
+            "DATE_GMT": "2026-10-01T00:00:00",
+            "TIME_GMT": "09:00",
+            "SETTLEMENT_DATE": "2026-10-01T00:00:00",
+            "SETTLEMENT_PERIOD": 20,
+            "EMBEDDED_WIND_FORECAST": 1133,
+            "EMBEDDED_WIND_CAPACITY": 6417,
+            "EMBEDDED_SOLAR_FORECAST": 5054,
+            "EMBEDDED_SOLAR_CAPACITY": 23963
+          },
+          {
+            "_id": 3,
+            "DATE_GMT": "2026-10-01T00:00:00",
+            "TIME_GMT": "09:30",
+            "SETTLEMENT_DATE": "2026-10-01T00:00:00",
+            "SETTLEMENT_PERIOD": 21,
+            "EMBEDDED_WIND_FORECAST": 1170,
+            "EMBEDDED_WIND_CAPACITY": 6417,
+            "EMBEDDED_SOLAR_FORECAST": 6185,
+            "EMBEDDED_SOLAR_CAPACITY": 23963
+          }
+        ],
+        "fields": [
+          {
+            "type": "int",
+            "id": "_id"
+          },
+          {
+            "info": {
+              "comment": "N/A",
+              "description": "The date for which the forecast is intended for",
+              "title": "Forecast Date",
+              "type": "datetime",
+              "example": "2022-01-05T00:00:00",
+              "unit": "N/A"
+            },
+            "type": "timestamp",
+            "id": "DATE_GMT"
+          },
+          {
+            "info": {
+              "comment": "N/A",
+              "description": "The time for which the forecast is intended for",
+              "title": "Time if Forecast",
+              "type": "string",
+              "example": "10:30",
+              "unit": "N/A"
+            },
+            "type": "text",
+            "id": "TIME_GMT"
+          },
+          {
+            "info": {
+              "comment": "N/A",
+              "description": "The period from 00:00 hours to 24:00 hours on each day;",
+              "title": "Settlement Date",
+              "type": "datetime",
+              "example": "2022-01-05T00:00:00",
+              "unit": "N/A"
+            },
+            "type": "timestamp",
+            "id": "SETTLEMENT_DATE"
+          },
+          {
+            "info": {
+              "comment": "N/A",
+              "description": "Period of 30 minutes beginning on the hour or the half-hour",
+              "title": "Settlement Period",
+              "type": "integer",
+              "example": "23",
+              "unit": "Number"
+            },
+            "type": "int4",
+            "id": "SETTLEMENT_PERIOD"
+          },
+          {
+            "info": {
+              "comment": "N/A",
+              "description": "This is an estimate forecast of the GB wind generation from wind farms which do not have Transmission System metering installed. These wind farms are embedded in the distribution network and invisible to Nation Grid ESO. Their effect is to suppress the electricity demand during periods of high wind. The true output of these generators is not known so an estimate is provided based on Nation Grid ESO\u2019s best model.\u00a0",
+              "title": "Embedded wind Forecast ",
+              "type": "number",
+              "example": "2361",
+              "unit": "MW"
+            },
+            "type": "numeric",
+            "id": "EMBEDDED_WIND_FORECAST"
+          },
+          {
+            "info": {
+              "comment": "N/A",
+              "description": "This is Nation Grid ESO\u2019s best view of the installed embedded wind capacity in GB. This is based on publically available information compiled from a variety of sources and is not the definitive view. It is consistent with the generation estimate provided. ",
+              "title": "Embedded Wind Capacity",
+              "type": "integer",
+              "example": "6559",
+              "unit": "MW"
+            },
+            "type": "int4",
+            "id": "EMBEDDED_WIND_CAPACITY"
+          },
+          {
+            "info": {
+              "comment": "N/A",
+              "description": "This is an estimate forecast of the GB solar generation from solar farms which do not have Transmission System metering installed. These solar farms are embedded in the distribution network and invisible to Nation Grid ESO. Their effect is to suppress the electricity demand during periods of high solar periods. The true output of these generators is not known so an estimate is provided based on Nation Grid ESO\u2019s best model.",
+              "title": "Embedded Solar Forecast",
+              "type": "integer",
+              "example": "7406",
+              "unit": "MW"
+            },
+            "type": "int4",
+            "id": "EMBEDDED_SOLAR_FORECAST"
+          },
+          {
+            "info": {
+              "comment": "N/A",
+              "description": "Estimated Embedded Solar Capacity. This is National Grid ESO\u2019s best view of the installed embedded solar capacity in GB. This is based on publically available information compiled from a variety of sources and is not the definitive view. It is consistent with the generation estimate provided.",
+              "title": "Embedded Solar Capacity",
+              "type": "integer",
+              "example": "13080",
+              "unit": "MW"
+            },
+            "type": "int4",
+            "id": "EMBEDDED_SOLAR_CAPACITY"
+          }
+        ]
+      },
+      "kind": "forecast",
+      "unit": "provider-defined",
+      "source": "neso",
+      "timezone": "UTC",
+      "resolution": null,
+      "provider": "neso",
+      "site_id": null,
+      "asset_id": null,
+      "time_start": null,
+      "time_end": null,
+      "original_unit": "provider-defined",
+      "field_units": {
+        "DATE_GMT": "N/A",
+        "TIME_GMT": "N/A",
+        "SETTLEMENT_DATE": "N/A",
+        "SETTLEMENT_PERIOD": "Number",
+        "EMBEDDED_WIND_FORECAST": "MW",
+        "EMBEDDED_WIND_CAPACITY": "MW",
+        "EMBEDDED_SOLAR_FORECAST": "MW",
+        "EMBEDDED_SOLAR_CAPACITY": "MW"
+      },
+      "retrieved_at": "2026-10-01T09:10:02.496732Z",
+      "assumptions": [],
+      "warnings": [
+        "NESO row semantics follow the selected dataset metadata; no metering claim is inferred."
+      ],
+      "quality": "provider-dataset",
+      "provenance": [
+        {
+          "provider": "neso",
+          "endpoint": "datastore_search",
+          "documentation": "https://www.neso.energy/data-portal/api-guidance"
+        },
+        {
+          "site_id": null,
+          "provider": "neso",
+          "tool_version": "1.0.0"
+        },
+        {
+          "execution_id": "c5351ebb58604160915898318805a4c0",
+          "tool": "neso.query_dataset",
+          "toolkit": "neso",
+          "session_id": "daa5ec05c7234b20bc1a44cd33a7151b",
+          "account_id": null
+        }
+      ]
+    }
+  }
+}

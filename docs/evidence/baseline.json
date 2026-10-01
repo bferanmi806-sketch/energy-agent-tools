@@ -1,0 +1,1 @@
+{"revision":"667bce02c814ea3fe32d4312c32cb9b32e845fe7","tests":{"passed":60,"seconds":30.28},"real_agent_access":{"runner":"codex exec --ignore-user-config --ephemeral --json","smoke_answer":"energy-eval-ready","successful":true},"private_credentials_present":false}

@@ -1,0 +1,93 @@
+{
+  "toolkit": {
+    "id": "sqlite",
+    "name": "Read-only SQLite",
+    "description": "Read operator-owned SQLite time series through a generated SELECT only.",
+    "runtime": "native",
+    "status": "unavailable",
+    "auth_required": false,
+    "docs_url": "https://docs.python.org/3/library/sqlite3.html",
+    "version": "1.0.0",
+    "categories": [
+      "local",
+      "metering",
+      "time series"
+    ]
+  },
+  "tools": [
+    {
+      "name": "sqlite.read_timeseries",
+      "toolkit": "sqlite",
+      "description": "Read a bounded operator-owned SQLite table with explicit timestamp and value columns.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "table": {
+            "type": "string"
+          },
+          "timestamp_column": {
+            "type": "string"
+          },
+          "value_column": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "default": "provider-defined"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "metered",
+              "calculated",
+              "estimated",
+              "simulated",
+              "forecast"
+            ],
+            "default": "metered"
+          },
+          "timezone": {
+            "type": "string",
+            "default": "UTC"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 10000
+          }
+        },
+        "required": [
+          "path",
+          "table",
+          "timestamp_column",
+          "value_column"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "read_local_timeseries",
+        "sqlite_timeseries",
+        "read-only telemetry"
+      ],
+      "actions": [
+        "read-only"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    }
+  ]
+}

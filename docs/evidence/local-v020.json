@@ -1,0 +1,20 @@
+{
+  "checked_at": "2026-10-01T13:19:18.057582+00:00",
+  "version": "0.2.0",
+  "python": "3.12.14",
+  "tests": {
+    "passed": 161,
+    "seconds": 54.34
+  },
+  "ruff": "passed",
+  "format": "passed",
+  "mypy": {
+    "status": "passed",
+    "sources": 27
+  },
+  "build": [
+    "wheel",
+    "sdist"
+  ],
+  "qualification": "Local checks; remote CI and release model evaluation recorded separately"
+}

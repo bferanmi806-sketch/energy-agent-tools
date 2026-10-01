@@ -6,7 +6,9 @@
     "runtime": "python",
     "status": "experimental",
     "auth_required": false,
-    "docs_url": null
+    "docs_url": null,
+    "version": "1.0.0",
+    "categories": []
   },
   "tools": [
     {
@@ -248,7 +250,14 @@
         "simulation",
         "calculation"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": [
+        "pvlib"
+      ]
     },
     {
       "name": "engineering.run_power_flow",
@@ -524,7 +533,14 @@
       "actions": [
         "simulation"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": [
+        "pandapower"
+      ]
     },
     {
       "name": "engineering.calculate_heat_loss",
@@ -618,7 +634,12 @@
       "actions": [
         "calculation"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
     },
     {
       "name": "engineering.schedule_battery_charging",
@@ -761,7 +782,14 @@
         "simulation",
         "calculation"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": [
+        "scipy"
+      ]
     }
   ]
 }

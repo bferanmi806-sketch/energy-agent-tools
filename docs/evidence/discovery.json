@@ -1,0 +1,108 @@
+{
+  "relevance": [
+    {
+      "query": "How much electricity did I use yesterday?",
+      "expected": "octopus_energy.get_consumption",
+      "top5": [
+        "octopus_energy.get_consumption",
+        "octopus_energy.get_tariffs",
+        "WORKBENCH_JOIN",
+        "WORKBENCH_SUMMARIZE",
+        "home_assistant.get_history"
+      ],
+      "hit": true
+    },
+    {
+      "query": "What is the cleanest time to charge?",
+      "expected": "carbon_intensity_gb.get_intensity",
+      "top5": [
+        "engineering.schedule_battery_charging",
+        "WORKBENCH_SUMMARIZE",
+        "carbon_intensity_gb.get_intensity",
+        "neso.search_datasets",
+        "octopus_energy.get_consumption"
+      ],
+      "hit": true
+    },
+    {
+      "query": "Find tomorrow's solar irradiance forecast",
+      "expected": "open_meteo.get_forecast",
+      "top5": [
+        "engineering.estimate_solar_generation",
+        "open_meteo.get_forecast",
+        "carbon_intensity_gb.get_intensity",
+        "elexon.get_grid_data",
+        "windpowerlib.estimate_generation"
+      ],
+      "hit": true
+    },
+    {
+      "query": "Check voltage problems in an AC network",
+      "expected": "engineering.run_power_flow",
+      "top5": [
+        "engineering.run_power_flow",
+        "pypsa.power_flow",
+        "pandapipes.pipeflow",
+        "WORKBENCH_ENERGY_OPERATION",
+        "WORKBENCH_RESAMPLE"
+      ],
+      "hit": true
+    },
+    {
+      "query": "Calculate building ventilation and envelope heat loss",
+      "expected": "engineering.calculate_heat_loss",
+      "top5": [
+        "engineering.calculate_heat_loss",
+        "home_assistant.get_history",
+        "home_assistant.get_state",
+        "WORKBENCH_ENERGY_OPERATION",
+        "WORKBENCH_ANOMALY"
+      ],
+      "hit": true
+    },
+    {
+      "query": "Compare electricity prices for my tariff",
+      "expected": "octopus_energy.get_tariffs",
+      "top5": [
+        "octopus_energy.get_tariffs",
+        "octopus_energy.get_consumption",
+        "WORKBENCH_ENERGY_OPERATION",
+        "WORKBENCH_JOIN",
+        "home_assistant.get_history"
+      ],
+      "hit": true
+    },
+    {
+      "query": "Investigate a consumption spike",
+      "expected": "WORKBENCH_ANOMALY",
+      "top5": [
+        "WORKBENCH_ANOMALY",
+        "octopus_energy.get_consumption",
+        "openenergymonitor.get_feed",
+        "home_assistant.get_history",
+        "WORKBENCH_JOIN"
+      ],
+      "hit": true
+    },
+    {
+      "query": "Convert cumulative counter into interval energy",
+      "expected": "WORKBENCH_ENERGY_OPERATION",
+      "top5": [
+        "WORKBENCH_ENERGY_OPERATION",
+        "WORKBENCH_SUMMARIZE",
+        "octopus_energy.get_consumption",
+        "octopus_energy.get_tariffs",
+        "WORKBENCH_PIVOT"
+      ],
+      "hit": true
+    }
+  ],
+  "recall_at_5": 1.0,
+  "scale": {
+    "actions": 10000,
+    "queries": 100,
+    "median_ms": 68.70370000251569,
+    "p95_ms": 127.42069499654463
+  },
+  "qualification": "Deterministic synthetic catalogue; no embedding or learned ranking."
+}

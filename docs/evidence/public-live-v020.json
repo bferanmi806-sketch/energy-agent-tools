@@ -1,0 +1,70 @@
+{
+  "checked_at": "2026-10-01T08:58:11.770810+00:00",
+  "checks": [
+    {
+      "tool": "carbon_intensity_gb.get_intensity",
+      "arguments": {},
+      "ok": true,
+      "kind": "calculated",
+      "unit": "gCO2/kWh",
+      "source": "carbon-intensity-gb",
+      "rows": 1,
+      "warnings": []
+    },
+    {
+      "tool": "carbon_intensity_gb.get_intensity",
+      "arguments": {
+        "start": "2026-10-01T08:58:09+00:00",
+        "horizon_hours": 24,
+        "region_id": 13
+      },
+      "ok": true,
+      "kind": "forecast",
+      "unit": "gCO2/kWh",
+      "source": "carbon-intensity-gb",
+      "rows": 48,
+      "warnings": []
+    },
+    {
+      "tool": "open_meteo.get_forecast",
+      "arguments": {
+        "latitude": 51.5,
+        "longitude": -0.12,
+        "forecast_days": 1
+      },
+      "ok": true,
+      "kind": "forecast",
+      "unit": "mixed",
+      "source": "open-meteo",
+      "rows": 96,
+      "warnings": []
+    },
+    {
+      "tool": "octopus_energy.get_tariffs",
+      "arguments": {
+        "product_code": "AGILE-24-10-01",
+        "tariff_code": "E-1R-AGILE-24-10-01-A"
+      },
+      "ok": true,
+      "kind": "calculated",
+      "unit": "p/kWh",
+      "source": "octopus-energy",
+      "rows": 27,
+      "warnings": []
+    },
+    {
+      "tool": "elexon.get_grid_data",
+      "arguments": {
+        "dataset": "FUELHH",
+        "start": "2026-09-30T08:58:09+00:00",
+        "end": "2026-10-01T08:58:09+00:00"
+      },
+      "ok": true,
+      "kind": "metered",
+      "unit": "MW",
+      "source": "elexon",
+      "rows": 960,
+      "warnings": []
+    }
+  ]
+}

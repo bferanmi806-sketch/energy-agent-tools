@@ -1,0 +1,239 @@
+{
+  "toolkit": {
+    "id": "pandapipes",
+    "name": "pandapipes",
+    "description": "Bounded explicit water or gas hydraulic pipeflow using pandapipes.",
+    "runtime": "python",
+    "status": "experimental",
+    "auth_required": false,
+    "docs_url": "https://pandapipes.readthedocs.io/en/latest/pipeflow/",
+    "version": "1.0.0",
+    "categories": [
+      "pipeflow",
+      "thermal network",
+      "gas network",
+      "water network"
+    ]
+  },
+  "tools": [
+    {
+      "name": "pandapipes.pipeflow",
+      "toolkit": "pandapipes",
+      "description": "Solve an explicit bounded water or gas network with fixed junction pressure, pipes, sources, and sinks.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "network": {
+            "type": "object",
+            "properties": {
+              "fluid": {
+                "type": "string",
+                "enum": [
+                  "water",
+                  "gas",
+                  "lgas",
+                  "hgas",
+                  "hydrogen",
+                  "methane"
+                ]
+              },
+              "junctions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "pn_bar": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 200.0
+                    },
+                    "tfluid_k": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 2000
+                    },
+                    "height_m": {
+                      "type": "number",
+                      "minimum": -1000,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "pn_bar"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 100
+              },
+              "pipes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "from_junction": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "to_junction": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "length_km": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 100.0
+                    },
+                    "diameter_m": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 10
+                    },
+                    "k_mm": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "loss_coefficient": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "from_junction",
+                    "to_junction",
+                    "length_km",
+                    "diameter_m"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "junction": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "mdot_kg_per_s": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "junction",
+                    "mdot_kg_per_s"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              },
+              "sinks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "junction": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "mdot_kg_per_s": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "junction",
+                    "mdot_kg_per_s"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              },
+              "reference_junction": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "reference_pressure_bar": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 200.0
+              },
+              "reference_temperature_k": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 2000
+              }
+            },
+            "required": [
+              "fluid",
+              "junctions",
+              "pipes",
+              "reference_junction",
+              "reference_pressure_bar"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "network"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "pipeflow",
+        "hydraulic network",
+        "water",
+        "gas",
+        "pressure",
+        "mass flow"
+      ],
+      "actions": [
+        "simulation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "simulated",
+      "result_unit": "bar, K, kg/s, m/s",
+      "dependencies": [
+        "pandapipes"
+      ]
+    }
+  ]
+}

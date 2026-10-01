@@ -1,0 +1,239 @@
+{
+  "toolkit": {
+    "id": "pypsa",
+    "name": "PyPSA",
+    "description": "Bounded explicit-network AC power flow using PyPSA.",
+    "runtime": "python",
+    "status": "experimental",
+    "auth_required": false,
+    "docs_url": "https://docs.pypsa.org/latest/user-guide/power-flow/",
+    "version": "1.0.0",
+    "categories": [
+      "power flow",
+      "grid",
+      "network simulation"
+    ]
+  },
+  "tools": [
+    {
+      "name": "pypsa.power_flow",
+      "toolkit": "pypsa",
+      "description": "Solve an explicit bounded AC network with PyPSA using bus kV, line ohms, load MW, and a declared slack bus.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "network": {
+            "type": "object",
+            "properties": {
+              "base_mva": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 10000.0,
+                "default": 100
+              },
+              "buses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "v_nom_kv": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000.0
+                    },
+                    "v_mag_pu_set": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 2
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "v_nom_kv"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 100
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "from_bus": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "to_bus": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "r_ohm": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "x_ohm": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "length_km": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 100.0
+                    },
+                    "r_ohm_per_km": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "x_ohm_per_km": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "s_nom_mva": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 10000.0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "from_bus",
+                    "to_bus"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              },
+              "loads": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "bus": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "p_mw": {
+                      "type": "number"
+                    },
+                    "q_mvar": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "bus",
+                    "p_mw"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              },
+              "generators": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "bus": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "p_mw": {
+                      "type": "number"
+                    },
+                    "q_mvar": {
+                      "type": "number"
+                    },
+                    "control": {
+                      "type": "string",
+                      "enum": [
+                        "PQ",
+                        "PV"
+                      ]
+                    },
+                    "v_mag_pu": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 2
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "bus",
+                    "p_mw"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              },
+              "slack_bus": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "slack_voltage_pu": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 2,
+                "default": 1
+              }
+            },
+            "required": [
+              "buses",
+              "slack_bus"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "network"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "power flow",
+        "AC network",
+        "PyPSA",
+        "voltage",
+        "line losses",
+        "grid simulation"
+      ],
+      "actions": [
+        "simulation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "simulated",
+      "result_unit": "MW, Mvar, pu, degree",
+      "dependencies": [
+        "pypsa"
+      ]
+    }
+  ]
+}

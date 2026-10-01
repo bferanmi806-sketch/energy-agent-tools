@@ -6,7 +6,9 @@
     "runtime": "http",
     "status": "requires credentials",
     "auth_required": true,
-    "docs_url": "https://docs.octopus.energy/rest/guides/endpoints/"
+    "docs_url": "https://docs.octopus.energy/rest/guides/endpoints/",
+    "version": "1.0.0",
+    "categories": []
   },
   "tools": [
     {
@@ -42,10 +44,15 @@
         "electricity"
       ],
       "actions": [
-        "external-data",
-        "read-only"
+        "read-only",
+        "external-data"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
     }
   ]
 }

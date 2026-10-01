@@ -6,7 +6,9 @@
     "runtime": "http",
     "status": "requires credentials",
     "auth_required": true,
-    "docs_url": "https://developers.home-assistant.io/docs/api/rest/"
+    "docs_url": "https://developers.home-assistant.io/docs/api/rest/",
+    "version": "1.0.0",
+    "categories": []
   },
   "tools": [
     {
@@ -33,10 +35,15 @@
         "sensor"
       ],
       "actions": [
-        "external-data",
-        "read-only"
+        "read-only",
+        "external-data"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
     },
     {
       "name": "home_assistant.get_history",
@@ -74,10 +81,15 @@
         "building"
       ],
       "actions": [
-        "external-data",
-        "read-only"
+        "read-only",
+        "external-data"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
     }
   ]
 }

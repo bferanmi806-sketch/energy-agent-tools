@@ -1,90 +1,164 @@
 # Architecture
 
-Energy Agent Tools owns its registry, sessions, connection resolution, execution,
-MCP service and workbench. No Composio service is involved.
+Energy Agent Tools owns the registry, capability bindings, sessions,
+connections, execution policy, MCP service and local workbench. It does not
+depend on a hosted connector or orchestration service.
 
 ```mermaid
 flowchart TD
-  Agent[AI agent or reference MCP client] --> Meta[Seven MCP discovery and execution helpers]
-  SDK[Python SDK and provider tool adapters] --> Runtime
-  Meta --> Runtime[Scoped execution runtime]
-  Runtime --> Registry[Local tool schemas and capabilities]
-  Runtime --> Accounts[User and site account resolution]
-  Accounts --> Secrets[Environment credential references]
-  Runtime --> Policy[Action policy and before hooks]
-  Policy --> Connectors[HTTP / Python / native / executable / MCP]
-  Connectors --> Results[Typed energy result and after hooks]
-  Results --> Redact[Secret redaction and provenance]
-  Redact --> Workbench[Private SQLite artifacts]
-  Workbench --> Summary[Bounded previews and dataframe analysis]
+  Client[SDK, MCP client, or authenticated host] --> Helpers[Ten bounded MCP helpers]
+  Helpers --> Runtime[Scoped execution runtime]
+  SDK[EnergyAgentTools bound session] --> Runtime
+  Runtime --> Resolver[Reviewed capability resolver]
+  Resolver --> Registry[Local tool schemas and handlers]
+  Runtime --> Accounts[User/site/account and asset scope]
+  Accounts --> Vault[Environment refs or encrypted local vault]
+  Registry --> Connectors[HTTP / Python / native / executable / MCP]
+  Connectors --> Result[Typed EnergyResult]
+  Result --> Lineage[Redaction, semantics and provenance]
+  Lineage --> Workbench[Private SQLite artifacts and bounded analysis]
+  Host[Authenticated self-hosted ingress] --> Runtime
 ```
 
-## Contracts
+## Startup and sessions
 
-`EnergyAgent.session(user_id, site_id=...)` creates local execution scope. A
-session can allow specific toolkits, pin accounts and enable action categories.
-An explicit empty toolkit set exposes no connector actions. User identity comes
-from trusted host configuration, never a tool argument. One MCP process serves
-one operator-configured user/site context. Multi-user applications create
-separate scoped sessions through the SDK and must authenticate their own users.
+`build_agent(root, config)` registers the built-in connector families, optional
+plugins, and an operator-approved CSV root. Configuration can also describe
+sites, extensible assets, accounts, bindings, a local encrypted vault and MCP
+servers. MCP imports are asynchronous: call `await configure_mcp(agent,
+config)` after `build_agent` and before resolving bindings. The CLI performs
+this step for configured `mcp_servers`.
 
-`Toolkit` records runtime, status and auth requirements. `Tool` records JSON
-Schema, provider-independent capability names, action categories and idempotency.
-`Registry.add(tool, handler)` binds an async handler to a schema. Search is bounded
-lexical ranking with inverse-frequency weighting and energy synonyms; it is not an embedding service. An agent can
-search again or request an exact tool schema when initial terms miss a match.
+The bound SDK follows the same lifecycle:
 
-Execution is one pipeline for every runtime. Validate scope, enforce action
-policy, validate arguments, run before hooks, validate modified arguments,
-resolve account and inject credentials, execute handler, run after hooks,
-validate output, redact known credentials, append execution provenance and
-compact/persist output. Batches are ordered and return independent failures.
-There are no automatic retries that could duplicate actions.
+```python
+from energy_agent_tools import EnergyAgentTools
 
-Connections belong to a user and optionally a site. Assets belong to sites.
-Selecting an account validates user, toolkit, site and enabled state. Ambiguous
-accounts cause a structured error rather than arbitrary selection. A site's
-IANA timezone is available to agents for local date windows, including DST.
-Private settings and environment variable names do not enter connection lists.
+async with EnergyAgentTools(".energy-agent", config) as tools:
+    home = tools.session("user-1", "home")
+    provider_tools = await home.tools("openai-responses")
+    matches = home.resolve("get_energy_consumption", kind="metered", unit="kWh")
+```
 
-The default policy allows read-only, external-data, calculation and simulation.
-Configuration writes, physical control and safety-critical operations require
-explicit operator changes in the SDK. There are no physical-control connectors
-in the shipped catalogue. Unreviewed MCP actions must not acquire permissions
-from an upstream server's read-only annotation.
+`EnergyAgentTools.initialize()` is the explicit equivalent of the async
+context manager. `session(user_id, site_id=...)` then creates a bound session;
+it does not authenticate a user by itself. Applications that use the SDK
+outside the authenticated host must establish user identity and pass only
+their own scoped sessions. A process started by the simple `serve` command
+uses one configured identity. The `host` command adds authenticated
+multi-user ingress.
 
-## Results and workbench
+## Contracts and capability resolution
 
-`EnergyResult` requires a measurement kind, unit and source. Optional fields carry
-resolution, quality, assumptions, warnings and provenance. Row timestamps retain
-offsets; provider-specific heterogeneous series also preserve per-row kinds and
-units. A grid carbon estimate is not an electricity meter reading.
+`Toolkit` records runtime, status, version and credential requirements. `Tool`
+records its JSON Schema, capability IDs, action categories, idempotency,
+version, review state and optional result kind/unit. `Registry.add(tool,
+handler)` validates the schema and binds one async handler.
 
-SQLite stores serialized result envelopes under random artifact IDs, with user
-and session ownership. Results above 16 KB become artifact references with a
-three-row preview. A result above 20 MB is rejected. Explicit `persist=true`
-also stores small datasets. Analysis returns calculated results linked to input
-artifacts and kinds; it cannot relabel a simulation as metered data.
+Capability labels are search and binding keys, not interchangeable provider
+schemas. A `CapabilityBinding` names the exact tool and can constrain account,
+asset, measurement kind, unit, resolution, coverage interval, quality,
+argument defaults/mapping, preference, review state and binding version.
+`CapabilityResolver` filters candidates by session toolkit and site scope,
+asset/account compatibility, optional dependency availability, provider
+status, connection state and credential availability. It then checks requested
+kind, unit, resolution, coverage and the exact tool schema. It returns ranked
+candidates with reasons; a tie remains `ambiguous` and requires an explicit
+tool or account choice. Execution is allowed only for one available reviewed
+binding and passes its expected kind, unit and asset into the normal runtime.
 
-Supported operations are numeric summaries, bounded resampling, UTC timestamp
-joins, weather pivots and anomaly screening. Empty resample bins remain null. Duplicate join
-timestamps must be resolved first. Units on both sides of joins remain in
-provenance. The trusted Python SDK `Workbench.calculate` accepts a dataframe
-callable for local analysis. Agents cannot submit arbitrary Python through MCP.
-This is a private local workbench, not a security sandbox for untrusted code.
+The resolver does not translate unlike provider schemas by label. For example,
+a cumulative counter is not interval consumption, and power is not energy
+without a time basis. Connector-specific argument mappings belong in reviewed
+bindings.
+
+## Common execution and safety boundary
+
+Every connector uses one pipeline: validate user/site/toolkit scope, enforce
+action policy, validate arguments, run before hooks, validate transformed
+arguments, resolve the account, obtain a credential only at the connector
+boundary, execute, check expected kind/unit semantics when a reviewed binding
+supplies them, run after hooks, validate the output, redact known secrets,
+append execution and input provenance, then
+compact or persist the result. Ordered batches return independent failures and
+are bounded to twenty calls. The runtime does not retry actions automatically.
+
+The default session policy permits read-only, external-data, calculation and
+simulation actions. Configuration writes, physical control and safety-critical
+actions require explicit operator policy. No shipped connector performs
+physical control. Imported MCP annotations and executable output cannot grant
+permissions or turn derived data into metered data.
+
+`EnergyResult` requires a data kind, unit and source. It can carry provider,
+site, asset, timezone, resolution, time bounds, original unit, field units,
+quality, assumptions, warnings and provenance. Derived results retain input
+artifact IDs, kinds, units and source lineage. Hooks cannot relabel derived
+output as metered.
+
+## Workbench and artifacts
+
+The workbench stores result envelopes in a private, permission-restricted
+SQLite database owned by user and session. It applies retention, per-user and
+global quotas, a 20 MB result limit, bounded previews and artifact hashes.
+Large results become references; reads and deletes require the same user and
+session scope.
+
+Native workbench tools support summaries, robust anomaly screening, DST-aware
+resampling, exact UTC joins, long-to-wide pivots and a bounded energy operation
+layer for filtering, missing-interval checks, cumulative-counter conversion,
+power integration, tariff cost, carbon, baselines, calendar comparisons,
+normalization and alignment. Unit checks, duplicate detection, explicit
+offsets and lineage remain part of each operation. `Workbench.calculate` is a
+trusted local Python API; arbitrary code is not accepted through MCP.
 
 ## Interfaces
 
-MCP exposes search, exact schema retrieval, safe connection list/selection,
-ordered batch execution, toolkit listing, skill guidance and site context.
-Both stdio and loopback streamable HTTP use the official MCP Python SDK.
-OpenAI Chat, OpenAI Responses and Anthropic adapters preserve JSON Schema and
-optionality. OpenAI strict mode is disabled rather than silently narrowing
-unsupported schemas. Applications route returned calls to the same MCP/SDK
-execution methods.
+The MCP server exposes ten bounded helpers:
 
-Connector integration is operator controlled. HTTP handlers own fixed public
-origins or locally configured telemetry origins. Library handlers own model
-construction. Executable adapters own fixed argv and JSON stdin/stdout. MCP
-adapters import schemas from local stdio or remote streamable HTTP. Imported
-semantics and action permissions require explicit review.
+- `ENERGY_SEARCH_TOOLS`
+- `ENERGY_GET_TOOL`
+- `ENERGY_MANAGE_CONNECTIONS`
+- `ENERGY_MULTI_EXECUTE_TOOL`
+- `ENERGY_LIST_TOOLKITS`
+- `ENERGY_LIST_SKILLS`
+- `ENERGY_SITE_CONTEXT`
+- `ENERGY_RESOLVE_CAPABILITY`
+- `ENERGY_EXECUTE_CAPABILITY`
+- `ENERGY_RUN_SKILL`
+
+Search is deterministic indexed lexical ranking with energy synonyms and
+availability signals. It is not an embedding service. Provider adapters format
+the same helper schemas for OpenAI Chat, OpenAI Responses and Anthropic; they
+preserve optionality and keep original schemas when strict conversion would be
+lossy. `BoundSession.dispatch` maps provider aliases back to canonical helper
+names before invoking the same MCP server.
+
+`create_server` is a fixed-session loopback service. `create_host` adds bearer
+token-digest principals, per-user/site session admission, session and artifact
+ownership checks, request/body/session limits, rate limiting and REST plus MCP
+routes. Host configuration must provide authenticated principals and allowed
+site IDs; it is not an identity provider.
+
+Connections are selected by user, toolkit, site and account ID. `AuthStore`
+keeps encrypted credential blobs in a local SQLite vault protected by an
+operator-provided Fernet key, returns metadata without tokens, and supports
+configure, verify, refresh, disable, revoke, reconnect and OAuth authorization
+callback flows. Environment references remain supported for local deployments.
+
+## Connector boundaries and extension points
+
+HTTP handlers own fixed provider origins or an operator-configured origin and
+must validate payloads, preserve provider units and kinds, bound rows/pages and
+reject cross-origin credential forwarding. Local solver handlers construct
+bounded models from explicit JSON and report library/version assumptions.
+Executable adapters own fixed argv, restricted environments and bounded
+JSON stdin/stdout. MCP adapters use the official client for local stdio or
+remote streamable HTTP, inspect and hash upstream schemas, require explicit
+review metadata, and re-check the selected schema before each call.
+
+Connector plugins register an entry point in the
+`energy_agent_tools.connectors` group. `energy-agent scaffold` creates a
+starter module, `energy-agent validate` performs structural schema/handler
+validation, and contributor tests must add malformed-input, availability,
+credential and meaningful numerical or protocol assertions. These tools are
+qualification gates, not claims that a provider is live or production-ready.

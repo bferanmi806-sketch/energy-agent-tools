@@ -1,0 +1,107 @@
+{
+  "toolkit": {
+    "id": "windpowerlib",
+    "name": "windpowerlib",
+    "description": "Run an offline wind turbine ModelChain from explicit weather and power-curve inputs.",
+    "runtime": "python",
+    "status": "experimental",
+    "auth_required": false,
+    "docs_url": "https://windpowerlib.readthedocs.io/en/stable/",
+    "version": "1.0.0",
+    "categories": [
+      "wind",
+      "generation",
+      "calculation"
+    ]
+  },
+  "tools": [
+    {
+      "name": "windpowerlib.estimate_generation",
+      "toolkit": "windpowerlib",
+      "description": "Estimate wind generation using windpowerlib's offline packaged data or an explicit power curve.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "hub_height_m": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "turbine_type": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "power_curve": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 200,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "wind_speed_m_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "power_kw": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "wind_speed_m_s",
+                "power_kw"
+              ]
+            }
+          },
+          "nominal_power_kw": {
+            "type": "number",
+            "minimum": 0
+          },
+          "weather_rows": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10000,
+            "items": {
+              "type": "object"
+            }
+          },
+          "timezone": {
+            "type": "string",
+            "default": "UTC"
+          },
+          "number_of_turbines": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 1
+          },
+          "final_interval_hours": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 168,
+            "default": 1
+          }
+        },
+        "required": [
+          "hub_height_m",
+          "weather_rows"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "estimate_wind_generation",
+        "windpowerlib",
+        "offline power curve model"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "estimated",
+      "result_unit": "kW and kWh",
+      "dependencies": []
+    }
+  ]
+}
