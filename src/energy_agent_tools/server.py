@@ -81,7 +81,12 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
     async def multi_execute(
         calls: Annotated[list[ExecutionCall], Field(min_length=1, max_length=20)],
     ) -> Json:
-        """Execute ordered independent calls; return structured per-call failures and provenance. persist=true stores a local artifact."""
+        """Execute discovered canonical tools, including provider reads and workbench analysis.
+
+        Put the canonical tool name in calls[].tool and its schema arguments in
+        calls[].arguments. A single call is supported. Calls run in order and
+        return per-call failures and provenance. persist=true stores an artifact.
+        """
         try:
             return {"results": await agent.multi_execute(session, [c.model_dump() for c in calls])}
         except EnergyError as exc:
@@ -94,7 +99,7 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
 
     @server.tool(name="ENERGY_LIST_SKILLS")
     async def list_skills(query: str | None = None) -> Json:
-        """Read energy workflow sequences and engineering pitfalls."""
+        """Find energy workflows, required inputs and pitfalls. Execute a selected workflow with ENERGY_RUN_SKILL."""
         return {"skills": search_skills(query) if query else SKILLS}
 
     @server.tool(name="ENERGY_SITE_CONTEXT")
@@ -222,7 +227,11 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
     ) -> Json:
         """Submit bounded local numerical jobs and inspect, cancel or delete scoped results.
 
-        Inspect the underlying engineering tool schema before submitting arguments.
+        heat_loss uses engineering.calculate_heat_loss; power_flow uses
+        engineering.run_power_flow; battery uses engineering.schedule_battery_charging;
+        solar uses engineering.estimate_solar_generation. Submit the arguments
+        from that engineering tool's schema. For provider reads and artifact
+        analysis, use ENERGY_EXECUTE_CAPABILITY or ENERGY_MULTI_EXECUTE_TOOL.
         Jobs preserve the user, site and session; resume returns owner-verified scope
         for restoring a session after a host restart. No executable or path inputs.
         """

@@ -248,3 +248,30 @@ async def test_multiple_provider_mapping_and_fixed_semantics(tmp_path):
     )
     assert not (await agent.resolver.execute(session, request))["ok"]
     await agent.close()
+
+
+async def test_discovery_uses_scoped_reviewed_mapping_without_mutating_shared_tools(tmp_path):
+    mapped = CapabilityBinding(
+        capability="get_current_power",
+        tool="meter.read",
+        account_id="a",
+        asset_id="main",
+        reviewed=True,
+        kind=DataKind.METERED,
+        unit="kW",
+    )
+    agent = platform(tmp_path, [mapped])
+    try:
+        home = agent.session("u", "home")
+        foreign = agent.session("other", "foreign")
+        assert "get_current_power" in agent.get_tool(home, "meter.read")["capabilities"]
+        assert "get_current_power" not in agent.get_tool(foreign, "meter.read")["capabilities"]
+        assert agent.search(home, "current power")[0]["name"] == "meter.read"
+        assert agent.search(foreign, "current power") == []
+        assert "get_current_power" not in agent.registry.get("meter.read").capabilities
+        pinned = agent.session("u", "home", account_ids={"meter": "b"})
+        assert "get_current_power" not in agent.get_tool(pinned, "meter.read")["capabilities"]
+        agent.accounts.pop("a")
+        assert "get_current_power" not in agent.get_tool(home, "meter.read")["capabilities"]
+    finally:
+        await agent.close()

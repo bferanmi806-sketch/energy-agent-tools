@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Mapping
 
 from jsonschema import Draft202012Validator
 
@@ -55,7 +56,14 @@ class Registry:
             raise EnergyError("tool_not_found", "Tool does not exist; search the registry first.")
         return self.tools[name]
 
-    def search(self, query: str, allowed: set[str] | None = None, limit: int = 5) -> list[Tool]:
+    def search(
+        self,
+        query: str,
+        allowed: set[str] | None = None,
+        limit: int = 5,
+        *,
+        scoped_capabilities: Mapping[str, list[str]] | None = None,
+    ) -> list[Tool]:
         words = set(re.findall(r"[a-z0-9]+", query.lower()))
         synonyms = {
             "electricity": "energy",
@@ -84,19 +92,30 @@ class Registry:
                 for token in tokens:
                     self._postings.setdefault(token, set()).add(name)
             self._indexed_count = len(self.tools)
-        frequencies = {w: len(self._postings.get(w, set())) for w in words}
-        matches = set().union(*(self._postings.get(w, set()) for w in words))
+        overlay_tokens = {
+            name: set(re.findall(r"[a-z0-9]+", " ".join(values).lower()))
+            for name, values in (scoped_capabilities or {}).items()
+            if name in self.tools
+        }
+        postings = {
+            word: self._postings.get(word, set())
+            | {name for name, tokens in overlay_tokens.items() if word in tokens}
+            for word in words
+        }
+        frequencies = {word: len(names) for word, names in postings.items()}
+        matches = set().union(*postings.values())
         for name in matches:
             tool = self.tools[name]
             if allowed is not None and tool.toolkit not in allowed:
                 continue
-            tokens = self._tokens[name]
+            tokens = self._tokens[name] | overlay_tokens.get(name, set())
             score = sum(
                 1 + math.log((len(self._tokens) + 1) / (frequencies[w] + 1)) for w in words & tokens
             )
             name_tokens = set(re.findall(r"[a-z0-9]+", tool.name.lower()))
             score += 2 * len(words & name_tokens)
-            score += sum(3 for c in tool.capabilities if c in query.lower())
+            roles = set(tool.capabilities) | set((scoped_capabilities or {}).get(name, []))
+            score += sum(3 for capability in roles if capability in query.lower())
             if score:
                 scored.append((score, tool.name, tool))
         return [t for _, _, t in sorted(scored, key=lambda s: (-s[0], s[1]))[:limit]]

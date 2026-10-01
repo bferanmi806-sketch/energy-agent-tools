@@ -293,6 +293,10 @@ class EnergyAgent:
         if session.toolkits is not None and tool.toolkit not in session.toolkits:
             raise EnergyError("tool_forbidden", "Tool is outside this session's toolkit scope.")
         data = tool.public()
+        data["capabilities"] = sorted(
+            set(data["capabilities"])
+            | set(self.resolver.scoped_capabilities(session).get(name, []))
+        )
         for hook in self.schema_hooks:
             data = hook(copy.deepcopy(data))
         secrets = self._secrets(session.user_id)
@@ -302,7 +306,12 @@ class EnergyAgent:
         self._scope(session)
         if not query.strip() or len(query) > 2000 or not 1 <= limit <= 10:
             raise EnergyError("invalid_search", "Provide a query and limit between 1 and 10.")
-        matches = self.registry.search(query, session.toolkits, max(limit, 10))
+        matches = self.registry.search(
+            query,
+            session.toolkits,
+            max(limit, 10),
+            scoped_capabilities=self.resolver.scoped_capabilities(session),
+        )
 
         def availability(tool: Tool) -> int:
             if any(find_spec(dependency) is None for dependency in tool.dependencies):

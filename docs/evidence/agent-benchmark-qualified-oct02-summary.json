@@ -1,0 +1,265 @@
+{
+  "started_at": "2026-10-01T23:06:04.205308+00:00",
+  "completed_at": "2026-10-01T23:08:59.583749+00:00",
+  "runner": {
+    "command": "codex exec --ignore-user-config --ephemeral --skip-git-repo-check -s read-only --json",
+    "codex": "codex",
+    "model_override": null,
+    "bypass_approvals": true,
+    "timeout_seconds": 180.0,
+    "fixture_only": true,
+    "synthetic_data": true,
+    "source_commit": "c2ea0aadba1114d52478db09bf5301d7c8a5ecef",
+    "source_dirty": false,
+    "dirty_source_sha256": "6323fd3ceb364c416d089190c3725e430065932857ebe610e45915c63639a6de",
+    "source_unchanged": true,
+    "source_at_completion": {
+      "source_commit": "c2ea0aadba1114d52478db09bf5301d7c8a5ecef",
+      "source_dirty": false,
+      "dirty_source_sha256": "6323fd3ceb364c416d089190c3725e430065932857ebe610e45915c63639a6de"
+    }
+  },
+  "summary": {
+    "cases": 4,
+    "mean_score": 0.9105,
+    "labels": {
+      "pass": 2,
+      "partial": 2,
+      "fail": 0,
+      "inconclusive": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "dev_consumption_daily_csv",
+      "score": {
+        "case_id": "dev_consumption_daily_csv",
+        "score": 1.0,
+        "label": "pass",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 4/4 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "argument_semantics",
+            "score": 1.0,
+            "evidence": "matched 2/2 argument expectations"
+          },
+          {
+            "name": "numeric_truth",
+            "score": 1.0,
+            "evidence": "matched 1/1 expected values; values=2026.0, 9.0, 29.0, 0.0, 0.0, 1.0, 0.0, 2026.0, 9.0, 30.0, 0.0, 0.0, 1.0, 0.0, 48.0, 42.5, 48.0, 48.0"
+          },
+          {
+            "name": "structured_evidence",
+            "score": 1.0,
+            "evidence": "provenance; site/asset"
+          },
+          {
+            "name": "data_kind_consistency",
+            "score": 1.0,
+            "evidence": "observed calculated, metered"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "5 calls, budget 10"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dev_consumption_interval_gap",
+      "score": {
+        "case_id": "dev_consumption_interval_gap",
+        "score": 0.9683,
+        "label": "partial",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 4/4 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): ENERGY_EXECUTE_CAPABILITY, WORKBENCH_SUMMARIZE"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "structured_evidence",
+            "score": 1.0,
+            "evidence": "provenance; site/asset"
+          },
+          {
+            "name": "call_budget",
+            "score": 0.6666666666666666,
+            "evidence": "15 calls, budget 10"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dev_current_power_snapshot",
+      "score": {
+        "case_id": "dev_current_power_snapshot",
+        "score": 0.9737,
+        "label": "pass",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.75,
+            "evidence": "matched 3/4 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): ENERGY_EXECUTE_CAPABILITY, ENERGY_SITE_CONTEXT"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "argument_semantics",
+            "score": 1.0,
+            "evidence": "matched 1/1 argument expectations"
+          },
+          {
+            "name": "structured_evidence",
+            "score": 1.0,
+            "evidence": "provenance; site/asset"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "5 calls, budget 10"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dev_two_account_selection",
+      "score": {
+        "case_id": "dev_two_account_selection",
+        "score": 0.7,
+        "label": "partial",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.75,
+            "evidence": "matched 3/4 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): ENERGY_MANAGE_CONNECTIONS"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 1/1 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "boundary_error",
+            "score": 0.0,
+            "evidence": "no structured boundary error"
+          },
+          {
+            "name": "structured_evidence",
+            "score": 0.0,
+            "evidence": "required provenance/site fields missing"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "2 calls, budget 10"
+          }
+        ]
+      }
+    }
+  ],
+  "transcript": {
+    "file": "agent-benchmark-qualified-oct02.json.gz",
+    "sha256": "7f3f449f2a6b26765b510f6a802dbefb9f24f79eee2afac827d8e53c418412ad",
+    "format": "gzip-compressed full suite JSON"
+  },
+  "qualification": "Four development environments using real Codex calls and local provider fixtures. Not a physical-meter qualification or held-out reliability result."
+}

@@ -21,8 +21,9 @@ provider permissions, approved models, host configuration and backups.
   need compatible sources and model parameters. Anomaly screening cannot establish
   cause. Tariff cost excludes standing charges unless separately supplied.
 - Artifacts are private to user and session, with size quotas, retention and scoped
-  deletion. Processes, plugins and executable adapters remain trusted operator
-  integrations. CPU-heavy numerical work is not an isolated job service.
+  deletion. Numerical jobs have bounded subprocess concurrency, timeouts and
+  durable scoped results. They do not provide an OS security sandbox or memory
+  limit. Plugins and executable adapters remain trusted operator integrations.
 - HTTP contract fixtures verify request construction, parsing and failure handling.
   They do not verify a private installation or paid-service entitlement. Public
   probes and real local numerical tests are recorded separately.
@@ -31,14 +32,15 @@ provider permissions, approved models, host configuration and backups.
   establish reliability across providers, seasons, sites or deployment conditions.
 - PyPSA and pandapower are bounded steady-state AC studies. pandapipes is hydraulic
   flow. Protection, transients, unbalanced switching, thermal transport and device
-  dispatch are outside these contracts. EnergyPlus has boundary fixtures; a real
-  installed engine/model qualification is still required.
-- OpenDSS, OpenStudio and vendor PowerMCP tools are not validated integrations.
+  dispatch are outside these contracts. EnergyPlus was qualified with one official
+  26.2.0 example; arbitrary building/HVAC accuracy is unqualified.
+- OpenDSS has bounded balanced/unbalanced steady-state reference checks with the
+  DSS-Extensions engine. OpenStudio and vendor PowerMCP tools remain unqualified.
   An operator may import reviewed MCP tools, but that does not qualify upstream
   software or physical-control safety.
 - The MIT licence applies to gateway code. Provider licences, data attribution,
   service limits and dependency licences still apply.
 
 Broader private-account qualification, published numerical reference models,
-load testing, multiple-model evaluation and long-running operational evidence
-remain necessary before offering a mature managed service.
+representative load testing, multiple-model evaluation and long-running operational
+evidence remain necessary to complete the project roadmap.

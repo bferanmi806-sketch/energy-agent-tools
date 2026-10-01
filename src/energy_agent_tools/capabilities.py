@@ -170,6 +170,38 @@ class CapabilityResolver:
                         "Capability account must belong to the bound asset's site and accounts."
                     )
 
+    def scoped_capabilities(self, session: Session) -> dict[str, list[str]]:
+        """Publish reviewed role names only inside their account and asset scope."""
+
+        self.agent._scope(session)
+        self.agent._sync_connections(session.user_id)
+        capabilities: dict[str, set[str]] = {}
+        for binding in self.bindings:
+            tool = self.agent.registry.get(binding.tool)
+            if not binding.reviewed or not tool.reviewed:
+                continue
+            if session.toolkits is not None and tool.toolkit not in session.toolkits:
+                continue
+            if binding.account_id:
+                account = self.agent.accounts.get(binding.account_id)
+                if (
+                    account is None
+                    or account.user_id != session.user_id
+                    or (session.site_id and account.site_id != session.site_id)
+                ):
+                    continue
+                selected = session.account_ids.get(tool.toolkit)
+                if selected and selected != account.id:
+                    continue
+            if binding.asset_id:
+                asset = self.agent.assets[binding.asset_id]
+                if self.agent.sites[asset.site_id].user_id != session.user_id or (
+                    session.site_id and asset.site_id != session.site_id
+                ):
+                    continue
+            capabilities.setdefault(tool.name, set()).add(binding.capability)
+        return {name: sorted(values) for name, values in capabilities.items()}
+
     def resolve(self, session: Session, request: CapabilityRequest) -> Json:
         self.agent._scope(session)
         self.agent._sync_connections(session.user_id)

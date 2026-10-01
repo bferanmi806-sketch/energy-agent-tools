@@ -13,7 +13,7 @@ commit `5354d32`. Completed implementation is distinct from live qualification.
 - [x] Implement local connection onboarding and reviewed mappings; private access qualification remains open.
 - [ ] Expand and execute real-agent evaluation without weakening scoring.
 - [x] Qualify OpenDSS and EnergyPlus with real engines and reference inputs.
-- [ ] Integrate bounded jobs, deployment and recovery checks.
+- [x] Integrate bounded jobs, deployment and recovery checks; upgrade and soak gates remain open.
 - [ ] Publish verified improvements and update the evidence matrix.
 - [ ] Review the complete supported experience against the roadmap gates.
 
@@ -99,3 +99,33 @@ The remaining gates include qualified scenario environments and 100+ actual runs
 held-out results, a second legitimately accessible model family, complete telemetry
 transformations and workflows, private installed-provider qualification, container
 restart/load/upgrade checks, contributor qualification, and sustained soak evidence.
+
+## 2 October checks
+
+At `c2ea0aa`, 255 tests passed locally and CI passed on Python 3.11, 3.12 and
+3.13. Four new development environments ran through actual Codex calls in an
+immutable checkout. The source identity stayed unchanged throughout the run.
+Two cases passed and two were partial, with a mean heuristic score of 0.9105.
+The daily CSV total was 42.5 kWh. The fresh Home Assistant fixture returned
+12.75 kW. The interval-gap answer correctly disclosed 42/48 intervals, 87.5%
+coverage and unknown missing energy, but used 15 calls against a budget of 10.
+The two-account answer asked for clarification; it missed required language,
+structured boundary-error and provenance evidence. Scoring was not weakened.
+
+[Full scores and transcript digest](evidence/agent-benchmark-qualified-oct02-summary.json)
+and [compressed complete traces](evidence/agent-benchmark-qualified-oct02.json.gz)
+preserve the results. These runs add development evidence, not held-out or
+physical-meter evidence. The separate 19-case run in the same immutable checkout
+is underway. The earlier 11-pass/8-partial run remains exploratory because
+source changes continued while it was running.
+
+Container host qualification passed in CI at `9c20850`: bearer enforcement,
+non-root UID 10001, 30 concurrent requests, and job/artifact recovery after a
+restart. The measured median was 0.06784 seconds and p95 was 0.07705 seconds.
+The test rediscovers the host port after restart because Docker can reassign it.
+This is a short load check, not sustained soak or upgrade evidence.
+
+Further fixes reject duplicate/overlapping energy intervals and apply current
+toolkit/site scope to saved jobs. Reviewed account/asset capability roles are
+now included in scoped search without mutating the shared catalogue. Their
+focused acceptance checks passed; final combined verification remains required.
