@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from benchmarks.fixture import write_fixture
@@ -119,7 +121,7 @@ def test_fixture_covers_the_declared_local_day_and_keeps_numeric_contract(tmp_pa
     assert meter[20]["timestamp"] == "2026-09-29T09:00:00Z"
     assert meter[37]["timestamp"] == "2026-09-29T17:30:00Z"
     cost = sum(float(row["kwh"]) * float(row["price_gbp_per_kwh"]) for row in meter)
-    assert cost == 3.6925
+    assert cost == pytest.approx(3.6925, rel=0, abs=1e-12)
 
     forecast = _filter_rows(
         _read_rows(fixture.root, "forecast.csv"),
@@ -130,7 +132,9 @@ def test_fixture_covers_the_declared_local_day_and_keeps_numeric_contract(tmp_pa
     )
     assert len(forecast) == 48
     assert forecast[0]["timestamp"] == "2026-09-30T23:00:00Z"
-    assert sum(float(row["forecast_solar_kwh"]) for row in forecast) == 22.68
+    assert sum(float(row["forecast_solar_kwh"]) for row in forecast) == pytest.approx(
+        22.68, rel=0, abs=1e-12
+    )
 
 
 async def test_native_fixture_uses_reviewed_capability_binding(tmp_path: Path):
