@@ -59,6 +59,11 @@ async def test_onboarding_uses_real_http_protocol_without_returning_credentials(
                 json={"access_token": access_token, "refresh_token": "project-refresh-token"},
                 request=request,
             )
+        if request.method == "GET" and request.url.path == "/api/config":
+            assert request.headers["authorization"] == "Bearer " + access_token
+            return httpx.Response(
+                200, json={"version": qualification.HOME_ASSISTANT_VERSION}, request=request
+            )
         if (
             request.method == "POST"
             and request.url.path == "/api/states/" + qualification.ENTITY_ID

@@ -193,7 +193,8 @@ async def _request_json(
         ) from exc
     if response.status_code != expected_status:
         raise QualificationFailure(
-            "home_assistant_protocol", "Home Assistant returned an unexpected response."
+            "home_assistant_protocol",
+            f"Home Assistant returned HTTP {response.status_code} for {method} {path}.",
         )
     if len(response.content) > MAX_HTTP_RESPONSE_BYTES:
         raise QualificationFailure(
