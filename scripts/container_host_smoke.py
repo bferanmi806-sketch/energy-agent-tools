@@ -155,6 +155,8 @@ async def qualify(image: str, config: Path, name: str, volume: str) -> dict:
 
         timings = await asyncio.gather(*(read_once() for _ in range(30)))
         docker("restart", "--timeout", "10", name)
+        restarted_port = docker("port", name, "8765/tcp").split(":")[-1]
+        client.base_url = f"http://127.0.0.1:{restarted_port}"
         await wait_ready(client)
         response = await client.post(
             "/sessions", headers=headers, json={"site_id": "home", "resume_job_id": job_id}
@@ -176,6 +178,7 @@ async def qualify(image: str, config: Path, name: str, volume: str) -> dict:
             "load_requests": 30,
             "median_seconds": statistics.median(timings),
             "p95_seconds": sorted(timings)[28],
+            "port_reassigned": restarted_port != port,
             "job_recovered": True,
             "artifact_recovered": True,
             "qualification": "Project-controlled numerical fixtures; no live meter or sustained soak.",
@@ -194,6 +197,12 @@ def main() -> None:
             directory.chmod(0o755)
             result = asyncio.run(qualify(args.image, directory / "config.json", identity, volume))
             print(json.dumps(result, sort_keys=True))
+    except Exception:
+        diagnostic = subprocess.run(
+            ["docker", "logs", "--tail", "40", identity], capture_output=True, text=True, timeout=15
+        )
+        print(diagnostic.stdout[-4000:] + diagnostic.stderr[-4000:])
+        raise
     finally:
         for command in [("rm", "--force", identity), ("volume", "rm", volume)]:
             subprocess.run(["docker", *command], capture_output=True, timeout=30)
