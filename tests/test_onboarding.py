@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import concurrent.futures
 import json
 import stat
 from pathlib import Path
@@ -118,6 +119,22 @@ def test_key_profile_and_vault_permissions_and_no_plaintext(tmp_path: Path) -> N
     profile.close()
 
 
+def test_octopus_origin_is_fixed_to_official_api(tmp_path: Path) -> None:
+    profile = LocalProfile(tmp_path)
+    profile.create_site("Home", "UTC")
+    with pytest.raises(ValueError, match="fixed official API origin"):
+        profile.configure_connection(
+            "octopus",
+            credential="octopus-secret",
+            metadata={
+                "base_url": "http://127.0.0.1:18123",
+                "mpan": "MPAN123",
+                "serial_number": "SERIAL456",
+            },
+        )
+    profile.close()
+
+
 def test_home_assistant_does_not_promote_cumulative_counter(tmp_path: Path) -> None:
     profile = LocalProfile(tmp_path)
     profile.create_site("Home", "Europe/London")
@@ -130,12 +147,177 @@ def test_home_assistant_does_not_promote_cumulative_counter(tmp_path: Path) -> N
             "telemetry_role": "consumption_interval",
             "measurement_kind": "metered",
             "unit": "kWh",
+            "quantity_shape": "interval",
+            "state_class": "total_increasing",
             # A total_increasing counter is not interval energy.  Without an
             # explicit interval semantic claim, no reviewed mapping is made.
         },
     )
     assert "capability_bindings" not in account.settings
     profile.close()
+
+
+@pytest.mark.parametrize(
+    ("role", "unit", "quantity_shape", "capability", "tool"),
+    [
+        ("current_power", "W", "instantaneous", "get_current_power", "home_assistant.get_state"),
+        ("generation", "kWh", "interval", "get_generation", "home_assistant.get_history"),
+        ("generation", "kW", "instantaneous", "get_generation", "home_assistant.get_history"),
+        ("export_interval", "kWh", "interval", "get_export", "home_assistant.get_history"),
+        ("storage_state", "%", "instantaneous", "get_storage_state", "home_assistant.get_state"),
+        ("storage_state", "kWh", "instantaneous", "get_storage_state", "home_assistant.get_state"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_reviewed_home_assistant_mappings_resolve_to_matching_tools(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    role: str,
+    unit: str,
+    quantity_shape: str,
+    capability: str,
+    tool: str,
+) -> None:
+    profile = LocalProfile(tmp_path)
+    profile.create_site("Home", "Europe/London", site_id="home")
+    profile.configure_connection(
+        "home_assistant",
+        credential="ha-secret",
+        site_id="home",
+        metadata={
+            "base_url": "https://ha.example",
+            "entity_id": "sensor.energy",
+            "telemetry_role": role,
+            "measurement_kind": "metered",
+            "unit": unit,
+            "quantity_shape": quantity_shape,
+            "state_class": "measurement",
+        },
+    )
+    key_env = "TEST_ONBOARDING_HA_MASTER"
+    monkeypatch.setenv(key_env, (tmp_path / "vault.key").read_text())
+    config = profile.config()
+    config["vault"] = {"master_key_env": key_env}
+    agent = build_agent(tmp_path, config)
+    session = agent.session("local", "home")
+    arguments = {}
+    if tool == "home_assistant.get_history":
+        arguments = {
+            "start": "2026-09-30T00:00:00Z",
+            "end": "2026-09-30T01:00:00Z",
+        }
+    resolved = agent.resolver.resolve(
+        session, CapabilityRequest(capability=capability, arguments=arguments)
+    )
+    assert resolved["status"] == "resolved"
+    assert resolved["selected"]["tool"] == tool
+    assert resolved["selected"]["arguments"]["entity_id"] == "sensor.energy"
+    await agent.close()
+    profile.close()
+
+
+@pytest.mark.asyncio
+async def test_home_assistant_probe_validates_declared_state_metadata(tmp_path: Path) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "entity_id": "sensor.power",
+                "state": "2.5",
+                "attributes": {"unit_of_measurement": "W", "state_class": "measurement"},
+            },
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    profile = LocalProfile(tmp_path, http=client)
+    profile.create_site("Home", "UTC")
+    result = await profile.connect(
+        "home_assistant",
+        credential="ha-secret",
+        metadata={
+            "base_url": "https://ha.example",
+            "entity_id": "sensor.power",
+            "telemetry_role": "current_power",
+            "measurement_kind": "metered",
+            "unit": "W",
+            "quantity_shape": "instantaneous",
+            "state_class": "measurement",
+        },
+    )
+    assert result["health"]["status"] == "healthy"
+    assert result["account"]["verified"] is True
+    profile.close()
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_home_assistant_probe_rejects_declared_unit_mismatch(tmp_path: Path) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "entity_id": "sensor.power",
+                "state": "2.5",
+                "attributes": {"unit_of_measurement": "W", "state_class": "measurement"},
+            },
+            request=request,
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    profile = LocalProfile(tmp_path, http=client)
+    profile.create_site("Home", "UTC")
+    result = await profile.connect(
+        "home_assistant",
+        credential="ha-secret",
+        metadata={
+            "base_url": "https://ha.example",
+            "entity_id": "sensor.power",
+            "telemetry_role": "current_power",
+            "measurement_kind": "metered",
+            "unit": "kW",
+            "quantity_shape": "instantaneous",
+            "state_class": "measurement",
+        },
+    )
+    assert result["health"]["status"] == "unhealthy"
+    assert result["account"]["verified"] is False
+    profile.close()
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [None, {"value": 2.0}, True, [2.0], float("inf")])
+async def test_emoncms_probe_requires_finite_numeric_value(tmp_path: Path, payload: object) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload, request=request)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    profile = LocalProfile(tmp_path, http=client)
+    profile.create_site("Home", "UTC")
+    result = await profile.connect(
+        "emoncms",
+        credential="emon-secret",
+        metadata={"base_url": "https://emon.example", "feed_id": 7},
+    )
+    assert result["health"]["status"] == "unhealthy"
+    assert result["account"]["verified"] is False
+    profile.close()
+    await client.aclose()
+
+
+def test_parallel_profile_initialization_keeps_one_fernet_key(tmp_path: Path) -> None:
+    def open_and_read_key(_: int) -> bytes:
+        profile = LocalProfile(tmp_path)
+        try:
+            return (tmp_path / "vault.key").read_bytes()
+        finally:
+            profile.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        keys = list(executor.map(open_and_read_key, range(6)))
+    assert len(set(keys)) == 1
+    assert len(keys[0]) == 44
 
 
 def test_home_assistant_interval_mapping_requires_explicit_quantity_shape(tmp_path: Path) -> None:

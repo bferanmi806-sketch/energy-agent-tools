@@ -51,6 +51,10 @@ The supported first-run providers are:
 | Home Assistant | Bearer token | `base_url` | Only explicit telemetry claims |
 | Emoncms / OpenEnergyMonitor | API key | `base_url`, numeric `feed_id` | Only explicit telemetry claims |
 
+Octopus always uses the official `api.octopus.energy` origin. Home Assistant
+and Emoncms accept an HTTPS self-hosted base URL; loopback HTTP is available
+for local fixtures and development services.
+
 ```python
 result = await profile.connect(
     "octopus",
@@ -117,13 +121,15 @@ metadata = {
 ```
 
 The `quantity_shape` field makes the distinction explicit: use `interval` for
-energy in a time interval, `instantaneous` for power, and leave the mapping
-unreviewed for a cumulative counter. `measurement_semantics="interval_energy"`
-is an additional descriptive declaration for interval consumption. Current-
-power and generation mappings use the same explicit role, shape, kind, and
-unit requirements. If those declarations are absent, the connection remains
-usable for direct provider reads but capability resolution will not pretend to
-know the telemetry semantics.
+energy in a time interval and `instantaneous` for power or a present storage
+state. Generation is reviewed as `kWh` intervals or `W`, `kW`, or `MW`
+instantaneous power. An export interval uses `kWh` and `interval`. Storage
+state accepts instantaneous `%` or `kWh`. Current-power and storage-state
+readings use the provider's current-state endpoint; interval readings use the
+history endpoint and therefore require a requested time window when resolved.
+Leave the mapping unreviewed for a cumulative counter. If these declarations
+are absent, the connection remains usable for direct provider reads but
+capability resolution will not pretend to know the telemetry semantics.
 
 ## Restart and handoff to the agent
 

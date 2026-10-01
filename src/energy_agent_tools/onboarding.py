@@ -18,6 +18,7 @@ status and never echoes an authenticated URL or provider response.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import secrets
@@ -299,8 +300,29 @@ class LocalProfile:
             self._chmod(self.key_path, 0o600)
             return key
         key = Fernet.generate_key()
-        self._atomic_write(self.key_path, key, 0o600)
-        return key
+        # Write the candidate completely before linking it into place.  A
+        # hard-link create is exclusive, so two processes cannot replace a
+        # key that another process has already installed.
+        candidate = self.key_path.with_name(f".{self.key_path.name}.{secrets.token_hex(8)}.tmp")
+        self._atomic_write(candidate, key, 0o600)
+        try:
+            try:
+                os.link(candidate, self.key_path)
+            except FileExistsError:
+                existing = self.key_path.read_bytes()
+                try:
+                    Fernet(existing)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("vault.key does not contain a valid Fernet key") from exc
+                self._chmod(self.key_path, 0o600)
+                return existing
+            self._chmod(self.key_path, 0o600)
+            return key
+        finally:
+            try:
+                candidate.unlink()
+            except FileNotFoundError:
+                pass
 
     def _empty_profile(self) -> Json:
         return {
@@ -492,7 +514,7 @@ class LocalProfile:
             _identifier(settings.get("mpan"), "mpan")
             _identifier(settings.get("serial_number"), "serial_number")
             if settings.get("base_url") is not None:
-                settings["base_url"] = _base_url(settings["base_url"], required=True)
+                raise ValueError("Octopus uses its fixed official API origin")
         elif provider == "home_assistant":
             settings["base_url"] = _base_url(settings.get("base_url"), required=True)
             entity = settings.get("entity_id")
@@ -561,6 +583,7 @@ class LocalProfile:
                     quantity_shape != "interval"
                     and settings.get("measurement_semantics") != "interval_energy"
                 )
+                or settings.get("state_class") in {"total", "total_increasing"}
             ):
                 return []
             capability = "get_energy_consumption"
@@ -570,19 +593,33 @@ class LocalProfile:
             and quantity_shape == "instantaneous"
         ):
             capability = "get_current_power"
-        elif (
-            role == "generation"
-            and unit in {"W", "kW", "MW", "kWh"}
-            and quantity_shape in {"instantaneous", "interval"}
+        elif role == "generation" and (
+            (unit == "kWh" and quantity_shape == "interval")
+            or (unit in {"W", "kW", "MW"} and quantity_shape == "instantaneous")
         ):
             capability = "get_generation"
+        elif role in {"export", "export_interval"} and (
+            unit == "kWh" and quantity_shape == "interval"
+        ):
+            capability = "get_export"
+        elif role == "storage_state" and (
+            unit in {"%", "kWh"} and quantity_shape == "instantaneous"
+        ):
+            capability = "get_storage_state"
         else:
             return []
-        tool = (
-            "home_assistant.get_history"
-            if provider == "home_assistant"
-            else "openenergymonitor.get_feed"
-        )
+        if capability == "get_current_power" or capability == "get_storage_state":
+            tool = (
+                "home_assistant.get_state"
+                if provider == "home_assistant"
+                else "openenergymonitor.get_feed"
+            )
+        else:
+            tool = (
+                "home_assistant.get_history"
+                if provider == "home_assistant"
+                else "openenergymonitor.get_feed"
+            )
         fixed_key = "entity_id" if provider == "home_assistant" else "feed_id"
         return [
             {
@@ -672,9 +709,8 @@ class LocalProfile:
         settings = account.settings
         try:
             if provider == "octopus":
-                base = _base_url(settings.get("base_url"), required=False) or _OCTOPUS_BASE
-                assert base is not None
-                expected_origin = base
+                base = _OCTOPUS_BASE
+                expected_origin = _OCTOPUS_BASE
                 mpan = _identifier(settings.get("mpan"), "mpan")
                 serial = _identifier(settings.get("serial_number"), "serial_number")
                 endpoint = (
@@ -735,10 +771,57 @@ class LocalProfile:
             ) from exc
         if provider == "octopus" and not isinstance(payload, Mapping):
             raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
-        if provider == "home_assistant" and not isinstance(payload, Mapping):
-            raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
-        if provider == "emoncms" and isinstance(payload, (list, tuple)):
-            raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+        if provider == "home_assistant":
+            if not isinstance(payload, Mapping):
+                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+            entity = settings.get("entity_id")
+            if entity is not None:
+                if payload.get("entity_id") != entity:
+                    raise _safe_error(
+                        "provider_verification_failed", "Provider returned invalid data."
+                    )
+                attributes = payload.get("attributes")
+                if not isinstance(attributes, Mapping):
+                    raise _safe_error(
+                        "provider_verification_failed", "Provider returned invalid data."
+                    )
+                declared_unit = settings.get("unit")
+                actual_unit = attributes.get("unit_of_measurement")
+                if declared_unit is not None and actual_unit != declared_unit:
+                    raise _safe_error(
+                        "provider_verification_failed",
+                        "Provider telemetry metadata does not match.",
+                    )
+                declared_state_class = settings.get("state_class")
+                actual_state_class = attributes.get("state_class")
+                if declared_state_class is not None and actual_state_class != declared_state_class:
+                    raise _safe_error(
+                        "provider_verification_failed",
+                        "Provider telemetry metadata does not match.",
+                    )
+                if settings.get(
+                    "telemetry_role"
+                ) == "consumption_interval" and actual_state_class in {"total", "total_increasing"}:
+                    raise _safe_error(
+                        "provider_verification_failed",
+                        "Provider telemetry metadata does not match.",
+                    )
+                if settings.get(
+                    "measurement_kind"
+                ) == DataKind.METERED.value and actual_state_class not in {
+                    "measurement",
+                    "total",
+                    "total_increasing",
+                }:
+                    raise _safe_error(
+                        "provider_verification_failed",
+                        "Provider telemetry metadata does not match.",
+                    )
+        if provider == "emoncms":
+            if isinstance(payload, bool) or not isinstance(payload, (int, float)):
+                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+            if not math.isfinite(float(payload)):
+                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
         return True
 
     async def verify_connection(
@@ -808,9 +891,10 @@ class LocalProfile:
             user_id=user_id,
             site_id=site_id,
         )
+        latest = self.auth_store.get_account(user_id, account.id, site_id)
         return {
             "ok": health["status"] == "healthy",
-            "account": account.public(),
+            "account": latest.public(),
             "health": health,
             "config": self.config(),
         }
