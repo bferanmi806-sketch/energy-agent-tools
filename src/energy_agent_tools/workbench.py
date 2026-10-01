@@ -182,6 +182,7 @@ class Workbench:
                     "input_kind": r.kind.value,
                     "source": r.source,
                     "unit": r.unit,
+                    "quantity_shape": r.quantity_shape,
                     "provenance": r.provenance,
                 }
                 for a, r in inputs
@@ -197,7 +198,9 @@ class Workbench:
             "count": int(values.count()),
             "missing": int(values.isna().sum()),
             "sum": float(values.sum())
-            if values.count() and result.unit not in {"W", "kW", "MW"}
+            if values.count()
+            and result.unit not in {"W", "kW", "MW"}
+            and result.quantity_shape not in {"counter", "instantaneous"}
             else None,
             "mean": float(values.mean()) if values.count() else None,
             "min": float(values.min()) if values.count() else None,
@@ -208,7 +211,7 @@ class Workbench:
             [(artifact_id, result)],
             result.unit,
             [
-                "Sum applies to interval quantities. Power requires integration over explicit durations."
+                "Sum applies to interval quantities. Counters require differences; power requires integration over explicit durations."
             ],
         )
 
@@ -227,6 +230,11 @@ class Workbench:
         if frequency not in {"15min", "30min", "1h", "1D"} or aggregation not in {"sum", "mean"}:
             raise EnergyError(
                 "invalid_operation", "Use supported resampling frequency and sum/mean."
+            )
+        if aggregation == "sum" and result.quantity_shape in {"counter", "instantaneous"}:
+            raise EnergyError(
+                "quantity_incompatible",
+                "Summation requires interval quantities; transform counters or instantaneous observations explicitly.",
             )
         if aggregation == "sum" and result.unit in {"W", "kW", "MW"}:
             raise EnergyError(
@@ -257,6 +265,7 @@ class Workbench:
             [f"{aggregation} on {frequency} bins in {result.timezone}; empty bins are null."],
         )
         derived.resolution = frequency
+        derived.quantity_shape = result.quantity_shape
         return derived
 
     def join(self, session: Session, left: str, right: str, timestamp: str) -> EnergyResult:

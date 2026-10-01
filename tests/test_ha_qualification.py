@@ -42,7 +42,9 @@ async def test_onboarding_uses_real_http_protocol_without_returning_credentials(
             assert body["name"] == "Energy Agent Tools qualification"
             assert body["language"] == "en"
             assert body["client_id"] == qualification.CLIENT_ID
-            assert isinstance(body["username"], str) and body["username"].startswith("eat_qualification_")
+            assert isinstance(body["username"], str) and body["username"].startswith(
+                "eat_qualification_"
+            )
             assert isinstance(body["password"], str) and body["password"]
             return httpx.Response(200, json={"auth_code": auth_code}, request=request)
         if request.method == "POST" and request.url.path == "/auth/token":
@@ -57,7 +59,10 @@ async def test_onboarding_uses_real_http_protocol_without_returning_credentials(
                 json={"access_token": access_token, "refresh_token": "project-refresh-token"},
                 request=request,
             )
-        if request.method == "POST" and request.url.path == "/api/states/" + qualification.ENTITY_ID:
+        if (
+            request.method == "POST"
+            and request.url.path == "/api/states/" + qualification.ENTITY_ID
+        ):
             assert request.headers["authorization"] == "Bearer " + access_token
             body = json.loads(request.content)
             assert body == {
@@ -68,7 +73,7 @@ async def test_onboarding_uses_real_http_protocol_without_returning_credentials(
                 },
             }
             return httpx.Response(
-                200,
+                201,
                 json={
                     "entity_id": qualification.ENTITY_ID,
                     "state": "1.75",
@@ -78,10 +83,12 @@ async def test_onboarding_uses_real_http_protocol_without_returning_credentials(
             )
         return httpx.Response(404, request=request)
 
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://ha.test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://ha.test"
+    ) as client:
         returned = await qualification.onboard_and_seed(client)
     assert returned == access_token
-    assert len(requests) == 4
+    assert len(requests) == 5
     # The function has no logging or return envelope containing the generated
     # password/auth code.  Only the access token is kept for the immediate
     # provider exercise.
@@ -90,7 +97,9 @@ async def test_onboarding_uses_real_http_protocol_without_returning_credentials(
 
 
 @pytest.mark.asyncio
-async def test_profile_execution_proves_encrypted_scope_freshness_and_provenance(tmp_path: Path) -> None:
+async def test_profile_execution_proves_encrypted_scope_freshness_and_provenance(
+    tmp_path: Path,
+) -> None:
     observed = datetime.now(UTC).isoformat()
     access_token = "profile-exercise-token"
 
@@ -151,7 +160,9 @@ def test_cleanup_targets_only_generated_resources(monkeypatch: pytest.MonkeyPatc
 
     def fake_run(args, **kwargs):
         calls.append(args)
-        return qualification.subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        return qualification.subprocess.CompletedProcess(
+            args=args, returncode=0, stdout="", stderr=""
+        )
 
     monkeypatch.setattr(qualification.subprocess, "run", fake_run)
     assert qualification.cleanup_owned_resources(root, root, root + "-init") is True

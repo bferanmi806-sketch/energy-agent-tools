@@ -8,7 +8,7 @@ household, or a device control path is connected.
 The run uses the pinned official image
 `ghcr.io/home-assistant/home-assistant@sha256:3e6710a7ab2a61311d9d899b719f6c3657791c63e8f4942cec4ebc42401d6b76`
 (Home Assistant 2026.9.4). It creates a unique Docker volume and container,
-writes a small configuration containing only `homeassistant`, `api`, and
+writes a small configuration containing `homeassistant`, `api`, `onboarding`, and
 `http`, and bounds the container to 1 GiB of memory, two CPUs, and 256
 processes. The image is not started by the local development workflow when
 the shared Docker VM is resource constrained; the same script is intended for
@@ -31,7 +31,8 @@ only a bounded error code and generic message and exits nonzero.
 The script follows Home Assistant's own onboarding and authentication
 boundaries:
 
-1. `GET /api/` is polled until the REST API reports that it is running.
+1. `GET /api/onboarding` is polled until the unfinished user step is available.
+   The API status endpoint requires authentication, so it cannot be the first-run readiness check.
 2. `GET /api/onboarding` confirms that onboarding is still available.
 3. `POST /api/onboarding/users` creates a project-controlled development owner
    using a password generated in memory for this run.
@@ -39,7 +40,7 @@ boundaries:
    same application client ID and the OAuth authorization-code grant, and
    validates both returned access and refresh tokens without printing either.
 5. `POST /api/states/sensor.eat_qualification_power` seeds the synthetic
-   state through the authenticated REST API.
+   state through the authenticated REST API, expecting HTTP 201 for a new entity.
 6. `LocalProfile.connect` performs a second authenticated provider read and
    stores the token in the encrypted local vault.
 7. `build_agent` reopens the profile and resolves the scoped
@@ -85,7 +86,7 @@ Those require an operator-owned Home Assistant installation and a separate
 reviewed qualification.
 
 The endpoint shapes used here are documented by Home Assistant's
-[onboarding view source](https://raw.githubusercontent.com/home-assistant/core/dev/homeassistant/components/onboarding/views.py),
+[onboarding view source](https://raw.githubusercontent.com/home-assistant/core/2026.9.4/homeassistant/components/onboarding/views.py),
 [authentication API](https://developers.home-assistant.io/docs/auth_api/), and
 [REST API](https://developers.home-assistant.io/docs/api/rest/). The REST API
 documentation also explains why the minimal configuration includes the

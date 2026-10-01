@@ -159,3 +159,28 @@ def test_large_metadata_stays_in_artifact(tmp_path):
     assert len(json.dumps(out).encode()) < 2000
     stored = bench.read(sess, out["data"]["artifact_id"])
     assert len(stored.provenance[0]["large_model"]) == 20000
+
+
+@pytest.mark.parametrize("shape", ["counter", "instantaneous"])
+def test_quantity_shape_prevents_summing_non_interval_energy(tmp_path, shape):
+    bench = Workbench(tmp_path)
+    session = Session(user_id="u")
+    source = EnergyResult(
+        data=[
+            {"timestamp": "2026-01-01T00:00:00Z", "value": 100},
+            {"timestamp": "2026-01-01T00:30:00Z", "value": 102},
+        ],
+        kind=DataKind.METERED,
+        unit="kWh",
+        source="state-sensor",
+        quantity_shape=shape,
+    )
+    artifact = bench.persist(session, source)["artifact_id"]
+    summary = bench.summarize(session, artifact, "value")
+    assert summary.data["sum"] is None
+    assert summary.data["mean"] == 101
+    with pytest.raises(EnergyError, match="interval|counter"):
+        bench.resample(session, artifact, "timestamp", "value", "1h", "sum")
+    means = bench.resample(session, artifact, "timestamp", "value", "1h", "mean")
+    assert means.quantity_shape == shape
+    assert means.provenance[0]["quantity_shape"] == shape

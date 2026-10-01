@@ -56,6 +56,7 @@ homeassistant:
   time_zone: UTC
   country: GB
 api:
+onboarding:
 http:
   server_port: 8123
 """
@@ -75,7 +76,9 @@ def _safe_name(prefix: str) -> str:
 
     name = f"{prefix}-{uuid4().hex}"
     if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{1,127}", name):
-        raise QualificationFailure("invalid_resource_name", "Generated Docker resource name is invalid.")
+        raise QualificationFailure(
+            "invalid_resource_name", "Generated Docker resource name is invalid."
+        )
     return name
 
 
@@ -91,7 +94,9 @@ def docker(*args: str, timeout: float = MAX_DOCKER_COMMAND_SECONDS) -> str:
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise QualificationFailure("docker_unavailable", "Docker did not complete the requested operation.") from exc
+        raise QualificationFailure(
+            "docker_unavailable", "Docker did not complete the requested operation."
+        ) from exc
     if completed.returncode:
         operation = args[0] if args else "command"
         raise QualificationFailure("docker_failed", f"Docker {operation} failed.")
@@ -127,7 +132,9 @@ def cleanup_owned_resources(container_name: str, volume_name: str, init_name: st
         re.fullmatch(r"eat-ha-qualification-[a-f0-9]{32}(?:-init)?", value)
         for value in (container_name, volume_name, init_name)
     ):
-        raise QualificationFailure("invalid_resource_name", "Refusing to clean an unowned Docker resource.")
+        raise QualificationFailure(
+            "invalid_resource_name", "Refusing to clean an unowned Docker resource."
+        )
     init_clean = _docker_remove(("rm", "--force", init_name))
     container_clean = _docker_remove(("rm", "--force", container_name))
     volume_clean = _docker_remove(("volume", "rm", "--force", volume_name))
@@ -157,10 +164,14 @@ def _published_port(container_name: str) -> int:
     raw = docker("port", container_name, "8123/tcp", timeout=30)
     match = re.search(r":([0-9]{1,5})\s*$", raw)
     if match is None:
-        raise QualificationFailure("docker_port_missing", "Home Assistant did not publish a host port.")
+        raise QualificationFailure(
+            "docker_port_missing", "Home Assistant did not publish a host port."
+        )
     port = int(match.group(1))
     if not 1 <= port <= 65535:
-        raise QualificationFailure("docker_port_invalid", "Home Assistant published an invalid host port.")
+        raise QualificationFailure(
+            "docker_port_invalid", "Home Assistant published an invalid host port."
+        )
     return port
 
 
@@ -177,44 +188,60 @@ async def _request_json(
     try:
         response = await client.request(method, path, **kwargs)
     except httpx.HTTPError as exc:
-        raise QualificationFailure("home_assistant_unavailable", "Home Assistant did not answer the request.") from exc
+        raise QualificationFailure(
+            "home_assistant_unavailable", "Home Assistant did not answer the request."
+        ) from exc
     if response.status_code != expected_status:
-        raise QualificationFailure("home_assistant_protocol", "Home Assistant returned an unexpected response.")
+        raise QualificationFailure(
+            "home_assistant_protocol", "Home Assistant returned an unexpected response."
+        )
     if len(response.content) > MAX_HTTP_RESPONSE_BYTES:
-        raise QualificationFailure("home_assistant_protocol", "Home Assistant returned too much data.")
+        raise QualificationFailure(
+            "home_assistant_protocol", "Home Assistant returned too much data."
+        )
     try:
         return response.json()
     except (TypeError, ValueError) as exc:
-        raise QualificationFailure("home_assistant_protocol", "Home Assistant returned invalid JSON.") from exc
+        raise QualificationFailure(
+            "home_assistant_protocol", "Home Assistant returned invalid JSON."
+        ) from exc
 
 
 def _require_string(payload: Any, key: str) -> str:
     if not isinstance(payload, Mapping):
-        raise QualificationFailure("home_assistant_protocol", "Home Assistant returned an invalid response.")
+        raise QualificationFailure(
+            "home_assistant_protocol", "Home Assistant returned an invalid response."
+        )
     value = payload.get(key)
     if not isinstance(value, str) or not value or len(value) > 4096:
-        raise QualificationFailure("home_assistant_protocol", "Home Assistant returned an invalid response.")
+        raise QualificationFailure(
+            "home_assistant_protocol", "Home Assistant returned an invalid response."
+        )
     return value
 
 
 async def wait_until_ready(client: httpx.AsyncClient, timeout_seconds: int) -> None:
-    """Wait for the unauthenticated Home Assistant API health endpoint."""
+    """Wait for unauthenticated onboarding; the API status endpoint requires auth."""
 
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         try:
-            response = await client.get("/api/")
+            response = await client.get("/api/onboarding")
             if response.status_code == 200:
                 payload = response.json()
-                if isinstance(payload, Mapping) and payload.get("message") in {
-                    "API running",
-                    "API running.",
-                }:
+                if isinstance(payload, list) and any(
+                    isinstance(step, Mapping)
+                    and step.get("step") == "user"
+                    and step.get("done") is False
+                    for step in payload
+                ):
                     return
         except (httpx.HTTPError, TypeError, ValueError):
             pass
         await asyncio.sleep(1)
-    raise QualificationFailure("home_assistant_startup_timeout", "Home Assistant did not become ready in time.")
+    raise QualificationFailure(
+        "home_assistant_startup_timeout", "Home Assistant did not become ready in time."
+    )
 
 
 async def onboard_and_seed(client: httpx.AsyncClient) -> str:
@@ -222,7 +249,9 @@ async def onboard_and_seed(client: httpx.AsyncClient) -> str:
 
     steps = await _request_json(client, "GET", "/api/onboarding")
     if not isinstance(steps, list):
-        raise QualificationFailure("home_assistant_protocol", "Home Assistant onboarding state is invalid.")
+        raise QualificationFailure(
+            "home_assistant_protocol", "Home Assistant onboarding state is invalid."
+        )
 
     username = f"eat_qualification_{secrets.token_hex(8)}"
     password = secrets.token_urlsafe(32)
@@ -248,10 +277,20 @@ async def onboard_and_seed(client: httpx.AsyncClient) -> str:
     access_token = _require_string(token_payload, "access_token")
     _require_string(token_payload, "refresh_token")
     headers = {"Authorization": f"Bearer {access_token}"}
+    configuration = await _request_json(client, "GET", "/api/config", headers=headers)
+    if (
+        not isinstance(configuration, Mapping)
+        or configuration.get("version") != HOME_ASSISTANT_VERSION
+    ):
+        raise QualificationFailure(
+            "version_mismatch",
+            "Home Assistant version differs from the pinned qualification version.",
+        )
     seeded = await _request_json(
         client,
         "POST",
         f"/api/states/{ENTITY_ID}",
+        expected_status=201,
         headers=headers,
         json={
             "state": "1.75",
@@ -262,12 +301,18 @@ async def onboard_and_seed(client: httpx.AsyncClient) -> str:
         },
     )
     if not isinstance(seeded, Mapping) or seeded.get("entity_id") != ENTITY_ID:
-        raise QualificationFailure("home_assistant_protocol", "Home Assistant did not accept the synthetic state.")
+        raise QualificationFailure(
+            "home_assistant_protocol", "Home Assistant did not accept the synthetic state."
+        )
     attributes = seeded.get("attributes")
     if not isinstance(attributes, Mapping) or attributes.get("unit_of_measurement") != "kW":
-        raise QualificationFailure("home_assistant_protocol", "Home Assistant returned invalid state metadata.")
+        raise QualificationFailure(
+            "home_assistant_protocol", "Home Assistant returned invalid state metadata."
+        )
     if "state_class" in attributes:
-        raise QualificationFailure("home_assistant_protocol", "Synthetic state unexpectedly has a state class.")
+        raise QualificationFailure(
+            "home_assistant_protocol", "Synthetic state unexpectedly has a state class."
+        )
     return access_token
 
 
@@ -325,24 +370,34 @@ async def qualify_profile(
         },
     )
     if not outcome.get("ok") or outcome.get("health", {}).get("status") != "healthy":
-        raise QualificationFailure("onboarding_failed", "Local Home Assistant connection verification failed.")
+        raise QualificationFailure(
+            "onboarding_failed", "Local Home Assistant connection verification failed."
+        )
     connection = outcome.get("account")
     if not isinstance(connection, Mapping) or connection.get("id") != ACCOUNT_ID:
-        raise QualificationFailure("onboarding_failed", "Local Home Assistant account scope is invalid.")
+        raise QualificationFailure(
+            "onboarding_failed", "Local Home Assistant account scope is invalid."
+        )
 
     profile_text = (profile_root / "profile.json").read_text(encoding="utf-8")
     vault_bytes = (profile_root / "vault" / "auth.sqlite3").read_bytes()
     if access_token in profile_text or access_token.encode("utf-8") in vault_bytes:
-        raise QualificationFailure("secret_storage_failed", "Credential storage was not encrypted safely.")
+        raise QualificationFailure(
+            "secret_storage_failed", "Credential storage was not encrypted safely."
+        )
     config = profile.config()
     configured = next(
         (item for item in config.get("accounts", []) if item.get("id") == ACCOUNT_ID), None
     )
     if not isinstance(configured, Mapping):
-        raise QualificationFailure("onboarding_failed", "Encrypted connection metadata was not persisted.")
+        raise QualificationFailure(
+            "onboarding_failed", "Encrypted connection metadata was not persisted."
+        )
     bindings = configured.get("settings", {}).get("capability_bindings", [])
     if not isinstance(bindings, list) or _reviewed_binding() not in bindings:
-        raise QualificationFailure("onboarding_failed", "Reviewed Home Assistant binding was not persisted.")
+        raise QualificationFailure(
+            "onboarding_failed", "Reviewed Home Assistant binding was not persisted."
+        )
     profile.close()
 
     agent = build_agent(profile_root)
@@ -358,18 +413,27 @@ async def qualify_profile(
     try:
         resolution = agent.resolver.resolve(session, request)
         if resolution.get("status") != "resolved":
-            raise QualificationFailure("capability_unresolved", "Reviewed Home Assistant capability did not resolve.")
+            raise QualificationFailure(
+                "capability_unresolved", "Reviewed Home Assistant capability did not resolve."
+            )
         selected = resolution.get("selected")
         if not isinstance(selected, Mapping) or selected.get("account_id") != ACCOUNT_ID:
-            raise QualificationFailure("capability_scope_failed", "Capability resolved outside the configured account scope.")
+            raise QualificationFailure(
+                "capability_scope_failed",
+                "Capability resolved outside the configured account scope.",
+            )
         result = await agent.resolver.execute(session, request)
     finally:
         await agent.close()
     if not result.get("ok"):
-        raise QualificationFailure("capability_failed", "Home Assistant current power execution failed.")
+        raise QualificationFailure(
+            "capability_failed", "Home Assistant current power execution failed."
+        )
     envelope = result.get("result")
     if not isinstance(envelope, Mapping):
-        raise QualificationFailure("capability_failed", "Home Assistant returned no result envelope.")
+        raise QualificationFailure(
+            "capability_failed", "Home Assistant returned no result envelope."
+        )
     if (
         envelope.get("kind") != "estimated"
         or envelope.get("unit") != "kW"
@@ -377,15 +441,25 @@ async def qualify_profile(
         or envelope.get("site_id") != SITE_ID
         or envelope.get("asset_id") != ASSET_ID
     ):
-        raise QualificationFailure("semantic_contract_failed", "Home Assistant result semantics were not preserved.")
+        raise QualificationFailure(
+            "semantic_contract_failed", "Home Assistant result semantics were not preserved."
+        )
     data = envelope.get("data")
-    if not isinstance(data, Mapping) or data.get("state") != "1.75" or data.get("kind") != "estimated":
-        raise QualificationFailure("semantic_contract_failed", "Synthetic Home Assistant value was not preserved.")
+    if (
+        not isinstance(data, Mapping)
+        or data.get("state") != "1.75"
+        or data.get("kind") != "estimated"
+    ):
+        raise QualificationFailure(
+            "semantic_contract_failed", "Synthetic Home Assistant value was not preserved."
+        )
     provenance = envelope.get("provenance")
     if not isinstance(provenance, list) or not any(
         isinstance(item, Mapping) and "observation_age_seconds" in item for item in provenance
     ):
-        raise QualificationFailure("freshness_failed", "Home Assistant observation freshness was not recorded.")
+        raise QualificationFailure(
+            "freshness_failed", "Home Assistant observation freshness was not recorded."
+        )
     return {
         "ok": True,
         "provider": "home-assistant",
@@ -437,7 +511,9 @@ def run_qualification(image: str, startup_timeout: int) -> dict[str, Any]:
     volume_name = container_name
     init_name = f"{container_name}-init"
     if not 30 <= startup_timeout <= 300:
-        raise QualificationFailure("invalid_timeout", "Startup timeout must be between 30 and 300 seconds.")
+        raise QualificationFailure(
+            "invalid_timeout", "Startup timeout must be between 30 and 300 seconds."
+        )
     try:
         docker("pull", image)
         docker("volume", "create", volume_name)
@@ -472,12 +548,17 @@ def run_qualification(image: str, startup_timeout: int) -> dict[str, Any]:
                 await wait_until_ready(client, startup_timeout)
                 access_token = await onboard_and_seed(client)
                 with tempfile.TemporaryDirectory(prefix="eat-ha-profile-") as profile:
-                    return await qualify_profile(client, f"http://127.0.0.1:{port}", Path(profile), access_token)
+                    return await qualify_profile(
+                        client, f"http://127.0.0.1:{port}", Path(profile), access_token
+                    )
 
         return asyncio.run(run())
     finally:
         if not cleanup_owned_resources(container_name, volume_name, init_name):
-            raise QualificationFailure("cleanup_failed", "Owned Home Assistant Docker resources could not be removed safely.")
+            raise QualificationFailure(
+                "cleanup_failed",
+                "Owned Home Assistant Docker resources could not be removed safely.",
+            )
 
 
 def main() -> None:
@@ -488,7 +569,11 @@ def main() -> None:
     try:
         result = run_qualification(args.image, args.startup_timeout)
     except QualificationFailure as exc:
-        print(json.dumps({"ok": False, "error": {"code": exc.code, "message": exc.message}}, sort_keys=True))
+        print(
+            json.dumps(
+                {"ok": False, "error": {"code": exc.code, "message": exc.message}}, sort_keys=True
+            )
+        )
         raise SystemExit(1) from None
     except Exception:
         # Keep unexpected HTTP/client details, which can include request
