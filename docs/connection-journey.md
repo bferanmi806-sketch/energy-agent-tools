@@ -6,9 +6,9 @@
 create profile → create site → connect → verify → resolve → use
 ```
 
-The journey is SDK driven so a user interface or CLI can collect a provider
-credential without placing it in a configuration file. A CLI should collect a
-token with `getpass.getpass()` and pass it directly to `LocalProfile.connect`.
+The CLI and SDK collect provider credentials without placing them in a
+configuration file. The CLI prompts without echoing the token and passes it
+directly to `LocalProfile.connect`.
 The onboarding service does not print, log, return, or persist the token in
 plain text.
 
@@ -172,3 +172,20 @@ empty credentials fail before storing a connection. Provider status errors are
 generic and contain no URL or response body. The profile and vault are
 scoped to the local installation, and every credential lookup remains scoped
 to user, site, and connection ID by `AuthStore`.
+
+## CLI journey
+
+```sh
+energy-agent setup --state-dir .energy-agent --site-id home --name Home --timezone Europe/London
+energy-agent connect --state-dir .energy-agent --site-id home --provider octopus --mpan YOUR_MPAN --serial-number YOUR_SERIAL
+energy-agent run-skill --state-dir .energy-agent --site-id home --skill-id yesterday-consumption
+```
+
+The second command prompts for the API key without echoing it. For Home
+Assistant, use `--provider home_assistant --base-url https://YOUR_INSTANCE`
+with the reviewed `--entity-id`, `--telemetry-role`, `--quantity-shape`, and
+`--unit` options. `--credential-stdin` supports a pipe from approved secret
+storage; it never accepts a credential on the command line.
+`EnergyAgentTools(".energy-agent")` and the CLI load the saved profile directly.
+Current-power requests reject stale or undated observations. Home Assistant
+counters remain counters even if a sensor changes after its mapping is reviewed.

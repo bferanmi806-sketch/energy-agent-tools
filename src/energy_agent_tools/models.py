@@ -14,6 +14,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Json = dict[str, Any]
+QuantityShape = Literal["interval", "instantaneous", "counter"]
 
 
 class StrictModel(BaseModel):
@@ -50,6 +51,7 @@ class EnergyResult(StrictModel):
     asset_id: str | None = None
     time_start: datetime | None = None
     time_end: datetime | None = None
+    quantity_shape: QuantityShape | None = None
     original_unit: str | None = None
     field_units: dict[str, str] = Field(default_factory=dict)
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

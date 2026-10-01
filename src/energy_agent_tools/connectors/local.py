@@ -30,6 +30,37 @@ def register(registry: Registry) -> None:
     artifact = {"type": "string", "pattern": "^[a-f0-9]{32}$"}
     column = {"type": "string", "minLength": 1}
 
+    async def window(args: Json, ctx: ExecutionContext) -> EnergyResult:
+        from ..windows import select_window
+
+        return select_window(
+            ctx.workbench.read(ctx.session, args["artifact_id"]),
+            args["artifact_id"],
+            args["start"],
+            args["end"],
+            args["timestamp"],
+        )
+
+    registry.add(
+        Tool(
+            name="WORKBENCH_WINDOW",
+            toolkit="workbench",
+            description="Select a half-open time window, preserve source kind and report observed coverage. Never prorates intervals.",
+            input_schema=schema(
+                {
+                    "artifact_id": artifact,
+                    "start": {"type": "string"},
+                    "end": {"type": "string"},
+                    "timestamp": column,
+                },
+                ["artifact_id", "start", "end", "timestamp"],
+            ),
+            capabilities=["analyse_timeseries"],
+            actions={Action.CALCULATE},
+        ),
+        window,
+    )
+
     async def summarize(args: Json, ctx: ExecutionContext) -> EnergyResult:
         return ctx.workbench.summarize(ctx.session, args["artifact_id"], args["column"])
 

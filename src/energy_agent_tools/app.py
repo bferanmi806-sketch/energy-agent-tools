@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .capabilities import CapabilityBinding
-from .connectors import engineering, extended, http, local, networks
+from .connectors import dss, engineering, extended, http, local, networks
 from .models import Asset, ConnectedAccount, Json, Site
 from .registry import Registry
 from .runtime import EnergyAgent
@@ -13,6 +13,8 @@ from .runtime import EnergyAgent
 def build_agent(
     root: Path, config: Json | None = None, *, data_root: Path | None = None
 ) -> EnergyAgent:
+    if config is None and (root / "profile.json").is_file():
+        config = load_config(root / "profile.json")
     config = config or {}
     allowed = {
         "user_id",
@@ -35,6 +37,7 @@ def build_agent(
     http.register(registry)
     engineering.register(registry)
     networks.register(registry)
+    dss.register(registry)
     extended.register(registry, data_root=data_root)
     local.register(registry)
     from .connector_sdk import load_plugins
@@ -50,15 +53,25 @@ def build_agent(
         from .auth import AuthStore
 
         vault = config["vault"]
-        if set(vault) - {"master_key_env"}:
+        if set(vault) - {"master_key_env", "master_key_file"}:
             raise ValueError("Unknown vault configuration field")
-        key = os.environ.get(vault.get("master_key_env", "ENERGY_AUTH_MASTER_KEY"))
+        if "master_key_env" in vault and "master_key_file" in vault:
+            raise ValueError("Choose one vault key source")
+        if "master_key_file" in vault:
+            key_path = root / vault["master_key_file"]
+            if key_path.is_symlink() or not key_path.resolve().is_relative_to(root.resolve()):
+                raise ValueError("Vault key file must be inside the private state directory")
+            key = key_path.read_text().strip()
+        else:
+            key = os.environ.get(vault.get("master_key_env", "ENERGY_AUTH_MASTER_KEY"))
         if not key:
             raise ValueError("Vault master key is absent from the environment")
         auth_store = AuthStore(root / "vault", key.encode())
-        for user_id in {s["user_id"] for s in config.get("sites", [])} | {
-            config.get("user_id", "local")
-        }:
+        for user_id in (
+            {s["user_id"] for s in config.get("sites", [])}
+            | {a.user_id for a in accounts}
+            | {config.get("user_id", "local")}
+        ):
             accounts.extend(auth_store.accounts(user_id))
         accounts = list({a.id: a for a in accounts}.values())
     return EnergyAgent(

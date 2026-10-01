@@ -608,7 +608,7 @@ class LocalProfile:
             capability = "get_storage_state"
         else:
             return []
-        if capability == "get_current_power" or capability == "get_storage_state":
+        if quantity_shape == "instantaneous":
             tool = (
                 "home_assistant.get_state"
                 if provider == "home_assistant"
@@ -627,6 +627,7 @@ class LocalProfile:
                 "tool": tool,
                 "kind": measurement_kind,
                 "unit": unit,
+                "quantity_shape": quantity_shape,
                 "fixed_arguments": {fixed_key: entity_or_feed},
                 "reviewed": True,
                 "quality": "operator-reviewed",

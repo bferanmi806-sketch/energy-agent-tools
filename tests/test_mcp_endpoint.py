@@ -48,6 +48,7 @@ async def test_stdio_real_endpoint_search_execute_workbench(tmp_path):
             "ENERGY_RESOLVE_CAPABILITY",
             "ENERGY_EXECUTE_CAPABILITY",
             "ENERGY_RUN_SKILL",
+            "ENERGY_SIMULATION_JOB",
         }
         response = await client.call_tool(
             "ENERGY_SEARCH_TOOLS", {"query": "local CSV electricity consumption", "limit": 3}
@@ -107,7 +108,7 @@ async def test_mcp_hooks_and_provider_helper_schemas(tmp_path):
     agent.before.append(lambda tool, args, sess: (seen.append(tool.name), args)[1])
     server = create_server(agent, session)
     schemas = await provider_tools(server, "anthropic")
-    assert len(schemas) == 10
+    assert len(schemas) == 11
     assert all("input_schema" in t for t in schemas)
     async with create_connected_server_and_client_session(server) as client:
         response = await client.call_tool(

@@ -323,7 +323,32 @@ class JobManager:
         self._lock_handle: Any | None = None
         self._initialize_storage()
         self._acquire_root_lock()
-        self.recover()
+        try:
+            self._rebase_paths()
+            self.recover()
+        except BaseException:
+            self.close()
+            raise
+
+    def _rebase_paths(self) -> None:
+        """Keep generated paths inside the current root after a verified restore."""
+        with self._connect() as database:
+            for row in database.execute("SELECT job_id FROM jobs").fetchall():
+                job_id = str(row["job_id"])
+                if len(job_id) != 32 or any(c not in "0123456789abcdef" for c in job_id):
+                    raise JobError("invalid_job_store", "Stored job identifier is invalid.")
+                directory = self.jobs_dir / job_id
+                if directory.is_symlink():
+                    raise JobError("invalid_job_store", "Job directories cannot be symlinks.")
+                database.execute(
+                    "UPDATE jobs SET input_path=?, output_path=?, state_dir=? WHERE job_id=?",
+                    (
+                        str(directory / "input.json"),
+                        str(directory / "output.json"),
+                        str(directory / "state"),
+                        job_id,
+                    ),
+                )
 
     @property
     def database_path(self) -> Path:

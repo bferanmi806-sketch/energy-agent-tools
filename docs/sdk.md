@@ -80,12 +80,13 @@ constructs the session.
 
 | Method | Async | Contract |
 | --- | --- | --- |
-| `tools(provider="openai-responses")` | yes | Format the ten local MCP helpers for `openai`, `openai-responses`, or `anthropic`. |
+| `tools(provider="openai-responses")` | yes | Format the eleven local MCP helpers for `openai`, `openai-responses`, or `anthropic`. |
 | `search(query, limit=5)` | no | Return up to 10 scoped tool schemas, ranked by the local registry and dependency/connection availability. |
 | `resolve(capability, **kwargs)` | no | Return reviewed candidates, exact mapped arguments, schemas, reasons, and `status`; a tie is not selected. |
 | `execute(tool, arguments, **kwargs)` | yes | Execute a canonical registry tool through scope, action, schema, credential, result, and artifact policy. `persist=True` stores a scoped artifact. |
 | `capability(capability, arguments=None, *, persist=False, **kwargs)` | yes | Resolve and execute one uniquely selected reviewed capability. |
 | `skill(skill_id, parameters=None)` | yes | Run one of the twelve bounded workflows. See [workflows](workflows.md). |
+| `job(operation, **kwargs)` | yes | Submit, inspect, resume, cancel or delete a bounded numerical job under the current user/site/session policy. |
 | `dispatch(name, arguments)` | yes | Map a provider function name back to one canonical helper and invoke it through the local MCP server. |
 
 Direct tool execution returns an envelope such as:
@@ -233,3 +234,9 @@ supported registry. Derived results are `calculated`, have
 artifact.
 See [workflows](workflows.md#workbench-time-series-operations) for the full
 operation contract, DST behavior, interval-end rules, and unit semantics.
+
+Current-power capabilities require an observation timestamp and default to a
+300-second freshness limit. `max_age_seconds` can set a bounded requirement.
+Retrieval time alone does not establish observation freshness. Results retain
+`quantity_shape` (`interval`, `instantaneous`, or `counter`) when reviewed or
+reported by the provider. See [job lifecycle](simulation-jobs.md).

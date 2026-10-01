@@ -1,0 +1,101 @@
+# Roadmap execution
+
+Execution contract: [project roadmap](project-roadmap.md). Baseline is v0.2.0,
+commit `5354d32`. Completed implementation is distinct from live qualification.
+
+## Current work
+
+- [x] Read the orchestration principles and preserve the existing release evidence.
+- [x] Frame the run against the six milestone gates.
+- [x] Separate independent implementation into exclusive worktrees.
+- [x] Reproduce artifact-window and requested-coverage defects before changing code.
+- [x] Integrate and verify provider substitution fixtures.
+- [x] Implement local connection onboarding and reviewed mappings; private access qualification remains open.
+- [ ] Expand and execute real-agent evaluation without weakening scoring.
+- [x] Qualify OpenDSS and EnergyPlus with real engines and reference inputs.
+- [ ] Integrate bounded jobs, deployment and recovery checks.
+- [ ] Publish verified improvements and update the evidence matrix.
+- [ ] Review the complete supported experience against the roadmap gates.
+
+The primary owns integration contracts, shared runtime, CLI and final review.
+Workers own new fixture, onboarding, evaluation, engine, deployment and job files
+in isolated worktrees. Their commits require primary review and acceptance tests.
+
+## Original acceptance criteria
+
+| Criterion | Existing executable evidence | Remaining qualification |
+|---|---|---|
+| One heterogeneous gateway | `tests/test_workflows.py`, `tests/test_sdk_workflows.py` | Complete reference journeys across additional telemetry and engines |
+| Dynamic discovery | `tests/test_mcp_endpoint.py`, `scripts/discovery_benchmark.py` | Broader held-out intent set and relevance results |
+| Generic multi-provider capabilities | `tests/test_capabilities.py`, `tests/test_provider_substitution.py` | Reviewed telemetry transformations and real provider substitution |
+| Accounts/sites/assets | `tests/test_platform_security.py`, `tests/test_provider_substitution.py` | Broader multi-site real-agent scenarios |
+| Credentials outside context | `tests/test_auth.py`, `tests/test_review_regressions.py` | No-config onboarding and provider qualification |
+| Common REST/Python/local/MCP execution | `tests/test_hosting.py`, `tests/test_executable.py`, `tests/test_mcp_bridge.py`, `tests/test_sdk_workflows.py` | Full journey examples with authentication and imported semantics |
+| Bounded large results | `tests/test_workbench.py` | Chunked processing and representative large-site workloads |
+| Physical semantics and provenance | `tests/test_timeseries.py`, `tests/test_workflow_windows.py` | Complete source-to-answer coverage and counter mapping |
+| Broad real-agent success | `docs/evidence/agent-benchmark-v020.json` | 100+ distinct cases, held-out tests and two available model families |
+| Real private/site workflow when accessible | Provider fixtures in `tests/test_http_connectors.py` | Access acquisition and actual installed-provider workflow |
+| Connector SDK without runtime edits | `src/energy_agent_tools/connector_sdk.py`, `tests/test_extended.py` | Independently contributed integration |
+| Practical self-hosting | `docs/self-hosting.md`, `tests/test_hosting.py` | Container, install, restart, upgrade and restore checks |
+| Green engineering/release checks | Python 3.11/3.12/3.13 CI at v0.2.0 | Repeat for integrated changes and release artifact installation |
+| Honest qualification catalogue | `docs/connectors.md`, `docs/limitations.md` | New engine/provider qualification records |
+| Extensible platform experience | Registry, capability resolver, plugins, MCP and SDK | Reference projects and sustained operational evidence |
+
+A test path is a reproducible check, not proof that a new run passed. Results are
+recorded separately in release evidence and the append-only decision log.
+
+## External access investigation
+
+On 1 October the browser inventory contained no provider account sessions.
+The Emoncms hosted registration form was inspected through its home page. It
+requires username, password and email, and asks users to read its usage/pricing
+information. No identity, password or billing information was invented or
+submitted. Local provider deployments remain an independent qualification path.
+
+Octopus customer API keys come from the customer's Developer settings, and meter
+access requires the associated account. Home Assistant authentication requires
+an authorized instance or a project-controlled installation. ENTSO-E requires
+registration and an API-access request to its helpdesk. Electricity Maps offers
+personal/free access and trial routes whose eligibility and registration must be
+checked before requesting credentials. No private-provider access is claimed yet.
+
+Sources: [Octopus access](https://octopus.energy/help-and-faqs/articles/how-do-i-access-the-octopus-api/),
+[Home Assistant authentication](https://developers.home-assistant.io/docs/auth_api/),
+[Emoncms API](https://www.emoncms.org/site/api),
+[ENTSO-E token management](https://transparency.entsoe.eu/content/static_content/download?path=%2FStatic+content%2FAPI-Token-Management.pdf),
+[Electricity Maps access](https://help.electricitymaps.com/en/articles/13335550-how-can-i-access-the-electricity-maps-api-and-are-there-any-restrictions).
+
+## Integrated run evidence
+
+- 243 tests passed on Python 3.12; Ruff, formatting and mypy passed.
+- Three provider paths use the same consumption/cost workflow with independent
+  numerical truths. These are protocol fixtures, not live private meters.
+- Requested windows preserve source kind and report edge/interior gaps and DST.
+- The connection journey loads a generated local key/profile without environment
+  edits. Current power requires observation freshness; counters cannot be silently
+  promoted to interval energy.
+- Numerical jobs enforce the gateway policy and survive host restart. A complete
+  profile/vault/job backup was restored and used after deleting the original state.
+- A real Codex access probe completed with a partial score (0.9167); it is preserved
+  separately from a release benchmark. The 141-case corpus (58 held-out) and
+  221 discovery intents are contracts, not 141 executed cases. An interrupted
+  environment draft was not imported because its fixtures did not match several
+  independent scenario truths.
+- The Home Assistant official image was downloaded and started. Its API did not
+  reach readiness during checks. The shared Colima VM had 2908/2970 MB in use and
+  severe load; the project-created Home Assistant container was stopped successfully.
+  No private credentials or live physical readings were obtained. Other services
+  in that VM were left running. Container build/host qualification moves to CI.
+- Only Codex was present among the checked model CLIs. The checked Anthropic,
+  Gemini and OpenRouter credential environment references were absent. Claude
+  API access requires an owner-created Console account/key and available credits;
+  no owner identity or billing acceptance was fabricated. Electricity Maps'
+  documented portal was attempted in the browser, whose tab attachment timed out.
+
+Access references: [Claude API start](https://platform.claude.com/docs/en/get-started),
+[Electricity Maps key management](https://help.electricitymaps.com/en/articles/13160917-where-do-i-find-my-home-assistant-api-key).
+
+The remaining gates include qualified scenario environments and 100+ actual runs,
+held-out results, a second legitimately accessible model family, complete telemetry
+transformations and workflows, private installed-provider qualification, container
+restart/load/upgrade checks, contributor qualification, and sustained soak evidence.

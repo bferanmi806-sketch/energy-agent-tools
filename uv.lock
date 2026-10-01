@@ -748,8 +748,40 @@ wheels = [
 ]
 
 [[package]]
+name = "dss-python"
+version = "0.15.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dss-python-backend" },
+    { name = "numpy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a4/15/0bb630d747d9cfbf15dcdc537508fe0602f0a4e256ea40f6cb8496d56847/dss_python-0.15.7.tar.gz", hash = "sha256:bcdb6d8e4eb4255c3afb473a25aaa6951dbec46366c4cf2940796f5c00e53848", size = 198521, upload-time = "2024-03-29T05:57:18.528Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/95/ad/88f91e2d636a051441dad0bbd804ce2f42e0184cd321adb7ec98ee38d97d/dss_python-0.15.7-py3-none-any.whl", hash = "sha256:86359b60e103f5ff038adabb3af424e97857cf98d5c43a042d08795d3ba2dd3d", size = 231968, upload-time = "2024-03-29T05:57:15.71Z" },
+]
+
+[[package]]
+name = "dss-python-backend"
+version = "0.14.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cffi" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/f8/1fa9857d3d7d026f8897f4363a5c60bea9268f15ea41021a17682a351523/dss_python_backend-0.14.5-cp37-abi3-macosx_10_13_universal2.whl", hash = "sha256:511db113b30a4f979552c3c76ed520cf39acb4a7595f725465d7cda1fced8e78", size = 7595436, upload-time = "2024-03-29T04:55:07.185Z" },
+    { url = "https://files.pythonhosted.org/packages/39/95/ac35ee76cc7325201930638d3bf14952c93cf0915a2fe96fc5fd852346ed/dss_python_backend-0.14.5-cp37-abi3-macosx_12_0_arm64.whl", hash = "sha256:63cb7e495c9fd1834f7b5fe270333ef381b95281203dce5ece7ea2a11bb162a5", size = 6116707, upload-time = "2024-03-29T04:55:11.154Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/27/f188fc0e6cb54c94617bc2d9c1e19d010b6a8bd913e354bf1e544c30df6e/dss_python_backend-0.14.5-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0a490f6287f06c5f0d971ac5fa06527bbc1a19bc8ece5d12553d8aa72569dfba", size = 16427916, upload-time = "2024-03-29T04:55:16.47Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/4b/0610c18e4c5ca852a25524d635c0a65798d98335fc3e9c31f3fd61e22781/dss_python_backend-0.14.5-cp37-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:6aea8323d4e6a0425d01056e69f25eccb4d3951e287fe06fc53f342ddd8d09ac", size = 20565731, upload-time = "2024-03-29T04:55:22.96Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/eb/ff21c6d80a07cac2ec6d5a143ff2e3555d075eff66e5ffd4d3f64cbbf042/dss_python_backend-0.14.5-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e6fd9682a127f306a3b367810dee2b02d00660f6739e580609d5b9f523d03ccb", size = 22034261, upload-time = "2024-03-29T04:55:29.782Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/13/f6b7576d0d4fea9aba079816ce00ca67f784f0cbd9e2c418f50fcf00b06b/dss_python_backend-0.14.5-cp37-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:ac31301222f58f148c145847fa08bfcea934b4ea1097e5788d164d4dcf0a09d1", size = 22036908, upload-time = "2024-03-29T04:55:36.169Z" },
+    { url = "https://files.pythonhosted.org/packages/59/58/c0c48259f73c83fec75873a968589ff79b29d142a12e199689c1d7230180/dss_python_backend-0.14.5-cp37-abi3-win32.whl", hash = "sha256:873f5fe904034bb5b11e44b74841cc92ddae2101a16e68592a4725b93b546e27", size = 17365863, upload-time = "2024-03-29T04:55:41.549Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/d5/c71c498c0cca35018691af448fdc792703d3e36146edfe840bba2ba26700/dss_python_backend-0.14.5-cp37-abi3-win_amd64.whl", hash = "sha256:503ff6f15c6037863848a127244e090dbf246eeafcb71a31b35c2d35f13efae8", size = 18778503, upload-time = "2024-03-29T04:55:46.615Z" },
+]
+
+[[package]]
 name = "energy-agent-tools"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -758,6 +790,7 @@ dependencies = [
     { name = "mcp" },
     { name = "pandas" },
     { name = "pydantic" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -776,6 +809,7 @@ engineering = [
     { name = "windpowerlib" },
 ]
 network-solvers = [
+    { name = "opendssdirect-py" },
     { name = "pandapipes" },
     { name = "pypsa" },
 ]
@@ -788,6 +822,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mcp", specifier = ">=1.26,<2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.15" },
+    { name = "opendssdirect-py", marker = "extra == 'network-solvers'", specifier = ">=0.9.4,<0.10" },
     { name = "pandapipes", marker = "extra == 'network-solvers'", specifier = ">=0.14,<1" },
     { name = "pandapower", marker = "extra == 'engineering'", specifier = ">=3.1,<4" },
     { name = "pandas", specifier = ">=2.2,<3" },
@@ -799,6 +834,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.25,<2" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11" },
     { name = "types-jsonschema", marker = "extra == 'dev'" },
+    { name = "uvicorn", specifier = ">=0.31,<1" },
     { name = "windpowerlib", marker = "extra == 'engineering'", specifier = ">=0.2.2,<0.3" },
 ]
 provides-extras = ["engineering", "network-solvers", "dev"]
@@ -1936,6 +1972,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1a/9c/c531f2293b91265d8b48e9b329f54fdd7ffae73cb4134ea10cca4237e9cc/numpy-2.4.6-pp311-pypy311_pp73-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5dbbdb29840ca3d91ee0fece42fc29278886d908280bfec0a5846c6f901a3eb0", size = 15798374, upload-time = "2026-05-18T23:37:02.674Z" },
     { url = "https://files.pythonhosted.org/packages/1a/b0/413077f6b1153ed3cba361401c6783bbad6114804a000cc22eb71c13e190/numpy-2.4.6-pp311-pypy311_pp73-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8ad03c0965fb3c692200e74d458ca28c1dbb4ce96f9a479a8aa041ad5fabca02", size = 16747286, upload-time = "2026-05-18T23:37:06.327Z" },
     { url = "https://files.pythonhosted.org/packages/15/ce/e5ec180bc41812edcd8daeb8639d205622c0e8c02259d8ab25a0201b3c2a/numpy-2.4.6-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:2803abfebfc990042cd494d8ce2d5f82e9d847af6d35ec486923aa19dbad5e73", size = 12504263, upload-time = "2026-05-18T23:37:09.715Z" },
+]
+
+[[package]]
+name = "opendssdirect-py"
+version = "0.9.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dss-python" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3b/28/941c12bcda10ff9c120de5c827129664394cfd134f6c877530a2571360d5/opendssdirect_py-0.9.4.tar.gz", hash = "sha256:52ca478b5963d8f9bfd6a70de324c76fb97be43a23df847c5da012b38bdfcfb9", size = 71092, upload-time = "2024-03-29T06:07:15.459Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bf/59/66c22a0baf52019a460f064fde96b6be1199af578129af0c09ad560cde33/opendssdirect_py-0.9.4-py3-none-any.whl", hash = "sha256:532c80c7eca048ea1580bf204e351f1e9295bf7ed62789f96629e11323de9ae5", size = 101929, upload-time = "2024-03-29T06:07:12.923Z" },
 ]
 
 [[package]]

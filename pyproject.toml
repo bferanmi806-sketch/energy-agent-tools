@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "energy-agent-tools"
-version = "0.2.0"
+version = "0.3.0"
 description = "A self-hostable, search-first gateway to energy data and engineering tools"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -13,6 +13,7 @@ dependencies = [
     "pydantic>=2.10,<3",
     "httpx>=0.28,<1",
     "mcp>=1.26,<2",
+    "uvicorn>=0.31,<1",
     "jsonschema>=4.23,<5",
     "pandas>=2.2,<3",
     "cryptography>=43,<46",
@@ -20,7 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 engineering = ["pvlib>=0.13,<0.17", "pandapower>=3.1,<4", "windpowerlib>=0.2.2,<0.3"]
-network-solvers = ["pypsa>=1.0,<2", "pandapipes>=0.14,<1"]
+network-solvers = ["pypsa>=1.0,<2", "pandapipes>=0.14,<1", "opendssdirect.py>=0.9.4,<0.10"]
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "ruff>=0.11", "mypy>=1.15", "types-jsonschema", "pandas-stubs", "build"]
 
 [project.urls]

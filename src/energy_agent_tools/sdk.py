@@ -57,6 +57,9 @@ class BoundSession:
 
         return await run_skill(self.agent, self.context, skill_id, parameters or {})
 
+    async def job(self, operation: str, **kwargs: Any) -> Json:
+        return await self.agent.job(self.context, operation, **kwargs)
+
     async def dispatch(self, name: str, arguments: Json) -> Any:
         """Dispatch a provider function call; helper names are identical across providers."""
         from .providers import resolve_provider_name

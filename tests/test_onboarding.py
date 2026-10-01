@@ -67,14 +67,7 @@ async def test_connect_store_probe_resolve_and_consume(
     assert binding["unit"] == "kWh"
     assert outcome["config"]["vault"] == {"master_key_file": "vault.key"}
 
-    # The current build_agent accepts an environment key.  The onboarding
-    # profile deliberately emits the file reference that the extended app
-    # loader consumes; this conversion keeps the fixture usable on v0.2.
-    key_env = "TEST_ONBOARDING_MASTER"
-    monkeypatch.setenv(key_env, (tmp_path / "vault.key").read_text())
-    build_config = outcome["config"].copy()
-    build_config["vault"] = {"master_key_env": key_env}
-    agent = build_agent(tmp_path, build_config)
+    agent = build_agent(tmp_path)
     await agent.http.aclose()
     agent.http = client
     agent._owns_http = False
@@ -162,7 +155,7 @@ def test_home_assistant_does_not_promote_cumulative_counter(tmp_path: Path) -> N
     [
         ("current_power", "W", "instantaneous", "get_current_power", "home_assistant.get_state"),
         ("generation", "kWh", "interval", "get_generation", "home_assistant.get_history"),
-        ("generation", "kW", "instantaneous", "get_generation", "home_assistant.get_history"),
+        ("generation", "kW", "instantaneous", "get_generation", "home_assistant.get_state"),
         ("export_interval", "kWh", "interval", "get_export", "home_assistant.get_history"),
         ("storage_state", "%", "instantaneous", "get_storage_state", "home_assistant.get_state"),
         ("storage_state", "kWh", "instantaneous", "get_storage_state", "home_assistant.get_state"),

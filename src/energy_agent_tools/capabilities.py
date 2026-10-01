@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
@@ -21,6 +21,7 @@ class CapabilityBinding(StrictModel):
     asset_id: str | None = None
     kind: DataKind | None = None
     unit: str | None = None
+    quantity_shape: Literal["interval", "instantaneous", "counter"] | None = None
     resolution: str | None = None
     coverage_start: datetime | None = None
     coverage_end: datetime | None = None
@@ -56,6 +57,7 @@ class CapabilityRequest(StrictModel):
     unit: str | None = None
     resolution: str | None = None
     tool: str | None = None
+    max_age_seconds: int | None = Field(default=None, ge=1, le=86400)
 
 
 def builtins(agent: EnergyAgent) -> list[CapabilityBinding]:
@@ -78,6 +80,7 @@ def builtins(agent: EnergyAgent) -> list[CapabilityBinding]:
             None,
         ),
         ("run_power_flow", "engineering.run_power_flow", DataKind.SIMULATED, None, None),
+        ("run_power_flow", "opendss.power_flow", DataKind.SIMULATED, None, None),
         ("run_power_flow", "pypsa.power_flow", DataKind.SIMULATED, "MW, Mvar, pu, degree", None),
         ("run_pipe_flow", "pandapipes.pipeflow", DataKind.SIMULATED, "bar, K, kg/s, m/s", None),
         (
@@ -312,6 +315,7 @@ class CapabilityResolver:
                         "kind": binding.kind,
                         "unit": binding.unit,
                         "resolution": binding.resolution,
+                        "quantity_shape": binding.quantity_shape,
                         "quality": binding.quality,
                         "binding_version": binding.version,
                         "available": not reasons,
@@ -328,6 +332,19 @@ class CapabilityResolver:
         available = [c for c in candidates if c["available"]]
         unique = bool(available) and (
             len(available) == 1 or available[0]["score"] > available[1]["score"]
+        )
+        self.agent._event(
+            {
+                "type": "capability_resolution",
+                "user_id": session.user_id,
+                "session_id": session.id,
+                "capability": request.capability,
+                "status": "resolved" if unique else "ambiguous" if available else "unavailable",
+                "candidate_count": len(candidates),
+                "available_count": len(available),
+                "tool": available[0]["tool"] if unique else None,
+                "account_id": available[0]["account_id"] if unique else None,
+            }
         )
         return self.agent._redact(
             {
@@ -364,5 +381,8 @@ class CapabilityResolver:
             expected_unit=selected["unit"],
             asset_id=selected["asset_id"],
             expected_resolution=selected["resolution"],
+            expected_quantity_shape=selected["quantity_shape"],
+            max_age_seconds=request.max_age_seconds
+            or (300 if request.capability == "get_current_power" else None),
             expected_arguments=selected["fixed_arguments"],
         )

@@ -35,6 +35,7 @@ from ..models import (
     EnergyError,
     EnergyResult,
     ExecutionContext,
+    QuantityShape,
     Tool,
     Toolkit,
     schema,
@@ -242,6 +243,7 @@ def _result(
     resolution: str | None = None,
     warnings: list[str] | None = None,
     quality: str = "provider-reported",
+    quantity_shape: QuantityShape | None = None,
 ) -> EnergyResult:
     starts: list[datetime] = []
     ends: list[datetime] = []
@@ -277,6 +279,7 @@ def _result(
     return EnergyResult(
         data=data,
         kind=kind,
+        quantity_shape=quantity_shape,
         unit=unit,
         source=source,
         timezone="UTC",
@@ -847,6 +850,15 @@ def _ha_common_result(
     )
 
 
+def _ha_shape(attributes: Mapping[str, Any], ctx: ExecutionContext) -> QuantityShape | None:
+    if attributes.get("state_class") in {"total", "total_increasing"}:
+        return "counter"
+    declared = ctx.account.settings.get("quantity_shape") if ctx.account else None
+    if declared in {"interval", "instantaneous", "counter"}:
+        return declared
+    return "instantaneous" if attributes.get("state_class") == "measurement" else None
+
+
 async def _ha_state(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResult:
     base = _configured_base(ctx, "Home Assistant")
     entity = _ha_entity(args.get("entity_id"))
@@ -881,7 +893,7 @@ async def _ha_state(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResult
         "unit": attrs.get("unit_of_measurement", "state"),
         "kind": kind.value,
     }
-    return _ha_common_result(
+    result = _ha_common_result(
         state,
         kind=kind,
         unit=str(state["unit"]),
@@ -889,6 +901,13 @@ async def _ha_state(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResult
         resolution="state update",
         warnings=warnings,
     )
+
+    result.quantity_shape = _ha_shape(attrs, ctx)
+    observed = payload.get("last_updated") or payload.get("last_changed")
+    if observed:
+        result.time_start = _parse_time(observed, "state timestamp")
+        result.time_end = result.time_start
+    return result
 
 
 async def _ha_history(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResult:
@@ -916,6 +935,7 @@ async def _ha_history(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResu
     history: list[dict[str, Any]] = []
     unit_values: set[str] = set()
     kinds: set[DataKind] = set()
+    shapes: set[QuantityShape | None] = set()
     warnings: list[str] = []
     for entity_history in payload:
         if not isinstance(entity_history, list):
@@ -930,6 +950,7 @@ async def _ha_history(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResu
                 raise _error(
                     "malformed_response", "Home Assistant returned invalid history attributes."
                 )
+            shapes.add(_ha_shape(attrs, ctx))
             unit = str(attrs.get("unit_of_measurement", "state"))
             unit_values.add(unit)
             kind = _ha_kind(attrs)
@@ -950,6 +971,7 @@ async def _ha_history(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResu
                     "entity_id": item.get("entity_id", args.get("entity_id")),
                     "timestamp": timestamp,
                     "state": item.get("state"),
+                    "value": _ha_numeric(item.get("state")),
                     "attributes": attrs,
                     "unit": unit,
                     "kind": kind.value,
@@ -957,7 +979,7 @@ async def _ha_history(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResu
             )
     unit = next(iter(unit_values)) if len(unit_values) == 1 else "mixed"
     result_kind = next(iter(kinds)) if len(kinds) == 1 else DataKind.CALCULATED
-    return _ha_common_result(
+    result = _ha_common_result(
         history,
         kind=result_kind,
         unit=unit,
@@ -965,6 +987,17 @@ async def _ha_history(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResu
         resolution="state update",
         warnings=warnings,
     )
+
+    result.quantity_shape = next(iter(shapes)) if len(shapes) == 1 else None
+    return result
+
+
+def _ha_numeric(value: Any) -> float | None:
+    try:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (ValueError, TypeError):
+        return None
 
 
 def _emon_feed_id(args: Mapping[str, Any], ctx: ExecutionContext) -> str:
@@ -1013,7 +1046,7 @@ async def _emon_feed(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResul
         return _result(
             [
                 {
-                    "timestamp": _iso(datetime.now(UTC)),
+                    "timestamp": None,
                     "value": value,
                     "unit": unit,
                     "kind": DataKind.METERED.value,
@@ -1022,9 +1055,13 @@ async def _emon_feed(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResul
             kind=DataKind.METERED,
             unit=unit,
             source="openenergymonitor",
+            quantity_shape=_account_settings(ctx, "OpenEnergyMonitor").get("quantity_shape"),
             docs_url=EMON_DOCS,
             endpoint=endpoint,
-            warnings=["Emoncms feed units are provider-defined unless configured on the account."],
+            warnings=[
+                "Emoncms feed units are provider-defined unless configured on the account.",
+                "The scalar feed endpoint supplies no observation timestamp; freshness is unknown.",
+            ],
         )
 
     interval = args.get("interval", 60)
@@ -1079,6 +1116,7 @@ async def _emon_feed(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResul
         kind=DataKind.METERED,
         unit=unit,
         source="openenergymonitor",
+        quantity_shape=_account_settings(ctx, "OpenEnergyMonitor").get("quantity_shape"),
         docs_url=EMON_DOCS,
         endpoint=endpoint,
         resolution=f"{interval}s",

@@ -1,0 +1,54 @@
+name: energy-agent-tools
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: energy-agent-tools:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ENERGY_HOST_PORT:-8765}:8765"
+    environment:
+      ENERGY_AUTH_MASTER_KEY: "${ENERGY_AUTH_MASTER_KEY:-}"
+    volumes:
+      - energy_state:/var/lib/energy-agent
+      # The operator owns this file. It is deliberately mounted read-only.
+      - ./config/host-config.json:/etc/energy-agent/config.json:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    command:
+      - host
+      - --config
+      - /etc/energy-agent/config.json
+      - --state-dir
+      - /var/lib/energy-agent
+      - --bind-host
+      - 0.0.0.0
+      - --port
+      - "8765"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; s=socket.create_connection(('127.0.0.1',8765),2); s.close()"
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+  deployment-smoke:
+    profiles: [smoke]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: energy-agent-tools:local
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    entrypoint: ["python", "scripts/deployment_smoke.py"]
+
+volumes:
+  energy_state:

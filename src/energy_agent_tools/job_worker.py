@@ -120,7 +120,13 @@ async def _execute(
     agent = EnergyAgent(registry, state_dir / "agent")
     try:
         session = agent.session("job-worker")
-        return await agent.execute(session, _TOOLS[operation], arguments)
+        response = await agent.execute(session, _TOOLS[operation], arguments)
+        data = response.get("result", {}).get("data", {})
+        if isinstance(data, dict) and "artifact_id" in data:
+            response["result"] = agent.workbench.read(session, data["artifact_id"]).model_dump(
+                mode="json"
+            )
+        return response
     finally:
         await agent.close()
 

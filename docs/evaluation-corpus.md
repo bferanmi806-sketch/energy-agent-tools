@@ -76,8 +76,8 @@ The cases cover:
 From the repository root, export the deterministic JSONL corpus and manifest:
 
 ```sh
-python work/roadmap-evaluation/benchmarks/scenarios.py \
-  --output work/roadmap-evaluation/export
+python benchmarks/scenarios.py \
+  --output export
 ```
 
 The output contains `scenario-corpus.jsonl` and `manifest.json`. The manifest
@@ -94,10 +94,10 @@ fixture:
 
 ```sh
 outputs/energy-agent-tools/.venv/bin/pytest -q \
-  work/roadmap-evaluation/tests/test_scenarios.py
+  tests/test_scenarios.py
 outputs/energy-agent-tools/.venv/bin/ruff check \
-  work/roadmap-evaluation/benchmarks/scenarios.py \
-  work/roadmap-evaluation/tests/test_scenarios.py
+  benchmarks/scenarios.py \
+  tests/test_scenarios.py
 ```
 
 The tests check corpus size and prompt uniqueness, exact fixture coverage,

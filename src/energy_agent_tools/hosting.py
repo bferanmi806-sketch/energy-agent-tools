@@ -88,6 +88,14 @@ class _RequestModel(BaseModel):
 
 class _SessionCreate(_RequestModel):
     site_id: StrictStr | None = None
+    resume_job_id: StrictStr | None = None
+
+
+class _JobRequest(_RequestModel):
+    operation: StrictStr
+    job_id: StrictStr | None = None
+    simulation: StrictStr | None = None
+    arguments: dict[str, Any] = Field(default_factory=dict)
 
 
 class _SearchRequest(_RequestModel):
@@ -317,6 +325,7 @@ class AuthenticatedHost:
             Route("/sessions/{session_id}/resolve", self._resolve, methods=["POST"]),
             Route("/sessions/{session_id}/capability", self._capability, methods=["POST"]),
             Route("/sessions/{session_id}/skills", self._skills, methods=["GET", "POST"]),
+            Route("/sessions/{session_id}/jobs", self._jobs, methods=["POST"]),
             Route("/sessions/{session_id}/connections", self._connections, methods=["GET"]),
             Route("/sessions/{session_id}/artifacts", self._artifacts, methods=["GET"]),
             Route(
@@ -722,6 +731,11 @@ class AuthenticatedHost:
             return _error("global_session_limit", "Maximum sessions reached.", 429)
         try:
             session = self.agent.session(principal_value.user_id, site_id)
+            if data.resume_job_id:
+                resumed = await self.agent.job(session, "resume", job_id=data.resume_job_id)
+                if not resumed["ok"]:
+                    return _json_response(resumed, 403)
+                session.id = resumed["scope"]["session_id"]
         except EnergyError as exc:
             return self._energy_error(exc)
         self._sessions[session.id] = _StoredSession(
@@ -818,6 +832,16 @@ class AuthenticatedHost:
             return parsed
         data = cast(_SearchRequest, parsed)
         return _json_response({"skills": search_skills(data.query)})
+
+    async def _jobs(self, request: Request) -> Response:
+        scope = self._session_for(request)
+        if isinstance(scope, Response):
+            return scope
+        parsed = await self._parse_json(request, _JobRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(_JobRequest, parsed)
+        return _json_response(await self.agent.job(scope[1], **data.model_dump()))
 
     async def _connections(self, request: Request) -> Response:
         scope = self._session_for(request)

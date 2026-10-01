@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
 import os
@@ -14,6 +15,7 @@ from uuid import uuid4
 import httpx
 from jsonschema import Draft202012Validator, FormatChecker
 
+from .jobs import JobError, JobManager, SimulationOperation
 from .models import (
     Asset,
     ConnectedAccount,
@@ -26,6 +28,7 @@ from .models import (
     Tool,
 )
 from .registry import Registry
+from .resilience import ReadTransport
 from .workbench import Workbench
 
 BeforeHook = Callable[[Tool, Json, Session], Json]
@@ -48,6 +51,9 @@ class EnergyAgent:
         defer_unknown_bindings: bool = False,
         calendar_clock: Callable[[], datetime] | None = None,
     ):
+        self._jobs: JobManager | None = None
+        self._job_task: asyncio.Task[Any] | None = None
+        self._job_root = root / "jobs"
         self.registry = registry
         self.auth_store = auth_store
         self._closed = False
@@ -72,7 +78,10 @@ class EnergyAgent:
                     raise ValueError("Account must belong to an existing site of the same user.")
         if any(a.site_id not in self.sites for a in self.assets.values()):
             raise ValueError("Asset must belong to an existing site.")
-        self.http = http or httpx.AsyncClient(timeout=30, follow_redirects=False)
+        self.read_transport = None if http else ReadTransport()
+        self.http = http or httpx.AsyncClient(
+            timeout=30, follow_redirects=False, transport=self.read_transport
+        )
         self._owns_http = http is None
         self.before: list[BeforeHook] = []
         self.after: list[AfterHook] = []
@@ -144,10 +153,112 @@ class EnergyAgent:
         if self._closed:
             return
         self._closed = True
+        if self._jobs:
+            await self._jobs.aclose()
+        if self._job_task:
+            await asyncio.gather(self._job_task, return_exceptions=True)
         if self._owns_http:
             await self.http.aclose()
         if self.auth_store:
             self.auth_store.close()
+
+    async def job(
+        self,
+        session: Session,
+        operation: str,
+        *,
+        job_id: str | None = None,
+        simulation: str | None = None,
+        arguments: Json | None = None,
+    ) -> Json:
+        """Use bounded numerical jobs under the current gateway scope and policy."""
+        tools = {
+            "heat_loss": "engineering.calculate_heat_loss",
+            "power_flow": "engineering.run_power_flow",
+            "battery": "engineering.schedule_battery_charging",
+            "solar": "engineering.estimate_solar_generation",
+        }
+        try:
+            self._scope(session)
+            if self._closed:
+                raise EnergyError("agent_closed", "The agent is closed.")
+            if operation not in {
+                "submit",
+                "list",
+                "status",
+                "result",
+                "cancel",
+                "delete",
+                "resume",
+            }:
+                raise EnergyError("invalid_operation", "Unknown job operation.")
+            if operation == "submit":
+                if simulation not in tools:
+                    raise EnergyError(
+                        "invalid_operation", "Select an available numerical simulation."
+                    )
+                name = tools[simulation]
+                self.get_tool(session, name)
+                tool = self.registry.get(name)
+                if not tool.actions <= session.allowed_actions:
+                    raise EnergyError(
+                        "policy_denied", "Simulation is outside the session action policy."
+                    )
+                if self.before or self.after:
+                    raise EnergyError(
+                        "job_hooks_unsupported", "Jobs cannot bypass configured execution hooks."
+                    )
+                self._validate(tool, arguments or {})
+                if any(find_spec(dep) is None for dep in tool.dependencies):
+                    raise EnergyError(
+                        "dependency_missing", "The simulation dependency is unavailable."
+                    )
+            if self._jobs is None:
+                self._jobs = JobManager(self._job_root)
+            manager = self._jobs
+            if operation == "submit":
+                record = manager.submit(
+                    session.user_id,
+                    session.id,
+                    SimulationOperation(simulation or ""),
+                    arguments or {},
+                    site_id=session.site_id,
+                )
+                if self._job_task is None or self._job_task.done():
+                    self._job_task = asyncio.create_task(manager.run_pending())
+                result: Json = {"job": record.as_dict()}
+            elif operation == "list":
+                result = {
+                    "jobs": [item.as_dict() for item in manager.list(session.user_id, session.id)]
+                }
+            else:
+                if not job_id:
+                    raise EnergyError("job_required", "Provide a job identifier.")
+                if operation == "resume":
+                    scope = manager.resume_scope(job_id, session.user_id)
+                    if scope["site_id"] != session.site_id:
+                        raise EnergyError("site_forbidden", "Job belongs to a different site.")
+                    result = {"scope": scope}
+                elif operation == "result":
+                    result = manager.result(job_id, session.user_id, session.id)
+                elif operation == "delete":
+                    manager.delete(job_id, session.user_id, session.id)
+                    result = {"deleted": True}
+                else:
+                    method = manager.cancel if operation == "cancel" else manager.status
+                    result = {"job": method(job_id, session.user_id, session.id).as_dict()}
+            self._event(
+                {
+                    "event": "job",
+                    "user_id": session.user_id,
+                    "session_id": session.id,
+                    "operation": operation,
+                    "ok": True,
+                }
+            )
+            return self._redact({"ok": True, **result}, self._secrets(session.user_id))
+        except (EnergyError, JobError) as exc:
+            return {"ok": False, "error": {"code": exc.code, "message": exc.message}}
 
     def session(self, user_id: str, site_id: str | None = None, **kwargs: Any) -> Session:
         session = Session(user_id=user_id, site_id=site_id, **kwargs)
@@ -318,6 +429,8 @@ class EnergyAgent:
         expected_unit: str | None = None,
         asset_id: str | None = None,
         expected_resolution: str | None = None,
+        expected_quantity_shape: str | None = None,
+        max_age_seconds: int | None = None,
         expected_arguments: Json | None = None,
     ) -> Json:
         execution_id = uuid4().hex
@@ -393,6 +506,29 @@ class EnergyAgent:
                     raise EnergyError("asset_forbidden", "Account is not connected to this asset.")
             context = ExecutionContext(session, account, credential, self.http, self.workbench)
             result = await self.registry.handlers[name](args, context)
+            if (
+                expected_quantity_shape is not None
+                and result.quantity_shape != expected_quantity_shape
+            ):
+                raise EnergyError(
+                    "binding_semantics_changed",
+                    "Telemetry quantity shape differs from its reviewed binding.",
+                )
+            if max_age_seconds is not None:
+                observed_at = result.time_end or result.time_start
+                if observed_at is None:
+                    raise EnergyError(
+                        "freshness_unavailable",
+                        "Provider supplied no observation timestamp; current telemetry is unavailable.",
+                    )
+                age = (self.calendar_clock() - observed_at).total_seconds()
+                if age > max_age_seconds or age < -120:
+                    raise EnergyError(
+                        "stale_telemetry", "Observation is outside the allowed freshness window."
+                    )
+                result.provenance.append(
+                    {"observation_age_seconds": max(0, age), "max_age_seconds": max_age_seconds}
+                )
             if expected_kind is not None and result.kind != expected_kind:
                 raise EnergyError(
                     "binding_semantics_changed",
@@ -424,7 +560,14 @@ class EnergyAgent:
                 {"site_id": session.site_id, "provider": tool.toolkit, "tool_version": tool.version}
             )
             original_kind = result.kind
-            original_scope = (result.site_id, result.asset_id, result.original_unit)
+            original_scope = (
+                result.site_id,
+                result.asset_id,
+                result.original_unit,
+                result.quantity_shape,
+                result.time_start,
+                result.time_end,
+            )
             original_provenance = copy.deepcopy(result.provenance)
             for after in self.after:
                 result = after(tool, result, session)
@@ -434,10 +577,17 @@ class EnergyAgent:
                 )
             # Boundary check after hooks, before persisting any result.
             result = EnergyResult.model_validate(result.model_dump())
-            if (result.site_id, result.asset_id, result.original_unit) != original_scope:
+            if (
+                result.site_id,
+                result.asset_id,
+                result.original_unit,
+                result.quantity_shape,
+                result.time_start,
+                result.time_end,
+            ) != original_scope:
                 raise EnergyError(
                     "result_scope_changed",
-                    "Execution hooks changed the bound result scope or original unit.",
+                    "Execution hooks changed source scope, units, quantity shape or observation timestamps.",
                 )
             if result.provenance[: len(original_provenance)] != original_provenance:
                 raise EnergyError(

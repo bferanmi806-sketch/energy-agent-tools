@@ -135,6 +135,7 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         unit: str | None = None,
         resolution: str | None = None,
         tool: str | None = None,
+        max_age_seconds: Annotated[int | None, Field(ge=1, le=86400)] = None,
     ) -> Json:
         """Rank reviewed available sources by site, asset, account, measurement kind, units and coverage. Ambiguity is explicit."""
         from .capabilities import CapabilityRequest
@@ -149,6 +150,7 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
                 unit=unit,
                 resolution=resolution,
                 tool=tool,
+                max_age_seconds=max_age_seconds,
             )
             return agent.resolver.resolve(session, request)
         except (EnergyError, ValueError) as exc:
@@ -170,6 +172,7 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         unit: str | None = None,
         resolution: str | None = None,
         tool: str | None = None,
+        max_age_seconds: Annotated[int | None, Field(ge=1, le=86400)] = None,
     ) -> Json:
         """Execute a uniquely selected reviewed capability binding through normal policies. Never substitutes incompatible schemas."""
         from .capabilities import CapabilityRequest
@@ -184,6 +187,7 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
                 unit=unit,
                 resolution=resolution,
                 tool=tool,
+                max_age_seconds=max_age_seconds,
             )
             return await agent.resolver.execute(session, request, persist)
         except (EnergyError, ValueError) as exc:
@@ -209,13 +213,30 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
 
         return await execute_skill(agent, session, skill_id, parameters or {})
 
+    @server.tool(name="ENERGY_SIMULATION_JOB")
+    async def simulation_job(
+        operation: Literal["submit", "list", "status", "result", "cancel", "delete", "resume"],
+        job_id: str | None = None,
+        simulation: Literal["heat_loss", "power_flow", "battery", "solar"] | None = None,
+        arguments: Json | None = None,
+    ) -> Json:
+        """Submit bounded local numerical jobs and inspect, cancel or delete scoped results.
+
+        Inspect the underlying engineering tool schema before submitting arguments.
+        Jobs preserve the user, site and session; resume returns owner-verified scope
+        for restoring a session after a host restart. No executable or path inputs.
+        """
+        return await agent.job(
+            session, operation, job_id=job_id, simulation=simulation, arguments=arguments
+        )
+
     return server
 
 
 async def provider_tools(
     server: FastMCP, provider: Literal["openai", "openai-responses", "anthropic"]
 ) -> list[Json]:
-    """The same ten search-first helpers can be passed to provider function calling."""
+    """The same search-first helpers can be passed to provider function calling."""
     tools = await server.list_tools()
     return format_tools(
         [

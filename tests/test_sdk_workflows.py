@@ -55,7 +55,7 @@ async def test_bound_sdk_and_executable_capability_workflows(tmp_path):
     async with EnergyAgentTools(tmp_path, agent=agent) as energy:
         session = energy.session(FIXTURE_USER, FIXTURE_SITE)
         for provider in ("openai", "openai-responses", "anthropic"):
-            assert len(await session.tools(provider)) == 10
+            assert len(await session.tools(provider)) == 11
         result = await session.capability("get_energy_consumption", persist=True)
         artifact = result["result"]["data"]["artifact_id"]
         assert result["ok"] and result["result"]["kind"] == "metered"

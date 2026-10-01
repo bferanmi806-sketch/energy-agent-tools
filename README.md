@@ -33,7 +33,7 @@ or `uv run python examples/bound_sdk.py` for the bound SDK.
 
 ## Agent interface
 
-The endpoint exports ten helpers:
+The endpoint exports eleven helpers:
 
 - `ENERGY_SEARCH_TOOLS`
 - `ENERGY_GET_TOOL`
@@ -45,6 +45,7 @@ The endpoint exports ten helpers:
 - `ENERGY_RESOLVE_CAPABILITY`
 - `ENERGY_EXECUTE_CAPABILITY`
 - `ENERGY_RUN_SKILL`
+- `ENERGY_SIMULATION_JOB`
 
 Search returns bounded schemas. Capability resolution checks reviewed argument
 mappings, credentials, account pins, asset scope, kind, unit, resolution and declared

@@ -349,6 +349,10 @@ status and configure or select a real source. Never create a synthetic
 artifact, change a forecast into a measurement, or substitute grid generation
 for site generation.
 
-Existing artifact inputs are used as supplied. Provider start/end parameters do
-not refetch or trim those artifacts. Filter artifacts to the intended UTC window
-before passing them into a workflow; inspect their coverage and missing intervals.
+When a workflow has a requested window, fetched and reused artifacts pass through
+`WORKBENCH_WINDOW` using an inclusive start and exclusive end. This preserves
+source kinds and values, records the original artifact in lineage, and reports
+missing timestamp intervals against a compatible declared resolution. Unknown
+resolution leaves completeness unverified. A boundary cutting an energy interval
+fails instead of prorating it. Alternative tariffs and comparison artifacts use
+the same window. Without a requested window, artifacts retain their full range.

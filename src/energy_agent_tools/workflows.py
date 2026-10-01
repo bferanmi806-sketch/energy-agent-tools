@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from .capabilities import CapabilityRequest
 from .models import DataKind, EnergyError, Json, Session
 from .time import day_window
+from .windows import bounds, instant
 
 if TYPE_CHECKING:
     from .runtime import EnergyAgent
@@ -91,6 +92,8 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
         recipe = RECIPES[skill_id]
         operation = recipe["operation"]
         arguments = parameters.get("arguments", {})
+        if not isinstance(arguments, dict):
+            raise EnergyError("invalid_skill_parameters", "Capability arguments must be an object.")
         window: Json = {}
         if "start" in parameters or "end" in parameters:
             if not {"start", "end"} <= parameters.keys():
@@ -105,12 +108,42 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             )
             start, end = day_window(date, site.timezone)
             window = {"start": start.isoformat(), "end": end.isoformat()}
+        if window:
+            bounds(window["start"], window["end"])
         artifacts: dict[str, str] = dict(parameters.get("artifacts", {}))
         results: dict[str, Json] = {}
+
+        def source_arguments(capability: str) -> Json:
+            args = dict(arguments.get(capability, {}))
+            for key, value in window.items():
+                if key in args and instant(args[key]) != instant(value):
+                    raise EnergyError(
+                        "conflicting_time_window",
+                        "Capability arguments conflict with the workflow time window.",
+                    )
+            return {**args, **window}
+
+        async def window_artifact(capability: str, ref: str) -> str:
+            if not window:
+                return ref
+            original = agent.workbench.read(session, ref).model_dump(mode="json")
+            selected = await agent.execute(
+                session,
+                "WORKBENCH_WINDOW",
+                {"artifact_id": ref, **window, "timestamp": _time_column(original)},
+                input_artifacts=[ref],
+                persist=True,
+            )
+            evidence.append({"capability": capability, "window": selected})
+            if not selected.get("ok"):
+                error = selected["error"]
+                raise EnergyError(error["code"], error["message"])
+            return selected["result"]["data"]["artifact_id"]
+
         if skill_id == "solar-forecast":
             direct_request = CapabilityRequest(
                 capability="get_solar_forecast",
-                arguments={**window, **arguments.get("get_solar_forecast", {})},
+                arguments=source_arguments("get_solar_forecast"),
                 kind=DataKind.FORECAST,
                 unit="kWh",
                 account_id=parameters.get("account_ids", {}).get("get_solar_forecast"),
@@ -131,7 +164,17 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 operation = "summary"
         for capability in recipe["capabilities"]:
             if capability in artifacts:
+                artifacts[capability] = await window_artifact(capability, artifacts[capability])
                 result = agent.workbench.read(session, artifacts[capability])
+                if capability == "get_energy_consumption" and (
+                    result.kind != DataKind.METERED
+                    or result.unit not in {"Wh", "kWh", "MWh"}
+                    or result.quantity_shape in {"counter", "instantaneous"}
+                ):
+                    raise EnergyError(
+                        "incompatible_source",
+                        "Consumption workflows require metered interval energy, not power or modelled data.",
+                    )
                 results[capability] = result.model_dump(mode="json")
                 continue
             if operation == "solar" and capability == "estimate_solar_generation":
@@ -146,7 +189,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 "get_solar_forecast",
                 "get_carbon_intensity",
             }:
-                args = {**window, **args}
+                args = source_arguments(capability)
             request = CapabilityRequest(
                 capability=capability,
                 arguments=args,
@@ -172,8 +215,18 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                     "evidence": evidence,
                 }
             ref = output["result"]["data"]["artifact_id"]
+            ref = await window_artifact(capability, ref)
             artifacts[capability] = ref
-            results[capability] = agent.workbench.read(session, ref).model_dump(mode="json")
+            observed = agent.workbench.read(session, ref)
+            if capability == "get_energy_consumption" and observed.quantity_shape in {
+                "counter",
+                "instantaneous",
+            }:
+                raise EnergyError(
+                    "incompatible_source",
+                    "Consumption requires interval energy; transform counters or power explicitly.",
+                )
+            results[capability] = observed.model_dump(mode="json")
         column = parameters.get("column", "value")
         source = artifacts.get("get_energy_consumption") or artifacts.get("get_solar_forecast")
         if operation in {"summary", "anomaly"}:
@@ -194,6 +247,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 params["window"] = parameters["window"]
             if skill_id == "building-comparison" and parameters.get("comparison_artifact"):
                 other_id = parameters["comparison_artifact"]
+                other_id = await window_artifact("comparison", other_id)
                 other = agent.workbench.read(session, other_id)
                 if other.kind != DataKind.METERED or other.unit != results[keys[0]]["unit"]:
                     raise EnergyError(
@@ -216,6 +270,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                         "alternative_required",
                         "Provide an alternative tariff artifact for the same intervals.",
                     )
+                alternative = await window_artifact("alternative_tariff", alternative)
                 alt_inputs = [inputs[0], alternative]
                 alt = agent.workbench.read(session, alternative)
                 params["second_timestamp"] = _time_column(alt.model_dump(mode="json"))

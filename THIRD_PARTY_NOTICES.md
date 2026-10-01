@@ -13,12 +13,15 @@ manager rather than vendored. Consult the installed versions for definitive term
 | MCP Python SDK | MIT |
 | Pydantic | MIT |
 | HTTPX | BSD-3-Clause |
+| uvicorn | BSD-3-Clause |
 | jsonschema | MIT |
 | pandas | BSD-3-Clause |
 | cryptography | Apache-2.0 OR BSD-3-Clause |
 | pvlib | BSD-3-Clause |
 | pandapower | BSD-3-Clause |
 | [windpowerlib](https://github.com/wind-python/windpowerlib) | MIT |
+| [OpenDSSDirect.py](https://github.com/dss-extensions/OpenDSSDirect.py/blob/master/LICENSE) | Alliance BSD-style licence with additional source/naming conditions; consult installed licence |
+| DSS-Python / DSS-Python backend | BSD-3-Clause; bundled backend retains upstream notices |
 | [PyPSA](https://github.com/pypsa/pypsa) | MIT |
 | [pandapipes](https://github.com/e2nIEE/pandapipes/blob/develop/LICENSE) | BSD-3-Clause |
 
@@ -28,3 +31,7 @@ requires attribution and its free endpoint is intended for noncommercial use;
 check its terms for commercial deployments. Elexon, Octopus, telemetry platforms
 and imported MCP servers retain their respective data/service terms. Results
 include provider names and provenance so applications can retain attribution.
+
+EnergyPlus is an operator-installed external executable and is not bundled. Its
+official distribution retains its own licence and dependency notices. The
+qualification downloads remain outside the source tree and release packages.

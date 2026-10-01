@@ -28,7 +28,8 @@ real solver tests. Missing optional dependencies produce explicit unavailability
 | Workbench | Energy operations and bounded summaries | DST, missing/counter/power/unit/lineage/ownership tests |
 | Reviewed MCP | Local/remote import, schemas and calls | Real stdio/HTTP, auth, review and drift tests |
 | Fixed executable | Operator-owned JSON command | Real subprocess timeout/output/environment tests |
-| Optional EnergyPlus | Trusted IDF/EPW execution | Executable boundary fixtures only; no real engine run |
+| OpenDSS / DSS-Extensions | Bounded balanced and unbalanced snapshot power flow | Real balanced/unbalanced references and power balance |
+| Optional EnergyPlus | Trusted IDF/EPW execution | Official 26.2.0 binary and example/weather run; bounded adapter |
 
 The numerical adapters require optional extras. EnergyPlus is registered through
 `register_energyplus(registry, executable, model_root)` by a trusted operator.
@@ -51,10 +52,13 @@ explicit integration before energy analysis. See [workflows](workflows.md).
 
 ## Deferred engines
 
-OpenDSS needs an unbalanced model contract and reference-network validation.
+OpenDSS now has a bounded snapshot contract and two real reference checks.
+Controls, faults, protection and dynamic simulation remain outside its contract.
 OpenStudio needs installed software and trusted building models. Vendor PowerMCP
 servers need individual prerequisite, schema, permission and model qualification.
 Generic MCP ingestion does not establish any of these integrations as validated.
 
 No action claims real private access when only fixture evidence exists. Provider
 entitlements, attribution and limits remain operator responsibilities.
+
+New engine evidence is recorded in [engine qualification](engine-qualification.md).
