@@ -1,0 +1,386 @@
+{
+  "adapter": "opendss.power_flow",
+  "captured_at": "2026-10-01T14:56:17.236104+00:00",
+  "cases": [
+    {
+      "checks": {
+        "balanced_phase_current_spread_lt_0_01_a": true,
+        "converged": true,
+        "positive_line_current": true,
+        "power_balance_kw_abs_lt_0_02": true,
+        "three_phase_bus_output": true
+      },
+      "name": "balanced",
+      "passed": true,
+      "result": {
+        "asset_id": null,
+        "assumptions": [
+          "DSS-Extensions OpenDSS snapshot power flow on a caller-supplied bounded topology",
+          "line impedances use positive- and zero-sequence ohms per kilometre; missing zero-sequence values default to three times the positive-sequence values",
+          "loads are constant-power model 1 elements; no controls, protection, faults, dynamics, or time series are simulated"
+        ],
+        "data": {
+          "buses": [
+            {
+              "id": "grid",
+              "nodes": [
+                1,
+                2,
+                3
+              ],
+              "phases": [
+                {
+                  "phase": 1,
+                  "v_ang_deg": -0.02179615985819157,
+                  "v_mag_pu": 0.9997964519060701
+                },
+                {
+                  "phase": 2,
+                  "v_ang_deg": -120.02179615987043,
+                  "v_mag_pu": 0.9997964519060744
+                },
+                {
+                  "phase": 3,
+                  "v_ang_deg": 119.97820382078683,
+                  "v_mag_pu": 0.9997964519060777
+                }
+              ],
+              "v_ang_deg": -0.02179615985819157,
+              "v_mag_pu": 0.9997964519060741
+            },
+            {
+              "id": "load",
+              "nodes": [
+                1,
+                2,
+                3
+              ],
+              "phases": [
+                {
+                  "phase": 1,
+                  "v_ang_deg": -0.16106609081389314,
+                  "v_mag_pu": 0.997584480249363
+                },
+                {
+                  "phase": 2,
+                  "v_ang_deg": -120.16106609078457,
+                  "v_mag_pu": 0.9975844802495173
+                },
+                {
+                  "phase": 3,
+                  "v_ang_deg": 119.83893388985915,
+                  "v_mag_pu": 0.997584480248817
+                }
+              ],
+              "v_ang_deg": -0.16106609081389314,
+              "v_mag_pu": 0.9975844802492325
+            }
+          ],
+          "converged": true,
+          "frequency_hz": 50.0,
+          "lines": [
+            {
+              "ampacity_a": 100.0,
+              "from_bus": "grid",
+              "id": "feeder",
+              "loading_percent": 53.65415383560561,
+              "loss_kvar": 2.7499334241817706,
+              "loss_kw": 1.727304254380986,
+              "max_current_a": 53.65415383560561,
+              "phases": [
+                {
+                  "current_a": 53.654153835582655,
+                  "phase": 1,
+                  "power_kvar": 67.58339338479615,
+                  "power_kw": 333.90947881381703
+                },
+                {
+                  "current_a": 53.654153835569744,
+                  "phase": 2,
+                  "power_kvar": 67.58339338453278,
+                  "power_kw": 333.90947881378827
+                },
+                {
+                  "current_a": 53.65415383560561,
+                  "phase": 3,
+                  "power_kvar": 67.58339338463469,
+                  "power_kw": 333.9094788140011
+                }
+              ],
+              "to_bus": "load"
+            }
+          ],
+          "loads": [
+            {
+              "bus": "load",
+              "connection": "wye",
+              "id": "house",
+              "kvar": 200.0,
+              "kvar_by_phase": [
+                66.66666666666667,
+                66.66666666666667,
+                66.66666666666667
+              ],
+              "kw": 1000.0,
+              "kw_by_phase": [
+                333.3333333333333,
+                333.3333333333333,
+                333.3333333333333
+              ],
+              "phases": 3
+            }
+          ],
+          "mode": "balanced",
+          "source": {
+            "angle_deg": 0.0,
+            "bus": "grid",
+            "kv_ll": 11.0,
+            "kvar": 202.75018015375525,
+            "kw": 1001.7284364415444,
+            "phases": 3,
+            "pu": 1.0
+          },
+          "totals": {
+            "balance_error_kvar": 0.0002467295734818187,
+            "balance_error_kw": 0.0011321871634455416,
+            "load_kvar": 200.0,
+            "load_kw": 1000.0,
+            "loss_kvar": 2.7499334241817706,
+            "loss_kw": 1.727304254380986,
+            "source_kvar": 202.75018015375525,
+            "source_kw": 1001.7284364415444
+          }
+        },
+        "field_units": {},
+        "kind": "simulated",
+        "original_unit": null,
+        "provenance": [
+          {
+            "kind": "software",
+            "library": "opendssdirect.py",
+            "version": "0.9.4"
+          },
+          {
+            "kind": "engine",
+            "library": "DSS-Extensions",
+            "version": "DSS C-API Library version 0.14.5 revision 87d85c2622c8281b92255335bc7c09b11191b21d based on OpenDSS SVN 3723 [FPC 3.2.2] (64-bit build) MVMULT INCREMENTAL_Y CONTEXT_API PM 20240329033719; License Status: Open \nDSS-Python version: 0.15.7\nOpenDSSDirect.py version: 0.9.4"
+          }
+        ],
+        "provider": null,
+        "quality": "converged-power-flow",
+        "resolution": "steady-state snapshot",
+        "retrieved_at": "2026-10-01T14:56:17.196834Z",
+        "site_id": null,
+        "source": "opendssdirect",
+        "time_end": null,
+        "time_start": null,
+        "timezone": "UTC",
+        "unit": "kW, kvar, A, pu, degree",
+        "warnings": [
+          "This is a bounded engineering simulation and is not a certification of network safety or an operating limit.",
+          "DSS-Extensions is an alternative OpenDSS implementation and is not supported by EPRI."
+        ]
+      }
+    },
+    {
+      "checks": {
+        "converged": true,
+        "positive_line_current": true,
+        "power_balance_kw_abs_lt_0_02": true,
+        "three_phase_bus_output": true,
+        "unbalanced_phase_current_order_is_preserved": true,
+        "unbalanced_voltage_spread_gt_0_001_pu": true
+      },
+      "name": "unbalanced",
+      "passed": true,
+      "result": {
+        "asset_id": null,
+        "assumptions": [
+          "DSS-Extensions OpenDSS snapshot power flow on a caller-supplied bounded topology",
+          "line impedances use positive- and zero-sequence ohms per kilometre; missing zero-sequence values default to three times the positive-sequence values",
+          "loads are constant-power model 1 elements; no controls, protection, faults, dynamics, or time series are simulated"
+        ],
+        "data": {
+          "buses": [
+            {
+              "id": "grid",
+              "nodes": [
+                1,
+                2,
+                3
+              ],
+              "phases": [
+                {
+                  "phase": 1,
+                  "v_ang_deg": -0.031585571569739374,
+                  "v_mag_pu": 0.9997038060372561
+                },
+                {
+                  "phase": 2,
+                  "v_ang_deg": -120.01959415152378,
+                  "v_mag_pu": 0.9997931488341854
+                },
+                {
+                  "phase": 3,
+                  "v_ang_deg": 119.99230462307622,
+                  "v_mag_pu": 0.9999517921646678
+                }
+              ],
+              "v_ang_deg": -0.031585571569739374,
+              "v_mag_pu": 0.9998162490120364
+            },
+            {
+              "id": "load",
+              "nodes": [
+                1,
+                2,
+                3
+              ],
+              "phases": [
+                {
+                  "phase": 1,
+                  "v_ang_deg": -0.28305333403752386,
+                  "v_mag_pu": 0.9942031953480123
+                },
+                {
+                  "phase": 2,
+                  "v_ang_deg": -120.23137183711414,
+                  "v_mag_pu": 0.9995158882467047
+                },
+                {
+                  "phase": 3,
+                  "v_ang_deg": 120.07884859908707,
+                  "v_mag_pu": 0.9997545526014668
+                }
+              ],
+              "v_ang_deg": -0.28305333403752386,
+              "v_mag_pu": 0.9978245453987279
+            }
+          ],
+          "converged": true,
+          "frequency_hz": 50.0,
+          "lines": [
+            {
+              "ampacity_a": 100.0,
+              "from_bus": "grid",
+              "id": "feeder",
+              "loading_percent": 80.75586944722963,
+              "loss_kvar": 3.608098406550387,
+              "loss_kw": 2.229493301760085,
+              "max_current_a": 80.75586944722963,
+              "phases": [
+                {
+                  "current_a": 80.75586944722963,
+                  "phase": 1,
+                  "power_kvar": 102.71641091208468,
+                  "power_kw": 502.3224049481175
+                },
+                {
+                  "current_a": 48.195267813264145,
+                  "phase": 2,
+                  "power_kvar": 61.08242837681132,
+                  "power_kw": 299.85963025789437
+                },
+                {
+                  "current_a": 16.060352859977634,
+                  "phase": 3,
+                  "power_kvar": 19.809754990324134,
+                  "power_kw": 100.04971890898501
+                }
+              ],
+              "to_bus": "load"
+            }
+          ],
+          "loads": [
+            {
+              "bus": "load",
+              "connection": "wye",
+              "id": "house",
+              "kvar": 180.0,
+              "kvar_by_phase": [
+                100.0,
+                60.0,
+                20.0
+              ],
+              "kw": 900.0,
+              "kw_by_phase": [
+                500.0,
+                300.0,
+                100.0
+              ],
+              "phases": 3
+            }
+          ],
+          "mode": "unbalanced",
+          "source": {
+            "angle_deg": 0.0,
+            "bus": "grid",
+            "kv_ll": 11.0,
+            "kvar": 183.60859427915693,
+            "kw": 902.2317541150561,
+            "phases": 3,
+            "pu": 1.0
+          },
+          "totals": {
+            "balance_error_kvar": 0.0004958726065451557,
+            "balance_error_kw": 0.0022608132960204586,
+            "load_kvar": 180.0,
+            "load_kw": 900.0,
+            "loss_kvar": 3.608098406550387,
+            "loss_kw": 2.229493301760085,
+            "source_kvar": 183.60859427915693,
+            "source_kw": 902.2317541150561
+          }
+        },
+        "field_units": {},
+        "kind": "simulated",
+        "original_unit": null,
+        "provenance": [
+          {
+            "kind": "software",
+            "library": "opendssdirect.py",
+            "version": "0.9.4"
+          },
+          {
+            "kind": "engine",
+            "library": "DSS-Extensions",
+            "version": "DSS C-API Library version 0.14.5 revision 87d85c2622c8281b92255335bc7c09b11191b21d based on OpenDSS SVN 3723 [FPC 3.2.2] (64-bit build) MVMULT INCREMENTAL_Y CONTEXT_API PM 20240329033719; License Status: Open \nDSS-Python version: 0.15.7\nOpenDSSDirect.py version: 0.9.4"
+          }
+        ],
+        "provider": null,
+        "quality": "converged-power-flow",
+        "resolution": "steady-state snapshot",
+        "retrieved_at": "2026-10-01T14:56:17.235931Z",
+        "site_id": null,
+        "source": "opendssdirect",
+        "time_end": null,
+        "time_start": null,
+        "timezone": "UTC",
+        "unit": "kW, kvar, A, pu, degree",
+        "warnings": [
+          "This is a bounded engineering simulation and is not a certification of network safety or an operating limit.",
+          "DSS-Extensions is an alternative OpenDSS implementation and is not supported by EPRI."
+        ]
+      }
+    }
+  ],
+  "distribution": "opendssdirect.py",
+  "distribution_version": "0.9.4",
+  "engine": "DSS-Extensions",
+  "engine_version": "DSS C-API Library version 0.14.5 revision 87d85c2622c8281b92255335bc7c09b11191b21d based on OpenDSS SVN 3723 [FPC 3.2.2] (64-bit build) MVMULT INCREMENTAL_Y CONTEXT_API PM 20240329033719; License Status: Open \nDSS-Python version: 0.15.7\nOpenDSSDirect.py version: 0.9.4",
+  "qualification": {
+    "does_not_cover": [
+      "arbitrary DSS model files or script execution",
+      "protection, fault, dynamic, time-series, or controller studies",
+      "operational safety or equipment certification"
+    ],
+    "real_engine": true,
+    "scope": "in-memory steady-state balanced and unbalanced three-phase snapshot cases",
+    "status": "qualified-bounded-experimental"
+  },
+  "upstream_sources": [
+    "https://dss-extensions.org/OpenDSSDirect.py/",
+    "https://github.com/dss-extensions/OpenDSSDirect.py",
+    "https://github.com/dss-extensions/dss-extensions/blob/main/docs/python_apis.md"
+  ]
+}
