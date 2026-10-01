@@ -52,13 +52,14 @@ async def qualify(image: str, config: Path, name: str, volume: str) -> dict:
             {
                 "sites": [{"id": "home", "user_id": "operator", "name": "Home", "timezone": "UTC"}],
                 "hosting": {
+                    "max_requests_per_minute": 200,
                     "principals": [
                         {
                             "user_id": "operator",
                             "allowed_site_ids": ["home"],
                             "token_digest": token_digest(token),
                         }
-                    ]
+                    ],
                 },
             }
         )
