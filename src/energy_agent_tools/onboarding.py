@@ -770,8 +770,19 @@ class LocalProfile:
             raise _safe_error(
                 "provider_verification_failed", "Provider returned invalid data."
             ) from exc
-        if provider == "octopus" and not isinstance(payload, Mapping):
-            raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+        if provider == "octopus":
+            if not isinstance(payload, Mapping) or not isinstance(payload.get("results"), list):
+                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+            for row in payload["results"]:
+                if (
+                    not isinstance(row, Mapping)
+                    or isinstance(row.get("consumption"), bool)
+                    or not isinstance(row.get("consumption"), (int, float))
+                    or not math.isfinite(row["consumption"])
+                ):
+                    raise _safe_error(
+                        "provider_verification_failed", "Provider returned invalid data."
+                    )
         if provider == "home_assistant":
             if not isinstance(payload, Mapping):
                 raise _safe_error("provider_verification_failed", "Provider returned invalid data.")

@@ -114,3 +114,53 @@ async def test_sensor_changed_to_counter_cannot_pass_interval_binding(tmp_path):
             assert output["error"]["code"] == "binding_semantics_changed", output
         finally:
             await agent.close()
+
+
+async def test_current_power_unavailable_sensor_is_not_a_fresh_numeric_reading(
+    tmp_path, monkeypatch
+):
+    from energy_agent_tools.connectors import http
+    from energy_agent_tools.models import AuthConfig, ConnectedAccount, Site
+    from energy_agent_tools.registry import Registry
+    from energy_agent_tools.runtime import EnergyAgent
+
+    monkeypatch.setenv("TEST_HA_POWER_CREDENTIAL", "project-test-only")
+    registry = Registry()
+    http.register(registry)
+
+    async def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "entity_id": "sensor.power",
+                "state": "unavailable",
+                "attributes": {"state_class": "measurement", "unit_of_measurement": "kW"},
+                "last_updated": NOW.isoformat(),
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        account = ConnectedAccount(
+            id="ha",
+            user_id="u",
+            toolkit="home-assistant",
+            site_id="home",
+            auth=AuthConfig(scheme="bearer", credential_env="TEST_HA_POWER_CREDENTIAL"),
+            settings={"base_url": "https://ha.fixture"},
+        )
+        agent = EnergyAgent(
+            registry,
+            tmp_path,
+            http=client,
+            sites=[Site(id="home", user_id="u", name="Home", timezone="UTC")],
+            accounts=[account],
+        )
+        try:
+            result = await agent.execute(
+                agent.session("u", "home"),
+                "home_assistant.get_state",
+                {"entity_id": "sensor.power"},
+            )
+            assert result["error"]["code"] == "telemetry_unavailable", result
+        finally:
+            await agent.close()

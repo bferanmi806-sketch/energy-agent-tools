@@ -372,3 +372,31 @@ def test_metadata_rejects_secret_shaped_values(tmp_path: Path) -> None:
             metadata={"base_url": "https://ha.example", "token": "should-reject"},
         )
     profile.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"error": "invalid account"},
+        {"results": [{"consumption": True}]},
+        {"results": [{"consumption": float("inf")}]},
+    ],
+)
+async def test_octopus_probe_cannot_verify_error_or_non_numeric_readings(tmp_path, payload):
+    async def handler(request):
+        if payload == {"results": [{"consumption": float("inf")}]}:
+            return httpx.Response(200, content=b'{"results":[{"consumption":Infinity}]}')
+        return httpx.Response(200, json=payload)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        async with LocalProfile(tmp_path, http=client) as profile:
+            profile.create_site("Home", "UTC", site_id="home")
+            result = await profile.connect(
+                "octopus",
+                credential="synthetic-probe-only",
+                site_id="home",
+                metadata={"mpan": "MPAN", "serial_number": "SERIAL"},
+            )
+            assert not result["ok"]
+            assert not result["account"]["verified"]

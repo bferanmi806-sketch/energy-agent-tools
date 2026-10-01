@@ -877,6 +877,13 @@ async def _ha_state(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResult
     if not isinstance(attrs, dict):
         raise _error("malformed_response", "Home Assistant returned invalid state attributes.")
     kind = _ha_kind(attrs)
+    if (
+        kind in {DataKind.METERED, DataKind.CALCULATED}
+        and _ha_numeric(payload.get("state")) is None
+    ):
+        raise _error(
+            "telemetry_unavailable", "Home Assistant reports no finite numeric observation."
+        )
     warnings = (
         []
         if attrs.get("state_class")
