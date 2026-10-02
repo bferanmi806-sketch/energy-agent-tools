@@ -455,7 +455,7 @@ def test_qualified_scenarios_preserve_frozen_truth_and_select_environment(tmp_pa
 
     scenarios = {case.id: case for case in scenario_cases()}
     qualified = qualified_scenario_cases()
-    assert len(qualified) == 9
+    assert len(qualified) == 13
     fixture = write_fixture(tmp_path / "fixture")
     for case in qualified:
         expected = asdict(scenarios[case.id].expected)

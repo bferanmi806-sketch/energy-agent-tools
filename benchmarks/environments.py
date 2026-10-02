@@ -517,7 +517,13 @@ def _bindings(
 def qualified_environment_clocks() -> dict[str, datetime]:
     """Return only independently checked builders and their fixed clocks."""
 
+    from .engineering_environments import QUALIFIED_ENGINEERING_CASE_IDS
+    from .engineering_environments import SCENARIO_CLOCKS as engineering_clocks
     from .telemetry_environments import SCENARIO_CLOCKS as telemetry_clocks
+
+    qualified_engineering_clocks = {
+        case_id: engineering_clocks[case_id] for case_id in QUALIFIED_ENGINEERING_CASE_IDS
+    }
 
     clocks = {
         case_id: datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
@@ -526,14 +532,22 @@ def qualified_environment_clocks() -> dict[str, datetime]:
     clocks["dev_current_power_snapshot"] = datetime(2026, 9, 29, 16, 0, tzinfo=UTC)
     if clocks.keys() & telemetry_clocks.keys():
         raise RuntimeError("Qualified environment families must own distinct case IDs.")
-    return clocks | telemetry_clocks
+    if (clocks.keys() | telemetry_clocks.keys()) & qualified_engineering_clocks.keys():
+        raise RuntimeError("Qualified environment families must own distinct case IDs.")
+    return clocks | telemetry_clocks | qualified_engineering_clocks
 
 
 def build_environment(case_id: str, root: Path, state_dir: Path) -> BuiltEnvironment:
     """Dispatch one independently qualified development environment."""
 
+    from .engineering_environments import (
+        QUALIFIED_ENGINEERING_CASE_IDS,
+        build_engineering_environment,
+    )
     from .telemetry_environments import QUALIFIED_TELEMETRY_CASE_IDS, build_telemetry_environment
 
+    if case_id in QUALIFIED_ENGINEERING_CASE_IDS:
+        return build_engineering_environment(case_id, root, state_dir)
     if case_id in QUALIFIED_TELEMETRY_CASE_IDS:
         return build_telemetry_environment(case_id, root, state_dir)
 

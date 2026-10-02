@@ -76,7 +76,9 @@ async def test_power_flow_uses_asset_model_and_real_pandapower_runtime(tmp_path:
         load_bus = next(row for row in output["data"]["buses"] if row["id"] == "office")
         assert 0 < load_bus["vm_pu"] < 1.0
         assert any(item.get("library") == "pandapower" for item in output["provenance"])
-        assert any(item.get("tool") == "engineering.run_power_flow" for item in output["provenance"])
+        assert any(
+            item.get("tool") == "engineering.run_power_flow" for item in output["provenance"]
+        )
     finally:
         await built.close()
 
@@ -109,7 +111,9 @@ async def test_heat_loss_has_independent_12_kw_truth_and_input_provenance(tmp_pa
         assert output["data"]["transmission_ua_w_per_k"] == pytest.approx(500.0)
         assert output["asset_id"] == asset_id
         assert output["site_id"] == context.site_id
-        assert any(item.get("tool") == "engineering.calculate_heat_loss" for item in output["provenance"])
+        assert any(
+            item.get("tool") == "engineering.calculate_heat_loss" for item in output["provenance"]
+        )
     finally:
         await built.close()
 
@@ -172,9 +176,10 @@ async def test_network_asset_selection_runs_pypsa_and_preserves_lineage(tmp_path
             ("new-york-school-network-east", "east-feeder"),
             ("new-york-school-network-west", "west-feeder"),
         ):
-            assert "no physical line is changed" in built.agent.assets[asset_id].metadata[
-                "engineering"
-            ]["assumptions"]
+            assert (
+                "no physical line is changed"
+                in built.agent.assets[asset_id].metadata["engineering"]["assumptions"]
+            )
             resolution = built.agent.resolver.resolve(
                 session,
                 CapabilityRequest(capability="run_power_flow", asset_id=asset_id),

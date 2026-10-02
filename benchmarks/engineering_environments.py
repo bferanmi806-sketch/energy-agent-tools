@@ -137,9 +137,7 @@ def _power_flow_args() -> dict[str, Any]:
                     "max_loading_percent": 100.0,
                 }
             ],
-            "loads": [
-                {"id": "office-load", "bus": "office", "p_mw": 0.2, "q_mvar": 0.04}
-            ],
+            "loads": [{"id": "office-load", "bus": "office", "p_mw": 0.2, "q_mvar": 0.04}],
             "ext_grid": [{"id": "utility", "bus": "grid", "vm_pu": 1.0}],
         }
     }
@@ -398,7 +396,9 @@ def _build_components(
 
 
 def _unreachable(request: httpx.Request) -> httpx.Response:
-    return httpx.Response(404, json={"message": "No network connector is configured."}, request=request)
+    return httpx.Response(
+        404, json={"message": "No network connector is configured."}, request=request
+    )
 
 
 def build_engineering_environment(case_id: str, root: Path, state: Path) -> BuiltEnvironment:
@@ -415,7 +415,9 @@ def build_engineering_environment(case_id: str, root: Path, state: Path) -> Buil
     if case_id in ENGINEERING_CASE_EXCLUSIONS:
         raise EnvironmentUnavailable(ENGINEERING_CASE_EXCLUSIONS[case_id])
     if case_id not in QUALIFIED_ENGINEERING_CASE_IDS:
-        raise EnvironmentUnavailable(f"Scenario {case_id!r} has no qualified engineering environment.")
+        raise EnvironmentUnavailable(
+            f"Scenario {case_id!r} has no qualified engineering environment."
+        )
     if case.split != "development" or case.fixture_case_id is not None:
         raise EnvironmentUnavailable(f"Scenario {case_id!r} is not a development environment.")
 
