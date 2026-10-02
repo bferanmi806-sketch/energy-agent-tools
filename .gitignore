@@ -12,3 +12,5 @@ dist/
 build/
 *.egg-info/
 local-config.json
+
+node_modules/

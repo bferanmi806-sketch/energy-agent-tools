@@ -41,6 +41,7 @@ from .models import EnergyError, Json, Session
 from .runtime import EnergyAgent
 from .server import create_server
 from .skills import SKILLS, search_skills
+from .workflows import run_skill
 
 _TOKEN_DIGEST = re.compile(r"^[0-9a-fA-F]{64}$")
 _MAX_TOKEN_BYTES = 4096
@@ -109,6 +110,11 @@ class _ExecuteRequest(_RequestModel):
     account_id: StrictStr | None = None
     persist: StrictBool = False
     input_artifacts: list[StrictStr] = Field(default_factory=list, max_length=10)
+
+
+class _SkillExecutionRequest(_RequestModel):
+    skill_id: StrictStr = Field(min_length=1, max_length=128)
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class _CapabilityExecutionRequest(CapabilityRequest):
@@ -326,8 +332,10 @@ class AuthenticatedHost:
             Route("/sessions/{session_id}/resolve", self._resolve, methods=["POST"]),
             Route("/sessions/{session_id}/capability", self._capability, methods=["POST"]),
             Route("/sessions/{session_id}/skills", self._skills, methods=["GET", "POST"]),
+            Route("/sessions/{session_id}/skills/run", self._run_skill, methods=["POST"]),
             Route("/sessions/{session_id}/jobs", self._jobs, methods=["POST"]),
             Route("/sessions/{session_id}/connections", self._connections, methods=["GET"]),
+            Route("/sessions/{session_id}/toolkits", self._toolkits, methods=["GET"]),
             Route("/sessions/{session_id}/artifacts", self._artifacts, methods=["GET"]),
             Route(
                 "/sessions/{session_id}/artifacts/{artifact_id}",
@@ -834,7 +842,17 @@ class AuthenticatedHost:
         if isinstance(parsed, Response):
             return parsed
         data = cast(_SearchRequest, parsed)
-        return _json_response({"skills": search_skills(data.query)})
+        return _json_response({"skills": search_skills(data.query)[: data.limit]})
+
+    async def _run_skill(self, request: Request) -> Response:
+        scope = self._session_for(request)
+        if isinstance(scope, Response):
+            return scope
+        parsed = await self._parse_json(request, _SkillExecutionRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(_SkillExecutionRequest, parsed)
+        return _json_response(await run_skill(self.agent, scope[1], data.skill_id, data.parameters))
 
     async def _jobs(self, request: Request) -> Response:
         scope = self._session_for(request)
@@ -845,6 +863,15 @@ class AuthenticatedHost:
             return parsed
         data = cast(_JobRequest, parsed)
         return _json_response(await self.agent.job(scope[1], **data.model_dump()))
+
+    async def _toolkits(self, request: Request) -> Response:
+        scope = self._session_for(request)
+        if isinstance(scope, Response):
+            return scope
+        try:
+            return _json_response({"toolkits": self.agent.catalogue(scope[1])})
+        except EnergyError as exc:
+            return self._energy_error(exc)
 
     async def _connections(self, request: Request) -> Response:
         scope = self._session_for(request)

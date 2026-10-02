@@ -110,6 +110,9 @@ curl --fail-with-body \
   http://127.0.0.1:8765/sessions
 ```
 
+The [TypeScript SDK](../packages/typescript/README.md) wraps these authenticated
+REST routes and the site-scoped MCP endpoint.
+
 The response contains a server-generated `session_id`. Use it with the REST routes
 for search, execution, capabilities, skills, connections, and artifacts:
 
@@ -120,6 +123,9 @@ POST   /sessions/{session_id}/resolve
 POST   /sessions/{session_id}/capability
 GET    /sessions/{session_id}/skills
 POST   /sessions/{session_id}/skills
+POST   /sessions/{session_id}/skills/run
+POST   /sessions/{session_id}/jobs
+GET    /sessions/{session_id}/toolkits
 GET    /sessions/{session_id}/connections
 GET    /sessions/{session_id}/artifacts
 DELETE /sessions/{session_id}/artifacts/{artifact_id}

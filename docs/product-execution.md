@@ -195,3 +195,33 @@ with the TypeScript SDK and Connect Apps experience. Physical
 site evidence, broad actual agent evaluation, independent review, outside
 connector contribution and sustained operation remain open and continue
 alongside the developer product. The full goal remains active.
+
+## TypeScript SDK foundation, October 2
+
+Phase 2 now has a TypeScript package in `packages/typescript`. It generates
+request and result schemas from the Python models, validates gateway payloads,
+and exposes authenticated REST sessions and an official Streamable HTTP MCP
+client. Sessions support discovery, capability resolution/execution, connections,
+artifacts, skills, workflow execution and jobs. Toolkit catalogue metadata comes
+from the scoped Python registry through a typed REST route, giving Connect Apps
+a source without hard-coded entries. Bearer tokens stay in transport
+headers. HTTP calls have bounded responses, cancellation and timeouts, and do
+not automatically replay requests. MCP calls preserve JSON helper results.
+
+The gateway adds `POST /sessions/{session_id}/skills/run` over the existing
+scoped workflow engine. A real REST fixture composes a synthetic 192 kWh,
+eight-day forecast and GBP 42.72 bill estimate. Meter history, forecast energy
+and calculated forecast cost retain their semantics. Skill search now honors
+its requested result limit.
+
+Local verification passes 11 Node tests and 15 Python integration tests, strict
+TypeScript checking, generated-contract drift checking, Ruff and mypy. A packed
+SDK installs into a separate consumer project, runs the real authenticated REST
+acceptance and checks its public declarations. Node acceptance is also invoked
+by Python verification when Node 20 or newer and npm are available; a missing
+runtime is reported as a skip rather than a passing SDK check.
+
+This is the SDK foundation, not completion of Phase 2 or the full goal. The
+Connect Apps application, persistent workspace/connection control plane and
+remaining real-world qualification gates are still required. The SDK is not
+published to npm; the current source and local tarball are reviewable.

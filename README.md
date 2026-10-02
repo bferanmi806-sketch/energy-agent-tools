@@ -6,7 +6,7 @@ capabilities, and execute through one runtime with user, site, account, asset an
 artifact scope.
 
 The platform includes encrypted connections and OAuth PKCE, authenticated HTTP
-and MCP hosting, a bound Python SDK, executable workflows, and local time-series
+and MCP hosting, Python and TypeScript SDKs, executable workflows, and local time-series
 analysis. Results retain their physical unit, measurement kind, source, input
 lineage and warnings. A forecast or simulation never becomes a meter reading.
 
@@ -62,7 +62,9 @@ Large results stay in scoped SQLite artifacts. Analysis includes bounded filteri
 UTC alignment, missing intervals, counter differences, power integration, cost,
 carbon, baselines, calendar comparison, resampling and anomaly screening.
 Twelve executable recipes combine these operations through the same runtime.
-See [workflows](docs/workflows.md) and [SDK usage](docs/sdk.md).
+See [workflows](docs/workflows.md), [Python SDK usage](docs/sdk.md), and the
+[TypeScript SDK](packages/typescript/README.md). The TypeScript package is an
+initial developer release in the current source; it is not published to npm.
 
 ## Connections and hosting
 
