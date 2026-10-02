@@ -49,12 +49,21 @@ async def import_csv(
     kind: str,
     unit: str,
     timezone: str,
+    asset_id: str | None = None,
+    quantity_shape: str | None = None,
+    resolution: str | None = None,
 ) -> tuple[str, Any]:
     """Import and persist one declared local source through the production CSV tool."""
+    arguments = {"file": filename, "kind": kind, "unit": unit, "timezone": timezone}
+    if quantity_shape is not None:
+        arguments["quantity_shape"] = quantity_shape
+    if resolution is not None:
+        arguments["resolution"] = resolution
     output = await session.execute(
         "CSV_READ_TIMESERIES",
-        {"file": filename, "kind": kind, "unit": unit, "timezone": timezone},
+        arguments,
         persist=True,
+        asset_id=asset_id,
     )
     assert output["ok"], output
     artifact_id = output["result"]["data"]["artifact_id"]
@@ -62,7 +71,15 @@ async def import_csv(
     assert artifact.source == "local-csv"
     assert artifact.kind.value == kind
     assert artifact.unit == unit
-    assert {"file": filename, "declared_kind": kind} in artifact.provenance
+    assert artifact.asset_id == asset_id
+    assert artifact.quantity_shape == quantity_shape
+    assert artifact.resolution == resolution
+    declaration = {"file": filename, "declared_kind": kind}
+    if quantity_shape is not None:
+        declaration["declared_quantity_shape"] = quantity_shape
+    if resolution is not None:
+        declaration["declared_resolution"] = resolution
+    assert declaration in artifact.provenance
     return artifact_id, artifact
 
 
@@ -117,6 +134,9 @@ def source_summary(artifact_id: str, artifact: Any) -> dict[str, Any]:
         "artifact_id": artifact_id,
         "kind": artifact.kind.value,
         "unit": artifact.unit,
+        "asset_id": artifact.asset_id,
+        "quantity_shape": artifact.quantity_shape,
+        "resolution": artifact.resolution,
         "source": artifact.source,
         "quality": artifact.quality,
         "provenance": artifact.provenance,

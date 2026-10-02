@@ -69,6 +69,8 @@ async def main() -> None:
                 kind="metered",
                 unit="MW and Mvar",
                 timezone=TIMEZONE,
+                asset_id=LOAD_ASSET,
+                quantity_shape="instantaneous",
             )
             row = numeric_rows(load, ("p_mw", "q_mvar"))[0]
             network = {

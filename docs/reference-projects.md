@@ -37,6 +37,13 @@ non-increasing modeled cost, site and asset scope, and artifact lineage. It also
 shows the capability refusal when a generic consumption request has no provider
 account or reviewed CSV-to-capability mapping.
 
+The example also runs the `electricity-cost` SDK workflow against the imported
+meter and tariff artifacts. Exact interval alignment produces 0.28 GBP; the
+workflow reads those local artifacts and makes no provider request. The meter
+source is attached to `home-meter` and declares interval energy at 30-minute
+resolution. Tariff rows declare forecast interval rates at the same resolution;
+site weather rows declare instantaneous forecast values at 30-minute resolution.
+
 The weather and tariff values are hand-authored assumptions, not current
 forecasts or supplier prices. PV output depends on those weather rows and the
 explicit 2 kW fixed-tilt model. Battery output is an advisory schedule, not a
@@ -51,12 +58,14 @@ caller-supplied outdoor temperature forecast. A reviewed, asset-scoped
 independently calculates the envelope UA and the 1.638 kW heat loss, then checks
 the result against a 2 kW heat-pump rating supplied as asset metadata.
 
-Consumption totals 4.2 kWh. The outdoor temperature input remains a
-`forecast` artifact; the engineering result is `calculated` and carries the
-forecast artifact in its provenance. Heat-pump capacity and COP are caller
-metadata, not a product database lookup. The steady-state calculation does not
-model thermal mass, schedules, solar gains, internal gains, or a dynamic
-heat-pump performance curve.
+Consumption totals 4.2 kWh. The meter source is attached to
+`office-main-meter` and declares interval energy at one-hour resolution. The
+outdoor temperature source declares instantaneous forecast values at hourly
+resolution; it remains a `forecast` artifact. The engineering result is
+`calculated` and carries the forecast artifact in its provenance. Heat-pump
+capacity and COP are caller metadata, not a product database lookup. The
+steady-state calculation does not model thermal mass, schedules, solar gains,
+internal gains, or a dynamic heat-pump performance curve.
 
 ## Engineering network
 
@@ -70,18 +79,20 @@ residual, pandapower provenance, and the source artifact link.
 The topology, impedance and 50 Hz frequency are example assumptions. This is a
 balanced steady-state snapshot; it does not model protection, faults, controls,
 unbalanced phases, or equipment switching. The solver result is `simulated` and
-must not be presented as a meter reading.
+must not be presented as a meter reading. The feeder load artifact is attached to
+`feeder-head-meter` and declares instantaneous MW/Mvar values; its sampling
+cadence is unknown and no resolution is declared.
 
 ## Evidence boundary
 
 All local CSV access is restricted to the fixture directory by the production
-connector. Import kind and units are caller declarations preserved with source
-filename provenance. The fixtures have no measurement quantity-shape metadata,
-so the examples use interval energy or an explicitly supplied instantaneous
-network snapshot instead of deriving a counter or integrating power. A deployed
-operator must review the physical meaning, unit and scope of each real source
-before adding a capability binding. A missing account or unreviewed mapping
-remains unavailable rather than being inferred from a file name or asset name.
+connector. Import kind, unit, asset, quantity shape, and resolution are caller
+declarations preserved with source filename provenance. The examples use
+interval energy and an instantaneous network snapshot; they do not derive a
+counter or integrate power. A deployed operator must review the physical
+meaning, unit and scope of each real source before adding a capability binding.
+A missing account or unreviewed mapping remains unavailable rather than being
+inferred from a file name or asset name.
 
 Run the focused executable check with:
 

@@ -53,7 +53,14 @@ async def main() -> None:
         async with make_tools(Path(temporary) / "state", config) as tools:
             session = tools.session(USER_ID, SITE_ID)
             meter_id, meter = await import_csv(
-                session, "home_meter.csv", kind="metered", unit="kWh", timezone=TIMEZONE
+                session,
+                "home_meter.csv",
+                kind="metered",
+                unit="kWh",
+                timezone=TIMEZONE,
+                asset_id=METER_ASSET,
+                quantity_shape="interval",
+                resolution="30min",
             )
             tariff_id, tariff = await import_csv(
                 session,
@@ -61,6 +68,8 @@ async def main() -> None:
                 kind="forecast",
                 unit="GBP/kWh",
                 timezone=TIMEZONE,
+                quantity_shape="interval",
+                resolution="30min",
             )
             weather_id, weather = await import_csv(
                 session,
@@ -68,18 +77,37 @@ async def main() -> None:
                 kind="forecast",
                 unit="W/m2, degC, m/s",
                 timezone=TIMEZONE,
+                quantity_shape="instantaneous",
+                resolution="30min",
             )
-            meter_rows = numeric_rows(meter, ("kwh",))
-            tariff_rows = numeric_rows(tariff, ("price_gbp_per_kwh",))
+            meter_rows = numeric_rows(meter, ("value",))
+            tariff_rows = numeric_rows(tariff, ("value",))
             weather_rows = numeric_rows(
                 weather,
                 ("ghi_w_m2", "temp_air_c", "wind_speed_m_s", "duration_hours"),
             )
             meter_summary = await session.execute(
-                "WORKBENCH_SUMMARIZE", {"artifact_id": meter_id, "column": "kwh"}
+                "WORKBENCH_SUMMARIZE", {"artifact_id": meter_id, "column": "value"}
             )
             assert meter_summary["ok"], meter_summary
             assert abs(meter_summary["result"]["data"]["sum"] - 1.3) < 1e-9
+            cost_workflow = await session.skill(
+                "electricity-cost",
+                {
+                    "start": "2026-06-21T11:00:00+01:00",
+                    "end": "2026-06-21T13:00:00+01:00",
+                    "artifacts": {
+                        "get_energy_consumption": meter_id,
+                        "get_tariff": tariff_id,
+                    },
+                },
+            )
+            assert cost_workflow["ok"], cost_workflow
+            cost_analysis = next(
+                item["analysis"] for item in cost_workflow["evidence"] if "analysis" in item
+            )
+            cost_rows = cost_analysis["result"]["data"]
+            assert abs(sum(row["cost"] for row in cost_rows) - 0.28) < 1e-9
 
             pv = await execute_capability(
                 session,
@@ -123,9 +151,9 @@ async def main() -> None:
                     {
                         "timestamp": meter_row["timestamp"],
                         "duration_hours": duration_hours,
-                        "load_kw": meter_row["kwh"] / duration_hours,
+                        "load_kw": meter_row["value"] / duration_hours,
                         "pv_kw": pv_row["ac_power_kw"],
-                        "price_per_kwh": tariff_row["price_gbp_per_kwh"],
+                        "price_per_kwh": tariff_row["value"],
                     }
                 )
 
@@ -159,7 +187,7 @@ async def main() -> None:
             assert len(battery["data"]["schedule"]) == 4
 
             refusal = missing_consumption_evidence(session, asset_id=METER_ASSET)
-            assert sum(row["kwh"] for row in meter_rows) == 1.3
+            assert sum(row["value"] for row in meter_rows) == 1.3
             print(
                 json.dumps(
                     {
@@ -173,6 +201,12 @@ async def main() -> None:
                         ],
                         "truths": {"metered_energy_kwh": 1.3, "meter_intervals": 4},
                         "workbench_summary": meter_summary["result"]["data"],
+                        "electricity_cost_workflow": {
+                            "skill_id": cost_workflow["skill_id"],
+                            "kind": cost_analysis["result"]["kind"],
+                            "total_gbp": sum(row["cost"] for row in cost_rows),
+                            "evidence_count": len(cost_workflow["evidence"]),
+                        },
                         "pv": {
                             "kind": pv["kind"],
                             "estimated_energy_kwh": pv["data"]["total_energy_kwh"],

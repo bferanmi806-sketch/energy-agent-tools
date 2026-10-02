@@ -74,7 +74,14 @@ async def main() -> None:
         async with make_tools(Path(temporary) / "state", config) as tools:
             session = tools.session(USER_ID, SITE_ID)
             meter_id, meter = await import_csv(
-                session, "building_meter.csv", kind="metered", unit="kWh", timezone=TIMEZONE
+                session,
+                "building_meter.csv",
+                kind="metered",
+                unit="kWh",
+                timezone=TIMEZONE,
+                asset_id=METER_ASSET,
+                quantity_shape="interval",
+                resolution="1h",
             )
             weather_id, weather = await import_csv(
                 session,
@@ -82,6 +89,8 @@ async def main() -> None:
                 kind="forecast",
                 unit="degC",
                 timezone=TIMEZONE,
+                quantity_shape="instantaneous",
+                resolution="1h",
             )
             consumption_rows = numeric_rows(meter, ("kwh",))
             weather_rows = numeric_rows(weather, ("outdoor_temp_c",))
