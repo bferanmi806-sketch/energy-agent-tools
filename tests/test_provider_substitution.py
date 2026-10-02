@@ -155,3 +155,54 @@ async def test_account_choice_site_scope_and_cross_user_isolation(tmp_path: Path
         assert bob_result["error"]["code"] == "capability_unavailable"
     finally:
         await _close(agent)
+
+
+@pytest.mark.parametrize("provider", sorted(SCENARIOS))
+@pytest.mark.parametrize(
+    "skill", ["yesterday-consumption", "building-spike", "energy-baseline", "building-comparison"]
+)
+async def test_single_source_workflows_substitute_three_provider_contracts(
+    tmp_path, provider, skill
+):
+    fixture = build_provider_fixture(tmp_path / provider)
+    agent = fixture.agent(tmp_path / f"{provider}-state")
+    scenario = SCENARIOS[provider]
+    try:
+        session = agent.session(scenario.user_id, scenario.site_id)
+        parameters = {"start": WINDOW_START.isoformat(), "end": WINDOW_END.isoformat()}
+        if skill == "energy-baseline":
+            parameters["window"] = 2
+        response = await run_skill(agent, session, skill, parameters)
+        assert response["ok"], response
+        result = response["evidence"][-1]["analysis"]["result"]
+        assert result["kind"] == "calculated"
+        assert result["site_id"] == scenario.site_id
+        assert scenario.consumption_source in {
+            entry.get("source") for entry in result["provenance"] if "artifact_id" in entry
+        }
+        data = result["data"]
+        if skill == "yesterday-consumption":
+            assert data["count"] == 4
+            assert data["missing"] == 0
+            assert data["sum"] == pytest.approx(scenario.expected_consumption_kwh)
+        elif skill == "building-spike":
+            assert data["anomaly_count"] == 0
+        elif skill == "energy-baseline":
+            expected_baseline, expected_residual = {
+                "octopus": (1.5, -1),
+                "emon": (1, 1.25),
+                "csv": (1, 0.6),
+            }[provider]
+            assert len(data) == 4
+            assert data[0]["baseline"] is None
+            assert data[1]["baseline"] is None
+            assert data[2]["baseline"] == pytest.approx(expected_baseline)
+            assert data[2]["residual"] == pytest.approx(expected_residual)
+        else:
+            assert len(data) == 1
+            assert data[0]["value"] == pytest.approx(scenario.expected_consumption_kwh)
+            assert data[0]["previous"] is None
+            assert data[0]["difference"] is None
+            assert data[0]["percent_change"] is None
+    finally:
+        await _close(agent)

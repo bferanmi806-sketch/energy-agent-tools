@@ -246,3 +246,10 @@ reference, battery and solar source acceptance suite passed 15 tests; repository
 Ruff lint/format and source mypy checks passed. The other six recipe references
 are assigned to an isolated worker. This does not close the twelve-workflow or
 real-site gate.
+
+The first six references passed CI at `19f1178`. Twelve additional protocol
+checks run unchanged consumption, anomaly screening, baseline and calendar
+comparison workflows over Octopus, OpenEnergyMonitor and CSV source contracts.
+All 16 provider-substitution tests passed, including the prior cost cases.
+The comparisons keep the unavailable previous period and change values null.
+These checks are implementation evidence, not actual-agent or live-meter passes.
