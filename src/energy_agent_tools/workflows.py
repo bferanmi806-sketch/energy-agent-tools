@@ -424,40 +424,68 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 raise EnergyError(
                     "unit_incompatible", "Charging requires reviewed price and carbon units."
                 )
-            prices = pd.DataFrame(tariff["data"])
-            emissions = pd.DataFrame(carbon["data"])
-            pcol, ccol = _time_column(tariff), _time_column(carbon)
-            prices["instant"] = pd.to_datetime(prices[pcol], utc=True)
-            emissions["instant"] = pd.to_datetime(emissions[ccol], utc=True)
-            if prices["instant"].duplicated().any() or emissions["instant"].duplicated().any():
-                raise EnergyError(
-                    "duplicate_timestamp", "Charging inputs must have unique intervals."
-                )
-            merged = prices.merge(
-                emissions, on="instant", suffixes=("_price", "_carbon"), validate="one_to_one"
+            inputs = [artifacts["get_tariff"], artifacts["get_carbon_intensity"]]
+            alignment = await agent.execute(
+                session,
+                "WORKBENCH_ENERGY_OPERATION",
+                {
+                    "operation": "align",
+                    "artifact_ids": inputs,
+                    "parameters": {
+                        "timestamp": _time_column(tariff),
+                        "second_timestamp": _time_column(carbon),
+                        "column": "value",
+                        "second_column": "value",
+                        "end": _end_column(tariff) or "end",
+                        "second_end": _end_column(carbon) or "end",
+                    },
+                },
+                input_artifacts=inputs,
+                persist=True,
             )
-            if len(merged) != len(prices):
-                raise EnergyError("incomplete_coverage", "Carbon must cover every tariff interval.")
+            evidence.append({"alignment": alignment})
+            if not alignment["ok"]:
+                raise EnergyError(alignment["error"]["code"], alignment["error"]["message"])
+            aligned = agent.workbench.read(session, alignment["result"]["data"]["artifact_id"])
             intervals = []
-            for row in merged.to_dict("records"):
-                interval_end = row.get("to_price", row.get("to"))
-                if interval_end is None:
+            previous_end = None
+            for row in aligned.data:
+                if "end" not in row:
                     raise EnergyError(
-                        "interval_end_required", "Tariff binding must expose interval end."
+                        "interval_end_required",
+                        "Price and carbon sources require explicit interval ends.",
                     )
-                duration = (pd.Timestamp(interval_end) - row["instant"]).total_seconds() / 3600
-                cvalue = row.get("value_carbon", row.get("forecast", row.get("actual")))
+                start, end = pd.Timestamp(row["timestamp"]), pd.Timestamp(row["end"])
+                if previous_end is not None and start != previous_end:
+                    raise EnergyError(
+                        "incomplete_coverage", "Charging forecasts must cover contiguous intervals."
+                    )
+                previous_end = end
+                if row["value"] is None or row["value_right"] is None:
+                    raise EnergyError(
+                        "incomplete_coverage", "Charging price and carbon values cannot be missing."
+                    )
                 intervals.append(
                     {
-                        "timestamp": row["instant"].isoformat(),
-                        "duration_hours": duration,
-                        "price_per_kwh": float(row["value_price"])
-                        / (100 if tariff["unit"] == "p/kWh" else 1),
-                        "carbon_intensity_g_per_kwh": cvalue,
+                        "timestamp": start.isoformat(),
+                        "duration_hours": (end - start).total_seconds() / 3600,
+                        "price_per_kwh": row["value"] / (100 if tariff["unit"] == "p/kWh" else 1),
+                        "carbon_intensity_g_per_kwh": row["value_right"],
                         "load_kw": 0,
                         "pv_kw": 0,
                     }
                 )
+            if window:
+                requested_start, requested_end = bounds(window["start"], window["end"])
+                if (
+                    not intervals
+                    or instant(intervals[0]["timestamp"]) != requested_start
+                    or previous_end != requested_end
+                ):
+                    raise EnergyError(
+                        "incomplete_coverage",
+                        "Charging forecasts must cover the full requested horizon.",
+                    )
             request = CapabilityRequest(
                 capability="plan_battery_charging",
                 arguments={

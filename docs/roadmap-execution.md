@@ -205,3 +205,18 @@ A separate explicit GPT-6 Luna/max CLI probe was rejected as unsupported for
 this ChatGPT account and remains inconclusive. Native implementation workers
 continue using that requested configuration; no alternate model run is
 represented as GPT-6 Luna.
+
+The integrated source at `16bd4cd` passed 362 tests on Python 3.11, 3.12 and
+3.13, container qualification, the real Home Assistant API checks, and the
+published-v0.2.0 state upgrade check. The
+[CI run](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/36998552788)
+records these checks.
+
+Canonical CSV tariff and carbon sources now use the shared interval alignment
+operation in battery workflows. Five native-solver regression cases verify
+distinct cheapest and cleanest charging hours and refusal of mismatched ends,
+empty values, and a forecast shorter than the requested horizon. Alignment
+evidence retains explicit interval ends and source lineage.
+
+The battery integration batch passed the full 367-test local suite, plus Ruff
+lint, formatting, and mypy checks.

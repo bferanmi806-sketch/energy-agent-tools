@@ -1047,17 +1047,20 @@ def _normalize(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> Ener
 def _align(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> EnergyResult:
     left, right, resolution = _paired_series(inputs, parameters)
     right_name = right.column if right.column != left.column else f"{right.column}_right"
+    ends = _optional_ends(left, parameters.get("end", "end"))
+    interval_ends = dict(zip(left.times, ends, strict=True)) if ends is not None else {}
     output: list[Json] = []
     for timestamp, left_value, right_value in zip(
         left.times, left.values, right.values, strict=True
     ):
-        output.append(
-            {
-                "timestamp": _timestamp_text(timestamp, left.result.timezone),
-                left.column: left_value,
-                right_name: right_value,
-            }
-        )
+        row = {
+            "timestamp": _timestamp_text(timestamp, left.result.timezone),
+            left.column: left_value,
+            right_name: right_value,
+        }
+        if timestamp in interval_ends:
+            row["end"] = _timestamp_text(interval_ends[timestamp], left.result.timezone)
+        output.append(row)
     return _derived(
         "align",
         output,

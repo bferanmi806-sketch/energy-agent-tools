@@ -87,7 +87,7 @@ table is the order used for the workflow's `artifacts` map and evidence.
 | `yesterday-consumption` | `get_energy_consumption` | summary | A site is required when `start`/`end` are omitted. |
 | `building-spike` | `get_energy_consumption` | anomaly screening | Uses the workbench anomaly defaults; there is no workflow-level threshold field. |
 | `electricity-cost` | `get_energy_consumption`, `get_tariff` | exact-interval cost | Both inputs must cover the same UTC starts and resolution. |
-| `cheapest-battery` | `get_tariff`, `get_carbon_intensity` | constrained battery schedule | Requires a complete battery object and interval ends on tariff rows. Objective is `cost`. |
+| `cheapest-battery` | `get_tariff`, `get_carbon_intensity` | constrained battery schedule | Requires a complete battery object and matching explicit tariff/carbon intervals. Objective is `cost`. |
 | `cleanest-battery` | `get_tariff`, `get_carbon_intensity` | constrained battery schedule | Same inputs as `cheapest-battery`; objective is `carbon`. |
 | `solar-consumption` | `get_energy_consumption`, `get_generation` | exact alignment | `get_generation` must be supplied by a reviewed binding. |
 | `solar-forecast` | `get_solar_forecast` when resolved, otherwise `get_weather` | direct interval-energy forecast summary or weather plus PV estimate | Direct forecasts require reviewed forecast/kWh semantics. Otherwise the workflow needs explicit PV model inputs. Equal direct forecast sources require a choice. |
@@ -146,12 +146,15 @@ error. A `tariff-comparison` call applies these same rules to its alternative.
 ### `cheapest-battery` and `cleanest-battery`
 
 The tariff must use `p/kWh` or `GBP/kWh`; carbon must use `gCO2/kWh` or
-`gCO2e/kWh`. Each tariff row needs `timestamp` and `to_price` (or `to`) so the
-workflow can calculate a positive `duration_hours`. Carbon must cover every
-tariff start exactly, without duplicates. The resulting intervals pass
+`gCO2e/kWh`. Both sources require explicit interval ends, using `end`, `to`,
+or `interval_end`. The shared alignment operation parses numeric CSV values
+and requires matching UTC starts and ends, without duplicates. Intervals must
+be contiguous and cover the full requested window. The workflow persists the
+alignment as evidence before calculating positive `duration_hours` values.
+The resulting intervals pass
 `load_kw: 0` and `pv_kw: 0` because the workflow has no load/PV input field.
 
-The optional `battery` object has this exact shape:
+Supply a `battery` object with this shape:
 
 ```json
 {
@@ -167,8 +170,9 @@ The optional `battery` object has this exact shape:
 ```
 
 `capacity_kwh`, `initial_soc_kwh`, `max_charge_kw`, and `max_discharge_kw` are
-required. The other fields default to `0`, `0.95`, `0.95`, and the initial state
-of charge, respectively. The optimizer also supports the schema-level fields
+required. Capacity and both power limits must be strictly positive. The other
+fields default to `0`, `0.95`, `0.95`, and the initial state of charge,
+respectively. The optimizer also supports the schema-level fields
 `timezone`, `carbon_price_gbp_per_tonne`, `carbon_weight`,
 `allow_grid_charging`, and `allow_grid_export`, but the current workflow passes
 only `intervals`, `battery`, and its objective (`cost` or `carbon`). Plans are
@@ -322,7 +326,8 @@ The pure workbench applies these rules:
   unit in the same physical dimension, currency, and carbon species.
 - `align` is an exact UTC inner alignment with no fill or interpolation. A
   second column with the same name is emitted as `<column>_right` and the result
-  unit is `mixed`.
+  unit is `mixed`. Explicit interval ends are retained after validation against
+  the second source.
 
 Operations are bounded to the workbench row and output limits. They produce a
 calculated `EnergyResult` with `source: "workbench"`, `quality: "derived"`,
