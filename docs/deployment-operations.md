@@ -210,3 +210,25 @@ The key is excluded by default. Keep a separate recoverable key when using that
 default. Archives containing a key must be kept in private secret storage.
 The restore target must be new. Numerical job paths are regenerated under the
 restored directory; a completed result never depends on the old directory.
+
+## Published-version upgrade check
+
+The upgrade check installs the published v0.2.0 wheel in a separate environment.
+That installed package creates the old artifact database and encrypted vault.
+The current package must read both, enforce ownership, back them up, and read
+both again after restore and deletion of the original state directory.
+
+```sh
+mkdir -p work/upgrade-baseline
+gh release download v0.2.0 --repo bferanmi806-sketch/energy-agent-tools --pattern 'energy_agent_tools-0.2.0-py3-none-any.whl' --dir work/upgrade-baseline
+uv venv work/upgrade-baseline/venv --python 3.12
+uv pip install --python work/upgrade-baseline/venv/bin/python work/upgrade-baseline/energy_agent_tools-0.2.0-py3-none-any.whl
+uv run python scripts/upgrade_smoke.py --baseline-python work/upgrade-baseline/venv/bin/python --baseline-wheel work/upgrade-baseline/energy_agent_tools-0.2.0-py3-none-any.whl
+```
+
+The script verifies the baseline wheel against its published SHA-256 digest.
+Generated development credentials stay in private temporary files and are
+removed after the check. The recorded result is in
+`docs/evidence/state-upgrade-v020-to-v030.json`. This qualifies the artifact
+and vault formats with synthetic data. REST sessions, physical connections,
+and arbitrary operator configurations need separate qualification.

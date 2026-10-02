@@ -31,6 +31,7 @@ import httpx
 
 from energy_agent_tools.app import build_agent
 from energy_agent_tools.capabilities import CapabilityRequest
+from energy_agent_tools.models import EnergyError
 from energy_agent_tools.onboarding import LocalProfile
 
 HOME_ASSISTANT_IMAGE = (
@@ -424,6 +425,37 @@ async def qualify_profile(
                 "Capability resolved outside the configured account scope.",
             )
         result = await agent.resolver.execute(session, request)
+        try:
+            agent.session("qualification-outsider", SITE_ID)
+        except EnergyError as error:
+            if error.code != "site_forbidden":
+                raise QualificationFailure(
+                    "scope_check_failed", "Unexpected site authorization failure."
+                ) from None
+        else:
+            raise QualificationFailure(
+                "scope_check_failed", "Foreign user could enter the qualification site."
+            )
+        outsider = agent.session("qualification-outsider")
+        denied = await agent.execute(
+            outsider,
+            "home_assistant.get_state",
+            {"entity_id": ENTITY_ID},
+            account_id=ACCOUNT_ID,
+        )
+        if denied.get("ok") or denied.get("error", {}).get("code") != "account_forbidden":
+            raise QualificationFailure(
+                "scope_check_failed", "Foreign user could access the provider account."
+            )
+        await asyncio.sleep(2)
+        stale = await agent.resolver.execute(
+            session,
+            CapabilityRequest(capability="get_current_power", asset_id=ASSET_ID, max_age_seconds=1),
+        )
+        if stale.get("ok") or stale.get("error", {}).get("code") != "stale_telemetry":
+            raise QualificationFailure(
+                "freshness_failed", "A stale observation was accepted as current power."
+            )
     finally:
         await agent.close()
     if not result.get("ok"):
@@ -477,6 +509,8 @@ async def qualify_profile(
             "site_id": SITE_ID,
             "asset_id": ASSET_ID,
             "account_id": ACCOUNT_ID,
+            "foreign_user_site_denied": True,
+            "foreign_user_account_denied": True,
         },
         "synthetic_reading": {
             "entity_id": ENTITY_ID,
@@ -495,6 +529,7 @@ async def qualify_profile(
             "max_age_seconds": 300,
             "observation_timestamp_required": True,
             "provenance_recorded": True,
+            "stale_read_rejected": True,
         },
         "credential_storage": {
             "encrypted_vault": True,
