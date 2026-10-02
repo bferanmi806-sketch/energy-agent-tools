@@ -541,6 +541,10 @@ def _context_values(
 
 
 def _matching_site(history: EnergyResult, context: EnergyResult, label: str) -> None:
+    if history.site_id is None or context.site_id is None:
+        raise EnergyError(
+            "invalid_context", f"{label} context requires the same known site as history."
+        )
     if (
         history.site_id is not None
         and context.site_id is not None

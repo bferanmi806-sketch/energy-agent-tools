@@ -8,18 +8,19 @@ is `forecast`; its cost is `calculated` with `calculation_basis` set to
 
 ```python
 session = energy.session("owner", "home")
-result = await session.skill("forecast-bill", {
-    "start": "2026-10-01T00:00:00Z",
-    "end": "2026-10-09T00:00:00Z",
-    "history_months": 3,
-    "billing": {
-        "standing_charge": {
-            "amount_per_day": 0.30, "currency": "GBP", "taxable": False
+result = await session.skill(
+    "forecast-bill",
+    {
+        "start": "2026-10-01T00:00:00Z",
+        "end": "2026-10-09T00:00:00Z",
+        "history_months": 3,
+        "billing": {
+            "standing_charge": {"amount_per_day": 0.30, "currency": "GBP", "taxable": False},
+            "tax": {"rate": 0.05, "energy_taxable": True},
+            "source": "Reviewed tariff components",
         },
-        "tax": {"rate": 0.05, "energy_taxable": True},
-        "source": "Reviewed tariff components"
-    }
-})
+    },
+)
 ```
 
 The workflow resolves meter history and tariffs without requiring provider tool

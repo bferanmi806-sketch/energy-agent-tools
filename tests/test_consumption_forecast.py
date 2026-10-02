@@ -494,3 +494,21 @@ def test_rejects_numeric_overflow_in_conversion_context_model_and_summary() -> N
     }
     with pytest.raises(EnergyError, match="overflow"):
         _forecast(huge_history, huge_horizon)
+
+
+@pytest.mark.parametrize("unknown", ["history", "context"])
+def test_temperature_context_requires_known_matching_sites(unknown):
+    history = _history(temperature_effect=True, noisy=True)
+    observed = _history_context(history)
+    future = _future_context(datetime.fromisoformat(str(_PARAMETERS["start"])), 8 * 96)
+    if unknown == "history":
+        history = history.model_copy(update={"site_id": None})
+    else:
+        observed = observed.model_copy(update={"site_id": None})
+    with pytest.raises(EnergyError, match="known site"):
+        forecast(
+            ("history", history),
+            dict(_PARAMETERS),
+            historical_context=("observed", observed),
+            future_context=("future", future),
+        )
