@@ -220,3 +220,13 @@ evidence retains explicit interval ends and source lineage.
 
 The battery integration batch passed the full 367-test local suite, plus Ruff
 lint, formatting, and mypy checks.
+
+At `d2a790d`, CI passed the integrated battery implementation on Python 3.11,
+3.12 and 3.13, plus the container, Home Assistant and published-release upgrade
+checks. Final battery outputs now link the actual validated alignment artifact
+in their provenance. Four additional protocol-fixture checks substitute CSV
+prices with GB carbon-intensity responses, and Octopus tariff responses with
+CSV carbon data, for both cheapest and cleanest workflows. All nine battery
+source tests passed, with independent charging-time, final-charge, cost, carbon
+and source-lineage checks. These fixtures do not qualify live public requests
+or a physical installation.
