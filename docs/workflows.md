@@ -296,7 +296,14 @@ The pure workbench applies these rules:
 - `counter` accepts energy-unit cumulative readings only. It needs a declared
   `resolution` on the input or a `frequency` parameter. The first and reset
   differences are null; a missing reading or a timestamp gap produces a null
-  difference, with the difference assigned to the later reading when valid.
+  difference. Each row uses the previous observation as `timestamp` and the
+  current observation as `end` and `counter_observed_at`. The initial null
+  row covers one declared interval before the first observation; no energy
+  is inferred there. Converted output declares `quantity_shape: interval`.
+  Include a reading at the requested window end before differencing, then
+  select the half-open window so its final interval is retained. Raw readings
+  are nested under `counter_observation` with their unit so a numeric summary
+  cannot mistake that supporting evidence for interval consumption.
 - `integrate_power` accepts only `W`, `kW`, or `MW`. The default trapezoid method
   and optional `left` method use observed duration. A declared-resolution gap
   remains null; unobserved hours are never integrated. If every row has an
@@ -306,7 +313,9 @@ The pure workbench applies these rules:
 - `cost` and `carbon` require two exact aligned series. Rate/intensity coverage
   and UTC starts must match; mixed resolutions, mismatched explicit durations,
   missing rates, and duplicate or nearest matches are errors. Missing energy
-  remains null rather than being invented.
+  remains null rather than being invented. Cumulative or instantaneous energy
+  is rejected until explicitly converted. Filtering, missing-row expansion,
+  and unit normalization preserve the input quantity shape.
 - `baseline` is a previous-observation rolling mean. `compare` groups energy in
   the result timezone by local daily, Monday-based weekly, or calendar monthly
   periods and records missing counts. `normalize` requires an explicit target

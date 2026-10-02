@@ -117,6 +117,17 @@ async def test_home_assistant_counter_is_reviewed_then_explicitly_differenced(
         assert result.data[0]["status"] == "initial"
         assert all(row["status"] == "ok" for row in result.data[1:])
         assert raw.quantity_shape == "counter"
+        selected = await built.agent.execute(
+            session,
+            "WORKBENCH_WINDOW",
+            {"artifact_id": differenced_id, "timestamp": "timestamp", **context.arguments()},
+            persist=True,
+        )
+        selected_result = built.agent.workbench.read(session, _artifact_id(selected))
+        assert selected_result.quantity_shape == "interval"
+        assert len(selected_result.data) == 24
+        assert sum(row["value"] for row in selected_result.data) == pytest.approx(24.0)
+        assert selected_result.data[-1]["end"] == context.window_end.isoformat()
 
         missing_entity = await built.agent.execute(
             session,

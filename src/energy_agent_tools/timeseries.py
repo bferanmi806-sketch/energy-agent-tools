@@ -520,6 +520,10 @@ def _counter(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> Energy
     unit = _unit_info(series.result.unit)
     if unit.dimension != "energy":
         raise EnergyError("unit_mismatch", "Counter readings must use an energy unit.")
+    if series.result.quantity_shape in {"interval", "instantaneous"}:
+        raise EnergyError(
+            "quantity_shape_mismatch", "Counter differences require cumulative readings."
+        )
     expected_seconds: int | None
     expected_frequency: str | None
     if "frequency" in parameters:
@@ -564,9 +568,16 @@ def _counter(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> Energy
             missing_count += 1
         output.append(
             {
-                "timestamp": _timestamp_text(timestamp, series.result.timezone),
+                "timestamp": _timestamp_text(
+                    previous_timestamp
+                    if previous_timestamp is not None
+                    else timestamp - pd.Timedelta(seconds=expected_seconds),
+                    series.result.timezone,
+                ),
+                "end": _timestamp_text(timestamp, series.result.timezone),
+                "counter_observed_at": _timestamp_text(timestamp, series.result.timezone),
                 series.column: delta,
-                "counter": current,
+                "counter_observation": {"value": current, "unit": series.result.unit},
                 "status": status,
             }
         )
@@ -574,7 +585,7 @@ def _counter(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> Energy
         previous_timestamp = timestamp
         if current is not None:
             last_valid = current
-    warnings = []
+    warnings = ["The interval preceding the first counter reading is unobserved and remains null."]
     if reset_count:
         warnings.append(f"Detected {reset_count} counter reset(s); reset intervals are null.")
     if missing_count:
@@ -583,15 +594,26 @@ def _counter(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> Energy
         warnings.append(
             f"Detected {gap_count} interval gap(s) against the expected {expected_frequency or expected_seconds}-resolution; gap differences are null."
         )
-    return _derived(
+    derived = _derived(
         "counter",
         output,
         inputs,
         series.result.unit,
         resolution=expected_frequency,
-        field_units={series.column: series.result.unit, "counter": series.result.unit},
-        assumptions=["Differences are assigned to the later reading timestamp."],
+        quantity_shape="interval",
+        field_units={series.column: series.result.unit},
+        assumptions=[
+            "Each difference covers the preceding and current reading timestamps; timestamp is the interval start and end is the current observation.",
+            "The initial null row covers one declared interval before the first reading; it does not infer consumption.",
+        ],
         warnings=warnings,
+    )
+
+    return derived.model_copy(
+        update={
+            "time_start": _parse_timestamp(output[0]["timestamp"]).to_pydatetime(),
+            "time_end": series.times[-1].to_pydatetime(),
+        }
     )
 
 

@@ -346,3 +346,28 @@ def test_integrated_power_declares_interval_energy():
     integrated = operate("integrate_power", [("power", power)], {"method": "left"})
     assert integrated.quantity_shape == "interval"
     assert integrated.provenance[0]["inputs"][0]["quantity_shape"] == "instantaneous"
+
+
+def test_counter_differences_cover_the_requested_day_without_losing_final_interval():
+    from energy_agent_tools.windows import select_window
+
+    readings = [100 + index for index in range(48)] + [150]
+    raw = _result(_rows(readings)).model_copy(update={"quantity_shape": "counter"})
+    differences = operate("counter", [("meter", raw)], {})
+    selected = select_window(
+        differences, "differences", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "timestamp"
+    )
+    assert differences.quantity_shape == "interval"
+    assert differences.data[-1]["counter_observation"] == {"value": 150.0, "unit": "kWh"}
+    assert "counter" not in differences.data[-1]
+    assert len(selected.data) == 48
+    assert sum(row["value"] for row in selected.data) == 50
+    assert selected.data[-1]["end"] == "2026-01-02T00:00:00+00:00"
+    assert selected.data[-1]["counter_observed_at"] == selected.data[-1]["end"]
+
+
+def test_counter_operation_refuses_known_interval_energy():
+    raw = _result(_rows([1, 2])).model_copy(update={"quantity_shape": "interval"})
+    with pytest.raises(EnergyError) as failure:
+        operate("counter", [("meter", raw)], {})
+    assert failure.value.code == "quantity_shape_mismatch"
