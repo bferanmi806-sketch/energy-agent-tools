@@ -13,10 +13,14 @@ import os
 import sqlite3
 import time
 from collections.abc import Iterable, Iterator
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import pandas as pd
+
+from .interval_chunk_bounds import interval_chunk_bounds, utc_microseconds
 from .models import EnergyError, EnergyResult, Json, Session
 
 _MAX_CHUNK_BYTES = 4 * 1024 * 1024
@@ -70,6 +74,22 @@ class PartitionedTimeseriesStore:
                 "row_count INTEGER NOT NULL, payload TEXT NOT NULL, bytes INTEGER NOT NULL, "
                 "PRIMARY KEY(dataset_id,chunk_index))"
             )
+            chunk_columns = {row[1] for row in db.execute("PRAGMA table_info(chunks)")}
+            for name, declaration in (
+                ("min_start_us", "INTEGER"),
+                ("max_end_us", "INTEGER"),
+                ("indexed_end_column", "TEXT"),
+            ):
+                if name not in chunk_columns:
+                    db.execute(f"ALTER TABLE chunks ADD COLUMN {name} {declaration}")
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS chunks_time_range "
+                "ON chunks(dataset_id,max_end_us,min_start_us)"
+            )
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS chunks_end_time_range "
+                "ON chunks(dataset_id,indexed_end_column,max_end_us,min_start_us)"
+            )
             columns = {row[1] for row in db.execute("PRAGMA table_info(datasets)")}
             if "created_at" not in columns:
                 db.execute("ALTER TABLE datasets ADD COLUMN created_at REAL NOT NULL DEFAULT 0")
@@ -117,6 +137,7 @@ class PartitionedTimeseriesStore:
         if metadata_bytes > self.max_bytes:
             raise EnergyError("timeseries_quota_exceeded", "Dataset exceeds its byte quota.")
 
+        index_timestamp, index_resolution = _time_index_spec(metadata)
         artifact_id = uuid4().hex
         db = self.connect()
         total_rows = 0
@@ -190,6 +211,8 @@ class PartitionedTimeseriesStore:
                         encoded_chunk_bytes,
                         total_bytes,
                         quota_remaining,
+                        timestamp_column=index_timestamp,
+                        resolution=index_resolution,
                     )
                     total_rows += len(encoded_rows)
                     chunk_index += 1
@@ -209,6 +232,8 @@ class PartitionedTimeseriesStore:
                     encoded_chunk_bytes,
                     total_bytes,
                     quota_remaining,
+                    timestamp_column=index_timestamp,
+                    resolution=index_resolution,
                 )
                 total_rows += len(encoded_rows)
 
@@ -235,13 +260,36 @@ class PartitionedTimeseriesStore:
         payload_bytes: int,
         current_bytes: int,
         quota_remaining: int,
+        *,
+        timestamp_column: str | None = None,
+        resolution: timedelta | None = None,
     ) -> int:
         payload = "[" + ",".join(encoded_rows) + "]"
         # JSON is emitted with ASCII escapes, so character length equals byte length.
         actual_bytes = len(payload.encode("utf-8"))
         if actual_bytes != payload_bytes or actual_bytes > _MAX_CHUNK_BYTES:
             raise EnergyError("invalid_timeseries_chunk", "Encoded chunk exceeds its byte bound.")
-        updated_bytes = current_bytes + actual_bytes
+        end_columns: set[str | None] = set()
+
+        def decoded_rows() -> Iterator[dict[str, Any]]:
+            for encoded in encoded_rows:
+                row = json.loads(encoded)
+                end_columns.add(
+                    next((name for name in ("interval_end", "to", "end") if name in row), None)
+                )
+                yield row
+
+        extent = (
+            interval_chunk_bounds(
+                decoded_rows(), timestamp_column=timestamp_column, resolution=resolution
+            )
+            if timestamp_column is not None
+            else None
+        )
+        indexed_end = next(iter(end_columns)) if extent and len(end_columns) == 1 else None
+        index_bytes = len(_encode_json([*extent, indexed_end]).encode("utf-8")) if extent else 0
+        charged_bytes = actual_bytes + index_bytes
+        updated_bytes = current_bytes + charged_bytes
         if updated_bytes > self.max_bytes:
             raise EnergyError("timeseries_quota_exceeded", "Dataset exceeds its byte quota.")
         if updated_bytes > quota_remaining:
@@ -249,9 +297,19 @@ class PartitionedTimeseriesStore:
                 "artifact_quota_exceeded", "Delete old artifacts or increase the operator quota."
             )
         db.execute(
-            "INSERT INTO chunks(dataset_id,chunk_index,first_row,row_count,payload,bytes) "
-            "VALUES (?,?,?,?,?,?)",
-            (artifact_id, chunk_index, first_row, len(encoded_rows), payload, actual_bytes),
+            "INSERT INTO chunks(dataset_id,chunk_index,first_row,row_count,payload,bytes,min_start_us,max_end_us,indexed_end_column) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                artifact_id,
+                chunk_index,
+                first_row,
+                len(encoded_rows),
+                payload,
+                charged_bytes,
+                extent[0] if extent else None,
+                extent[1] if extent else None,
+                indexed_end,
+            ),
         )
         return updated_bytes
 
@@ -370,6 +428,63 @@ class PartitionedTimeseriesStore:
         finally:
             db.close()
 
+    def iter_window_chunks(
+        self,
+        session: Session,
+        artifact_id: str,
+        *,
+        start: datetime,
+        end: datetime,
+        timestamp: str = "timestamp",
+        end_column: str | None = None,
+    ) -> Iterator[list[dict[str, Any]]]:
+        """Yield conservative window candidates, scanning uncertain chunks or mappings."""
+        if start.tzinfo is None or end.tzinfo is None:
+            raise EnergyError("invalid_timestamp", "Window timestamps require explicit offsets.")
+        if start >= end:
+            raise EnergyError("invalid_range", "Start must precede the exclusive end.")
+        db = self.connect()
+        try:
+            db.execute("BEGIN")
+            record = self._dataset_record(db, session, artifact_id)
+            if record is None:
+                raise _not_found()
+            metadata = EnergyResult.model_validate_json(record[0])
+            index_timestamp, _ = _time_index_spec(metadata)
+            if timestamp != index_timestamp:
+                cursor = db.execute(
+                    "SELECT payload FROM chunks WHERE dataset_id=? ORDER BY chunk_index",
+                    (artifact_id,),
+                )
+            else:
+                left, right = utc_microseconds(start), utc_microseconds(end)
+                parameters: tuple[Any, ...]
+                if end_column is None:
+                    query = (
+                        "SELECT chunk_index,payload FROM chunks WHERE dataset_id=? "
+                        "AND max_end_us>? AND min_start_us<? "
+                        "UNION ALL SELECT chunk_index,payload FROM chunks WHERE dataset_id=? "
+                        "AND (min_start_us IS NULL OR max_end_us IS NULL) ORDER BY chunk_index"
+                    )
+                    parameters = (artifact_id, left, right, artifact_id)
+                else:
+                    query = (
+                        "SELECT chunk_index,payload FROM chunks WHERE dataset_id=? "
+                        "AND indexed_end_column=? AND max_end_us>? AND min_start_us<? "
+                        "UNION ALL SELECT chunk_index,payload FROM chunks WHERE dataset_id=? "
+                        "AND (min_start_us IS NULL OR max_end_us IS NULL "
+                        "OR indexed_end_column IS NULL OR indexed_end_column!=?) ORDER BY chunk_index"
+                    )
+                    parameters = (artifact_id, end_column, left, right, artifact_id, end_column)
+                cursor = db.execute(query, parameters)
+                for _, payload in cursor:
+                    yield json.loads(payload)
+                return
+            for (payload,) in cursor:
+                yield json.loads(payload)
+        finally:
+            db.close()
+
     def delete(self, session: Session, artifact_id: str) -> None:
         """Delete an artifact only when both the user and session match."""
         db = self.connect()
@@ -393,6 +508,25 @@ class PartitionedTimeseriesStore:
             "SELECT metadata,total_rows FROM datasets WHERE id=? AND user_id=? AND session_id=? AND created_at>=?",
             (artifact_id, session.user_id, session.id, time.time() - self.retention_seconds),
         ).fetchone()
+
+
+def _time_index_spec(metadata: EnergyResult) -> tuple[str | None, timedelta | None]:
+    timestamp = (
+        metadata.provenance[0].get("timestamp_column", "timestamp")
+        if metadata.provenance
+        else "timestamp"
+    )
+    if not isinstance(timestamp, str) or not timestamp:
+        timestamp = None
+    resolution = None
+    if metadata.resolution:
+        try:
+            candidate = pd.Timedelta(metadata.resolution).to_pytimedelta()
+            if isinstance(candidate, timedelta) and candidate > timedelta(0):
+                resolution = candidate
+        except (ValueError, TypeError, OverflowError):
+            pass
+    return timestamp, resolution
 
 
 def _not_found() -> EnergyError:

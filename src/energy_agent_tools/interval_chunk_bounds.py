@@ -15,7 +15,8 @@ _MICROSECONDS_PER_SECOND = 1_000_000
 _STANDARD_END_COLUMNS = ("interval_end", "to", "end")
 
 
-def _utc_microseconds(value: datetime) -> int:
+def utc_microseconds(value: datetime) -> int:
+    """Encode an offset-aware timestamp without floating-point rounding."""
     delta = value - _EPOCH
     return (
         delta.days * _MICROSECONDS_PER_DAY
@@ -69,8 +70,8 @@ def interval_chunk_bounds(
             if end <= start:
                 return None
 
-            start_us = _utc_microseconds(start)
-            end_us = _utc_microseconds(end)
+            start_us = utc_microseconds(start)
+            end_us = utc_microseconds(end)
             minimum_start = start_us if minimum_start is None else min(minimum_start, start_us)
             maximum_end = end_us if maximum_end is None else max(maximum_end, end_us)
     except (EnergyError, OverflowError, TypeError, ValueError, AttributeError):

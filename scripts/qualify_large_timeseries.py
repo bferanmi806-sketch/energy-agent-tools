@@ -84,19 +84,58 @@ async def qualify(count: int) -> dict[str, Any]:
                 measured = summary["result"]["data"]
                 assert measured["count"] == count and measured["missing"] == 0
                 assert math.isclose(measured["sum"], expected, rel_tol=1e-12, abs_tol=1e-6)
+                decoded = {"chunks": 0, "rows": 0}
+                captured_queries = []
+                store = energy.agent.workbench.partitioned
+                original_iterator, original_connect = store.iter_window_chunks, store.connect
+
+                def tracked_iterator(*args, **kwargs):
+                    for chunk in original_iterator(*args, **kwargs):
+                        decoded["chunks"] += 1
+                        decoded["rows"] += len(chunk)
+                        yield chunk
+
+                def tracked_connect():
+                    connection = original_connect()
+                    connection.set_trace_callback(
+                        lambda query: (
+                            captured_queries.append(query)
+                            if query.startswith("SELECT chunk_index,payload FROM chunks")
+                            else None
+                        )
+                    )
+                    return connection
+
+                store.iter_window_chunks, store.connect = tracked_iterator, tracked_connect
                 before = time.monotonic()
-                window = await session.execute(
-                    "WORKBENCH_WINDOW",
-                    {
-                        "artifact_id": ref,
-                        "timestamp": "timestamp",
-                        "start": start.isoformat(),
-                        "end": (start + timedelta(days=1)).isoformat(),
-                    },
-                    input_artifacts=[ref],
-                    persist=True,
-                )
+                try:
+                    window = await session.execute(
+                        "WORKBENCH_WINDOW",
+                        {
+                            "artifact_id": ref,
+                            "timestamp": "timestamp",
+                            "start": start.isoformat(),
+                            "end": (start + timedelta(days=1)).isoformat(),
+                        },
+                        input_artifacts=[ref],
+                        persist=True,
+                    )
+                finally:
+                    store.iter_window_chunks, store.connect = original_iterator, original_connect
                 durations["day_window_seconds"] = time.monotonic() - before
+                assert decoded["chunks"] <= 3 and decoded["rows"] <= 3000, decoded
+                assert len(captured_queries) == 1, captured_queries
+                connection = original_connect()
+                try:
+                    query_plan = [
+                        row[3]
+                        for row in connection.execute("EXPLAIN QUERY PLAN " + captured_queries[0])
+                    ]
+                finally:
+                    connection.close()
+                assert any(
+                    "chunks_time_range" in row and "max_end_us" in row for row in query_plan
+                ), query_plan
                 assert window["ok"], window
                 selected = energy.agent.workbench.read(
                     session.context, window["result"]["data"]["artifact_id"]
@@ -120,6 +159,12 @@ async def qualify(count: int) -> dict[str, Any]:
                 )
                 assert final_page["total_rows"] == count
                 assert final_page["rows"][0]["value"] == str((count - 1) % 13)
+                restored_chunks = list(
+                    restored.partitioned.iter_window_chunks(
+                        session.context, ref, start=start, end=start + timedelta(days=1)
+                    )
+                )
+                assert sum(len(chunk) for chunk in restored_chunks) <= 3000
                 _, peak = tracemalloc.get_traced_memory()
                 assert peak < 32 * 1024 * 1024, peak
             finally:
@@ -140,6 +185,9 @@ async def qualify(count: int) -> dict[str, Any]:
                 "summary": measured,
                 "independent_expected_kwh": expected,
                 "window_rows": len(selected.data),
+                "window_candidates_decoded": decoded,
+                "actual_window_query_plan": query_plan,
+                "restored_window_candidate_rows": sum(len(chunk) for chunk in restored_chunks),
                 "inline_page_rows": page["result"]["data"]["returned_rows"],
                 "peak_traced_python_bytes": peak,
                 "timings": durations,
@@ -147,7 +195,7 @@ async def qualify(count: int) -> dict[str, Any]:
                 "foreign_scope": foreign["error"]["code"],
                 "limits": [
                     "Python allocations are traced; this is not an RSS or native SQLite memory measurement.",
-                    "Temporal window selection scans chunks; it is not indexed by timestamp.",
+                    "Temporal selection uses conservative chunk indexes for compatible mappings; uncertain or mismatched chunks still scan.",
                     "Bulk writes share SQLite's single writer; this is not a concurrent load or sustained soak qualification.",
                     "Meter semantics are synthetic declarations; no physical installation was read.",
                 ],

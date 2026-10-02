@@ -333,7 +333,14 @@ async def select_dataset_window(args: Json, ctx: ExecutionContext) -> EnergyResu
 
     def select() -> EnergyResult:
         rows: list[dict[str, Any]] = []
-        for chunk in ctx.workbench.partitioned.iter_chunks(ctx.session, dataset_id):
+        for chunk in ctx.workbench.partitioned.iter_window_chunks(
+            ctx.session,
+            dataset_id,
+            start=left,
+            end=right,
+            timestamp=timestamp,
+            end_column=end_column,
+        ):
             for row in chunk:
                 if timestamp not in row:
                     raise EnergyError("column_not_found", "Timestamp column is missing.")

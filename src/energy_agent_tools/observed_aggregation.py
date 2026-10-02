@@ -42,8 +42,13 @@ def register(registry: Registry) -> None:
                 isinstance(source.data, dict)
                 and source.data.get("storage") == "partitioned-timeseries.v1"
             ):
-                chunks = ctx.workbench.partitioned.iter_chunks(
-                    ctx.session, source.data["dataset_id"]
+                chunks = ctx.workbench.partitioned.iter_window_chunks(
+                    ctx.session,
+                    source.data["dataset_id"],
+                    start=left,
+                    end=right,
+                    timestamp=timestamp,
+                    end_column=end_column,
                 )
                 rows = (row for chunk in chunks for row in chunk)
             elif isinstance(source.data, list):
