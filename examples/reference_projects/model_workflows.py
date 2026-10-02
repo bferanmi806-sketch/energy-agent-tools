@@ -618,8 +618,11 @@ async def run_report() -> dict[str, Any]:
                     "failure": grid_failure,
                     "failure_code": _failure_code(grid_failure),
                     "limitations": [
-                        "This workflow exposes the two source outputs as evidence only; it produces no combined grid metric.",
-                        "Grid averages do not represent marginal emissions or a particular site's conditions.",
+                        "The generation and carbon inputs are national averages, not a particular "
+                        "site's conditions.",
+                        "Carbon intensity does not represent marginal emissions.",
+                        "This comparison does not assess local grid stability or derive operating "
+                        "limits.",
                     ],
                 },
                 {

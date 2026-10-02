@@ -157,15 +157,57 @@ def test_six_offline_model_workflows_have_source_evidence_and_real_failures() ->
     )
     assert [float(row["value"]) for row in generation["rows_data"]] == [31000, 32500, 31800]
     assert [float(row["value"]) for row in carbon["rows_data"]] == [250, 100, 40]
-    # The workflow labels its final fetched source as analysis evidence; it is
-    # still that carbon source artifact and does not combine grid values.
-    labeled_output = next(
-        item["analysis"] for item in grid["success"]["evidence"] if "analysis" in item
-    )
-    assert labeled_output["result"]["data"]["artifact_id"] == carbon["artifact_id"]
-    assert labeled_output["result"]["unit"] == "gCO2/kWh"
+    combined = _model_result(grid)
+    assert combined["kind"] == "calculated"
+    assert combined["source"] == "workbench"
+    assert combined["unit"] == "mixed"
+    assert combined["field_units"] == {
+        "generation_mw": "MW",
+        "carbon_intensity_g_per_kwh": "gCO2/kWh",
+    }
+    combined_data = combined["data"]
+    intervals = combined_data["intervals"]
+    assert [row["generation_mw"] for row in intervals] == [31000, 32500, 31800]
+    assert [row["carbon_intensity_g_per_kwh"] for row in intervals] == [250, 100, 40]
+    assert [row["timestamp"] for row in intervals] == [
+        "2026-06-21T10:00:00+00:00",
+        "2026-06-21T11:00:00+00:00",
+        "2026-06-21T12:00:00+00:00",
+    ]
+    summary = combined_data["summary"]
+    assert summary["generation_mw"] == {
+        "min": 31000,
+        "max": 32500,
+        "mean": 31766.666666666668,
+    }
+    assert summary["carbon_intensity_g_per_kwh"] == {
+        "min": 40,
+        "max": 250,
+        "mean": 130,
+    }
+    assert summary["peak_generation_interval"]["timestamp"] == intervals[1]["timestamp"]
+    assert summary["lowest_carbon_interval"]["timestamp"] == intervals[2]["timestamp"]
+    assert summary["lower_carbon_intervals"] == [
+        intervals[2]["timestamp"],
+        intervals[1]["timestamp"],
+        intervals[0]["timestamp"],
+    ]
+    coverage = combined_data["coverage"]
+    assert coverage["aligned_timestamp_count"] == 3
+    assert coverage["timestamps_match_exactly"] is True
+    assert coverage["horizon_claimed"] is False
+    lineage = combined["provenance"][0]["inputs"]
+    assert [item["artifact_id"] for item in lineage] == [
+        generation["artifact_id"],
+        carbon["artifact_id"],
+    ]
     assert grid["failure_code"] == "file_forbidden"
-    assert any("produces no combined grid metric" in item for item in grid["limitations"])
+    assert any("national averages" in item for item in grid["limitations"])
+    assert any("marginal emissions" in item for item in grid["limitations"])
+    assert any(
+        "grid stability" in item and "operating limits" in item
+        for item in grid["limitations"]
+    )
 
     power_flow = _recipe(report, "power-flow")
     flow = power_flow["model_result"]
