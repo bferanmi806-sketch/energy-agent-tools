@@ -5,11 +5,6 @@ frozen natural-language and scoring contracts.  This module supplies the
 small set whose inputs can be exposed as reviewed site assets and executed by
 the production :class:`~energy_agent_tools.runtime.EnergyAgent` runtime.
 
-Two nearby scenarios remain intentionally unavailable.  The current PyPSA
-adapter is a power-flow solver, not a dispatch optimizer, and the durable job
-API has no PyPSA operation with an enforceable per-job timeout.  Raising
-``EnvironmentUnavailable`` for those cases keeps the benchmark honest until
-the corresponding contracts exist.
 """
 
 from __future__ import annotations
@@ -47,29 +42,22 @@ SCENARIO_CLOCKS: dict[str, datetime] = {
     "dev_network_asset_scope": _SCENARIO_CLOCK,
 }
 
-# These four cases have a complete source -> production execution -> evidence
-# path.  The two excluded cases are documented below and fail closed in the
-# builder instead of being represented by a weaker substitute.
+# Each listed case has a complete source -> production execution -> evidence
+# path.  The two formerly excluded PyPSA cases now use their native adapters.
 QUALIFIED_ENGINEERING_CASE_IDS: frozenset[str] = frozenset(
     {
         "dev_power_flow_two_bus",
+        "dev_pypsa_capacity_constraint",
         "dev_heat_loss",
+        "dev_bounded_simulation",
         "dev_optimization_advisory",
         "dev_network_asset_scope",
     }
 )
 
-ENGINEERING_CASE_EXCLUSIONS: dict[str, str] = {
-    "dev_pypsa_capacity_constraint": (
-        "excluded: the production PyPSA adapter solves steady-state AC power flow; "
-        "it does not optimize dispatch or compare capacity-constrained dispatch "
-        "as required by this prompt"
-    ),
-    "dev_bounded_simulation": (
-        "excluded: the production job API exposes pandapower power_flow only and "
-        "has no PyPSA network operation with an enforceable 30-second timeout"
-    ),
-}
+# Kept as an explicit contract for the harness; all six engineering cases now
+# have independently qualified production execution paths.
+ENGINEERING_CASE_EXCLUSIONS: dict[str, str] = {}
 
 
 def _case_index() -> dict[str, ScenarioCase]:
@@ -166,6 +154,41 @@ def _pypsa_args(line_capacity_mva: float, *, line_id: str) -> dict[str, Any]:
     }
 
 
+def _dispatch_args(line_capacity_mva: float) -> dict[str, Any]:
+    return {
+        "network": {
+            "buses": [
+                {"id": "remote", "v_nom_kv": 11.0},
+                {"id": "load", "v_nom_kv": 11.0},
+            ],
+            "lines": [
+                {
+                    "id": "feeder",
+                    "from_bus": "remote",
+                    "to_bus": "load",
+                    "x_ohm": 0.4,
+                    "s_nom_mva": line_capacity_mva,
+                }
+            ],
+            "loads": [{"id": "demand", "bus": "load", "p_mw": 2.0}],
+            "generators": [
+                {
+                    "id": "remote-cheap",
+                    "bus": "remote",
+                    "p_nom_mw": 10.0,
+                    "marginal_cost": 10.0,
+                },
+                {
+                    "id": "local-dear",
+                    "bus": "load",
+                    "p_nom_mw": 10.0,
+                    "marginal_cost": 50.0,
+                },
+            ],
+        }
+    }
+
+
 def _heat_loss_args() -> dict[str, Any]:
     # Independent truth: UA = 500 W/K and delta-T = 24 K, so gross loss is
     # exactly 12 kW.  Every input is visible in the asset metadata and passed
@@ -245,20 +268,22 @@ def _engineering_asset(
     model_tool: str,
     arguments: dict[str, Any],
     assumptions: list[str],
+    execution: dict[str, Any] | None = None,
 ) -> Asset:
+    metadata: dict[str, Any] = {
+        "tool": model_tool,
+        "arguments": arguments,
+        "assumptions": assumptions,
+        "control_mode": "simulation-only",
+    }
+    if execution is not None:
+        metadata["execution"] = execution
     return Asset(
         id=asset_id,
         site_id=site_id,
         kind="engineering-model",
         name=name,
-        metadata={
-            "engineering": {
-                "tool": model_tool,
-                "arguments": arguments,
-                "assumptions": assumptions,
-                "control_mode": "simulation-only",
-            }
-        },
+        metadata={"engineering": metadata},
     )
 
 
@@ -391,6 +416,68 @@ def _build_components(
                 )
             )
         return assets, bindings
+
+    if case.id == "dev_pypsa_capacity_constraint":
+        assets: list[Asset] = []
+        bindings: list[CapabilityBinding] = []
+        for capacity in (1.0, 2.0):
+            asset_id = f"dublin-home-capacity-{int(capacity)}mw"
+            arguments = _dispatch_args(capacity)
+            assets.append(
+                _engineering_asset(
+                    asset_id=asset_id,
+                    site_id=context.site_id,
+                    name=f"Dublin home {capacity:g} MW PyPSA dispatch model",
+                    model_tool="pypsa.optimize_dispatch",
+                    arguments=arguments,
+                    assumptions=[
+                        "one fixed snapshot represents a one-hour operating interval",
+                        "PyPSA linear lossless economic dispatch uses the declared line capacity",
+                        "no physical line is changed; capacity is a model input",
+                    ],
+                )
+            )
+            bindings.append(
+                _binding(
+                    capability="run_network_optimization",
+                    tool="pypsa.optimize_dispatch",
+                    asset_id=asset_id,
+                    arguments=arguments,
+                    kind=DataKind.SIMULATED,
+                    unit="MW, caller currency/hour",
+                )
+            )
+        return assets, bindings
+
+    if case.id == "dev_bounded_simulation":
+        asset_id = "cape-town-house-bounded-network"
+        arguments = _pypsa_args(2.0, line_id="cape-town-feeder")
+        asset = _engineering_asset(
+            asset_id=asset_id,
+            site_id=context.site_id,
+            name="Cape Town bounded PyPSA network model",
+            model_tool="pypsa.power_flow",
+            arguments=arguments,
+            assumptions=[
+                "read-only PyPSA AC power flow in an isolated numerical worker",
+                "network schema permits at most 100 buses",
+                "the durable job manager enforces a 30-second worker timeout",
+            ],
+            execution={
+                "job_operation": "network_power_flow",
+                "timeout_seconds": 30,
+                "schema_max_buses": 100,
+            },
+        )
+        binding = _binding(
+            capability="run_power_flow",
+            tool="pypsa.power_flow",
+            asset_id=asset_id,
+            arguments=arguments,
+            kind=DataKind.SIMULATED,
+            unit="MW, Mvar, pu, degree",
+        )
+        return [asset], [binding]
 
     raise EnvironmentUnavailable(f"Scenario {case.id!r} is not an engineering environment.")
 
