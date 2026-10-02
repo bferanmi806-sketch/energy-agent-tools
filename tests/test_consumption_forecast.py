@@ -135,9 +135,75 @@ def test_forecasts_eight_days_from_ninety_days_of_exact_weekly_history() -> None
     assert result.data["model"]["heldout_rows"] == 14 * 96
     assert result.provenance[0]["inputs"][0]["artifact_id"] == "history-1"
     assert result.provenance[0]["inputs"][0]["kind"] == "metered"
+    assert result.data["model"]["selection_rows"] == 7 * 96
+    assert result.data["model"]["calibration_rows"] == 7 * 96
+    assert result.data["model"]["final_training_start"] == result.data["model"][
+        "evaluation_training_start"
+    ]
+    assert result.data["model"]["final_training_end"] > result.data["model"][
+        "evaluation_training_end"
+    ]
     assert all(row["value"] == pytest.approx(_weekly_value(
         datetime.fromisoformat(row["timestamp"]).astimezone(UTC)
     )) for row in intervals)
+
+
+def test_accepts_three_calendar_months_that_are_under_ninety_days() -> None:
+    start = datetime(2025, 2, 1, tzinfo=UTC)
+    history = _history(start=start, days=89)
+    forecast_start = start + timedelta(days=89)
+    parameters = {
+        "timezone": _ZONE,
+        "interval_minutes": 15,
+        "start": forecast_start.isoformat(),
+        "end": (forecast_start + timedelta(days=8)).isoformat(),
+    }
+
+    result = _forecast(history, parameters)
+
+    assert len(result.data["intervals"]) == 8 * 96
+    assert result.data["model"]["selection_rows"] == 7 * 96
+    assert result.data["model"]["calibration_rows"] == 7 * 96
+
+
+def test_forecasts_eight_local_days_of_thirty_minute_energy() -> None:
+    start = datetime(2025, 7, 1, tzinfo=UTC)
+    history_end = datetime(2025, 10, 1, tzinfo=UTC)
+    interval = timedelta(minutes=30)
+    rows = [
+        {
+            "timestamp": (start + index * interval).isoformat(),
+            "end": (start + (index + 1) * interval).isoformat(),
+            "value": 0.5,
+        }
+        for index in range(92 * 48)
+    ]
+    history = EnergyResult(
+        data=rows,
+        kind=DataKind.METERED,
+        unit="kWh",
+        source="synthetic-half-hour-meter",
+        timezone=_ZONE,
+        resolution="30min",
+        site_id="site-1",
+        asset_id="meter-1",
+        time_start=start,
+        time_end=history_end,
+        quantity_shape="interval",
+    )
+
+    result = _forecast(
+        history,
+        {
+            "timezone": _ZONE,
+            "interval_minutes": 30,
+            "start": history_end.isoformat(),
+            "end": (history_end + timedelta(days=8)).isoformat(),
+        },
+    )
+
+    assert len(result.data["intervals"]) == 8 * 48
+    assert result.data["summary"]["total_kwh"] == pytest.approx(192.0)
 
 
 def test_temperature_candidate_must_win_holdout_and_future_context_does_not_leak() -> None:
@@ -178,6 +244,49 @@ def test_temperature_candidate_must_win_holdout_and_future_context_does_not_leak
     ]
 
 
+def test_calibration_rows_do_not_change_selection_and_final_refit_uses_all_history() -> None:
+    history = _history(temperature_effect=True, noisy=True)
+    original_rows = history.data
+    assert isinstance(original_rows, list)
+    changed_rows = [dict(row) for row in original_rows]
+    for index in range(len(changed_rows) - 7 * 96, len(changed_rows)):
+        changed_rows[index]["value"] = float(changed_rows[index]["value"]) + 0.6
+    changed_history = history.model_copy(update={"data": changed_rows})
+    historical_context = _history_context(history)
+    start = datetime.fromisoformat(_PARAMETERS["start"]).astimezone(UTC)
+    future_context = _future_context(start, 8 * 96)
+
+    original = forecast(
+        ("history-1", history),
+        dict(_PARAMETERS),
+        historical_context=("weather-history", historical_context),
+        future_context=("weather-forecast", future_context),
+    )
+    changed = forecast(
+        ("history-1", changed_history),
+        dict(_PARAMETERS),
+        historical_context=("weather-history", historical_context),
+        future_context=("weather-forecast", future_context),
+    )
+    original_model = original.data["model"]
+    changed_model = changed.data["model"]
+
+    assert original_model["method"] == changed_model["method"]
+    assert original_model["method"] == "temperature_adjusted_weekly_profile"
+    assert original_model["selection_rows"] == 7 * 96
+    assert original_model["calibration_rows"] == 7 * 96
+    assert original_model["metrics"]["selection_mae_kwh"] == pytest.approx(
+        changed_model["metrics"]["selection_mae_kwh"]
+    )
+    assert original_model["metrics"]["temperature_candidate_selection_mae_kwh"] == pytest.approx(
+        changed_model["metrics"]["temperature_candidate_selection_mae_kwh"]
+    )
+    assert original_model["final_training_end"] == changed_model["final_training_end"]
+    assert original.data["intervals"][0]["value"] != pytest.approx(
+        changed.data["intervals"][0]["value"]
+    )
+
+
 def test_holdout_residual_bands_are_ordered_and_nonzero_for_noisy_history() -> None:
     result = _forecast(_history(noisy=True))
 
@@ -185,7 +294,9 @@ def test_holdout_residual_bands_are_ordered_and_nonzero_for_noisy_history() -> N
         assert 0 <= row["lower"] <= row["value"] <= row["upper"]
     assert any(row["lower"] < row["value"] for row in result.data["intervals"])
     assert result.data["model"]["nominal_interval_coverage"] == pytest.approx(0.9)
-    assert result.data["model"]["band_method"] == "symmetric empirical absolute heldout errors"
+    assert result.data["model"]["band_method"].startswith(
+        "symmetric empirical absolute errors from the independent final 7-day"
+    )
     assert "not guaranteed" in " ".join(result.assumptions)
     assert "complete forecast horizon" in " ".join(result.assumptions)
 
@@ -244,7 +355,7 @@ def test_refuses_short_history_gap_wrong_shape_power_and_negative_energy() -> No
             "time_end": datetime.fromisoformat(rows[14 * 96 - 1]["end"]),
         }
     )
-    with pytest.raises(EnergyError, match="90 days"):
+    with pytest.raises(EnergyError, match="70 days"):
         _forecast(short)
 
     missing = rows[:]
@@ -304,3 +415,76 @@ def test_refuses_incomplete_or_mismatched_temperature_context() -> None:
             historical_context=("historical-weather", history_context),
             future_context=("future-weather", bad_future),
         )
+
+
+def test_weather_context_may_use_a_different_asset_at_the_same_site() -> None:
+    history = _history(temperature_effect=True, noisy=True)
+    historical_weather = _history_context(history).model_copy(update={"asset_id": "weather-1"})
+    start = datetime.fromisoformat(_PARAMETERS["start"]).astimezone(UTC)
+    future_weather = _future_context(start, 8 * 96).model_copy(update={"asset_id": "weather-1"})
+
+    result = forecast(
+        ("history-1", history),
+        dict(_PARAMETERS),
+        historical_context=("historical-weather", historical_weather),
+        future_context=("future-weather", future_weather),
+    )
+
+    assert result.data["model"]["context_used"] is True
+    assert result.provenance[0]["inputs"][1]["asset_id"] == "weather-1"
+    assert result.provenance[0]["inputs"][2]["asset_id"] == "weather-1"
+
+    foreign_site = historical_weather.model_copy(update={"site_id": "site-2"})
+    with pytest.raises(EnergyError, match="different site"):
+        forecast(
+            ("history-1", history),
+            dict(_PARAMETERS),
+            historical_context=("historical-weather", foreign_site),
+            future_context=("future-weather", future_weather),
+        )
+
+
+def test_rejects_numeric_overflow_in_conversion_context_model_and_summary() -> None:
+    history = _history()
+    rows = history.data
+    assert isinstance(rows, list)
+    mwh_rows = [dict(row, value=1e308) for row in rows]
+    mwh_history = history.model_copy(update={"data": mwh_rows, "unit": "MWh"})
+    with pytest.raises(EnergyError, match="overflow"):
+        _forecast(mwh_history)
+
+    profile_rows = [dict(row, value=1e308) for row in rows]
+    profile_overflow = history.model_copy(update={"data": profile_rows})
+    with pytest.raises(EnergyError, match="overflow"):
+        _forecast(profile_overflow)
+
+    temperature_history = _history(temperature_effect=True, noisy=True)
+    extreme_context = _history_context(temperature_history)
+    weather_rows = extreme_context.data
+    assert isinstance(weather_rows, list)
+    extreme_values = [
+        dict(row, value=1e308 if (index // 96) % 2 else -1e308)
+        for index, row in enumerate(weather_rows)
+    ]
+    extreme_context = extreme_context.model_copy(update={"data": extreme_values})
+    start = datetime.fromisoformat(_PARAMETERS["start"]).astimezone(UTC)
+    with pytest.raises(EnergyError, match="overflow"):
+        forecast(
+            ("history-1", temperature_history),
+            dict(_PARAMETERS),
+            historical_context=("extreme-weather-history", extreme_context),
+            future_context=("future-weather", _future_context(start, 8 * 96)),
+        )
+
+    huge_rows = [dict(row, value=1e305) for row in rows]
+    huge_history = history.model_copy(update={"data": huge_rows})
+    forecast_start = history.time_end
+    assert forecast_start is not None
+    huge_horizon = {
+        "timezone": _ZONE,
+        "interval_minutes": 15,
+        "start": forecast_start.isoformat(),
+        "end": (forecast_start + timedelta(days=31)).isoformat(),
+    }
+    with pytest.raises(EnergyError, match="overflow"):
+        _forecast(huge_history, huge_horizon)

@@ -14,8 +14,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .models import DataKind, EnergyError, EnergyResult, Json
 
 _WEEK = timedelta(days=7)
-_MIN_HISTORY = timedelta(days=90)
+_MIN_HISTORY = timedelta(days=70)
 _HOLDOUT = timedelta(days=14)
+_SELECTION = timedelta(days=7)
+_CALIBRATION = timedelta(days=7)
 _MAX_HISTORY_ROWS = 100_000
 _MAX_FORECAST_ROWS = 10_000
 _MAX_HORIZON = timedelta(days=31)
@@ -45,11 +47,11 @@ def forecast(
     historical_context: tuple[str, EnergyResult] | None = None,
     future_context: tuple[str, EnergyResult] | None = None,
 ) -> EnergyResult:
-    """Forecast interval energy using a weekly calendar profile and optional temperature.
+    """Forecast interval energy using a weekly profile and optional temperature.
 
-    The final fourteen days are a chronological validation and calibration set. No
-    future context enters training: it is only applied after a temperature model
-    earns its place by improving that held-out period.
+    The final fourteen days are divided chronologically: the first seven select
+    the model and the last seven calibrate its error bands. The selected model is
+    then refit on all history before it produces the requested forecast.
     """
 
     if not isinstance(parameters, dict):
@@ -126,36 +128,52 @@ def forecast(
         )
     if rows[-1][1] - rows[0][0] < _MIN_HISTORY:
         raise EnergyError(
-            "insufficient_history", "At least 90 days of contiguous metered history are required."
+            "insufficient_history", "At least 70 days of contiguous metered history are required."
         )
 
     holdout_rows = int(_HOLDOUT.total_seconds() // seconds)
+    selection_rows_count = int(_SELECTION.total_seconds() // seconds)
+    calibration_rows_count = int(_CALIBRATION.total_seconds() // seconds)
     if len(rows) <= holdout_rows:
         raise EnergyError("insufficient_history", "History is too short for chronological holdout.")
-    training_rows = rows[:-holdout_rows]
-    validation_rows = rows[-holdout_rows:]
-    if training_rows[-1][1] - training_rows[0][0] < 8 * _WEEK:
+    evaluation_training_rows = rows[:-holdout_rows]
+    selection_rows = rows[-holdout_rows:-calibration_rows_count]
+    calibration_rows = rows[-calibration_rows_count:]
+    if (
+        len(selection_rows) != selection_rows_count
+        or len(calibration_rows) != calibration_rows_count
+    ):
+        raise EnergyError("insufficient_history", "Could not form complete weekly evaluation windows.")
+    if evaluation_training_rows[-1][1] - evaluation_training_rows[0][0] < 8 * _WEEK:
         raise EnergyError(
             "insufficient_history", "At least eight complete weekly cycles are needed for training."
         )
 
-    profile = _calendar_profile(training_rows, zone, interval_minutes)
-    training_values = [value for _, _, value in training_rows]
-    validation_values = [value for _, _, value in validation_rows]
-    baseline_validation = [
-        _profile_value(profile, start_time, zone, interval_minutes)
-        for start_time, _, _ in validation_rows
+    evaluation_profile = _calendar_profile(evaluation_training_rows, zone, interval_minutes)
+    evaluation_training_values = [value for _, _, value in evaluation_training_rows]
+    selection_values = [value for _, _, value in selection_rows]
+    calibration_values = [value for _, _, value in calibration_rows]
+    baseline_selection = [
+        _profile_value(evaluation_profile, interval_start, zone, interval_minutes)
+        for interval_start, _, _ in selection_rows
     ]
-    baseline_mae = _mae(validation_values, baseline_validation)
+    baseline_calibration = [
+        _profile_value(evaluation_profile, interval_start, zone, interval_minutes)
+        for interval_start, _, _ in calibration_rows
+    ]
+    baseline_selection_mae = _mae(selection_values, baseline_selection)
 
     context_inputs: list[tuple[str, EnergyResult]] = []
     model_context: dict[str, Any] = {"evaluated": False}
-    temperature_beta = 0.0
     selected_method = "weekly_calendar_profile"
-    validation_predictions = baseline_validation
+    selection_predictions = baseline_selection
+    calibration_predictions = baseline_calibration
     historical_temperatures: list[float] | None = None
     future_temperatures: list[float] | None = None
-    temperature_mae: float | None = None
+    candidate_selection: list[float] | None = None
+    candidate_calibration: list[float] | None = None
+    candidate_selection_mae: float | None = None
+    candidate_calibration_mae: float | None = None
 
     if historical_context is not None and future_context is not None:
         _validate_artifact(historical_context, "historical context")
@@ -199,87 +217,91 @@ def forecast(
             "future_kind": future_context[1].kind.value,
             "units": historical_context[1].unit,
             "feature": "temperature_celsius",
-            "selection": "evaluated_on_chronological_holdout",
+            "selection": "evaluated_on_first_chronological_7_day_window",
         }
 
-        train_temperatures = historical_temperatures[:-holdout_rows]
-        validation_temperatures = historical_temperatures[-holdout_rows:]
-        slot_temperatures: dict[int, list[float]] = defaultdict(list)
-        for (interval_start, _, _), temperature in zip(
-            training_rows, train_temperatures, strict=True
-        ):
-            slot_temperatures[_calendar_key(interval_start, zone, interval_minutes)].append(
-                temperature
-            )
-        slot_temperature_means = {
-            key: mean(values) for key, values in slot_temperatures.items()
-        }
-        residuals = [actual - baseline for actual, baseline in zip(
-            training_values, _profile_predictions(profile, training_rows, zone, interval_minutes), strict=True
-        )]
-        centered_temperature = [
-            value
-            - slot_temperature_means[
-                _calendar_key(row[0], zone, interval_minutes)
-            ]
-            for row, value in zip(training_rows, train_temperatures, strict=True)
-        ]
-        denominator = sum(value * value for value in centered_temperature)
-        if denominator > 1e-12:
-            temperature_beta = sum(
-                x * residual for x, residual in zip(centered_temperature, residuals, strict=True)
-            ) / denominator
-        candidate_validation = [
-            max(
-                0.0,
-                baseline
-                + temperature_beta
-                * (
-                    temperature
-                    - slot_temperature_means[
-                        _calendar_key(row[0], zone, interval_minutes)
-                    ]
-                ),
-            )
-            for row, baseline, temperature in zip(
-                validation_rows,
-                baseline_validation,
-                validation_temperatures,
-                strict=True,
-            )
-        ]
-        temperature_mae = _mae(validation_values, candidate_validation)
-        improvement = baseline_mae - temperature_mae
-        if improvement > max(1e-9, baseline_mae * 0.02):
+        evaluation_training_temperatures = historical_temperatures[:-holdout_rows]
+        selection_temperatures = historical_temperatures[-holdout_rows:-calibration_rows_count]
+        calibration_temperatures = historical_temperatures[-calibration_rows_count:]
+        evaluation_beta, evaluation_slot_temperature_means = _fit_temperature_adjustment(
+            evaluation_training_rows,
+            evaluation_training_values,
+            evaluation_training_temperatures,
+            evaluation_profile,
+            zone,
+            interval_minutes,
+        )
+        candidate_selection = _temperature_predictions(
+            selection_rows,
+            baseline_selection,
+            selection_temperatures,
+            evaluation_beta,
+            evaluation_slot_temperature_means,
+            zone,
+            interval_minutes,
+        )
+        candidate_calibration = _temperature_predictions(
+            calibration_rows,
+            baseline_calibration,
+            calibration_temperatures,
+            evaluation_beta,
+            evaluation_slot_temperature_means,
+            zone,
+            interval_minutes,
+        )
+        candidate_selection_mae = _mae(selection_values, candidate_selection)
+        candidate_calibration_mae = _mae(calibration_values, candidate_calibration)
+        improvement = baseline_selection_mae - candidate_selection_mae
+        if improvement > max(1e-9, baseline_selection_mae * 0.02):
             selected_method = "temperature_adjusted_weekly_profile"
-            validation_predictions = candidate_validation
+            selection_predictions = candidate_selection
+            calibration_predictions = candidate_calibration
             model_context["applied_to_forecast"] = True
-        else:
-            temperature_beta = 0.0
-
-    validation_errors = [
-        actual - prediction
-        for actual, prediction in zip(validation_values, validation_predictions, strict=True)
+    calibration_errors = [
+        _finite(actual - prediction, "calibration residual")
+        for actual, prediction in zip(calibration_values, calibration_predictions, strict=True)
     ]
-    band_width = _quantile([abs(error) for error in validation_errors], coverage)
+    band_width = _quantile([abs(error) for error in calibration_errors], coverage)
+
+    final_profile = _calendar_profile(rows, zone, interval_minutes)
+    final_temperature_beta = 0.0
+    final_slot_temperature_means: dict[int, float] = {}
+    if selected_method == "temperature_adjusted_weekly_profile":
+        assert historical_temperatures is not None
+        final_temperature_beta, final_slot_temperature_means = _fit_temperature_adjustment(
+            rows,
+            [value for _, _, value in rows],
+            historical_temperatures,
+            final_profile,
+            zone,
+            interval_minutes,
+        )
+
     future_intervals = _future_intervals(start, forecast_count, interval)
     output: list[Json] = []
     for index, (interval_start, interval_end, _) in enumerate(future_intervals):
-        point = _profile_value(profile, interval_start, zone, interval_minutes)
+        point = _profile_value(final_profile, interval_start, zone, interval_minutes)
         if selected_method == "temperature_adjusted_weekly_profile":
             assert future_temperatures is not None
             key = _calendar_key(interval_start, zone, interval_minutes)
-            point += temperature_beta * (
-                future_temperatures[index] - slot_temperature_means[key]
+            temperature_delta = _finite(
+                future_temperatures[index] - final_slot_temperature_means[key],
+                "forecast temperature deviation",
             )
-        point = max(0.0, point)
+            temperature_effect = _finite(
+                final_temperature_beta * temperature_delta, "forecast temperature adjustment"
+            )
+            point = _finite(point + temperature_effect, "forecast interval value")
+        point = max(0.0, _finite(point, "forecast interval value"))
+        lower = max(0.0, _finite(point - band_width, "forecast lower band"))
+        upper = _finite(point + band_width, "forecast upper band")
         output.append(
             {
                 "timestamp": interval_start.astimezone(zone).isoformat(),
                 "end": interval_end.astimezone(zone).isoformat(),
                 "value": point,
-                "lower": max(0.0, point - band_width),
-                "upper": point + band_width,
+                "lower": lower,
+                "upper": upper,
             }
         )
 
@@ -308,26 +330,62 @@ def forecast(
             ],
         }
     ]
-    total = sum(float(row["value"]) for row in output)
+    total = _finite(sum(float(row["value"]) for row in output), "forecast total")
+    heldout_actuals = selection_values + calibration_values
+    heldout_baseline = baseline_selection + baseline_calibration
+    heldout_selected = selection_predictions + calibration_predictions
+    heldout_candidate = (
+        None
+        if candidate_selection is None or candidate_calibration is None
+        else candidate_selection + candidate_calibration
+    )
+    combined_candidate_mae = (
+        None if heldout_candidate is None else _mae(heldout_actuals, heldout_candidate)
+    )
     model: Json = {
         "method": selected_method,
-        "training_start": training_rows[0][0].isoformat(),
-        "training_end": training_rows[-1][1].isoformat(),
-        "heldout_start": validation_rows[0][0].isoformat(),
-        "heldout_end": validation_rows[-1][1].isoformat(),
-        "heldout_rows": len(validation_rows),
+        "training_start": evaluation_training_rows[0][0].isoformat(),
+        "training_end": evaluation_training_rows[-1][1].isoformat(),
+        "evaluation_training_rows": len(evaluation_training_rows),
+        "evaluation_training_start": evaluation_training_rows[0][0].isoformat(),
+        "evaluation_training_end": evaluation_training_rows[-1][1].isoformat(),
+        "final_training_rows": len(rows),
+        "final_training_start": rows[0][0].isoformat(),
+        "final_training_end": rows[-1][1].isoformat(),
+        "heldout_start": selection_rows[0][0].isoformat(),
+        "heldout_end": calibration_rows[-1][1].isoformat(),
+        "heldout_rows": len(selection_rows) + len(calibration_rows),
+        "selection_start": selection_rows[0][0].isoformat(),
+        "selection_end": selection_rows[-1][1].isoformat(),
+        "selection_rows": len(selection_rows),
+        "calibration_start": calibration_rows[0][0].isoformat(),
+        "calibration_end": calibration_rows[-1][1].isoformat(),
+        "calibration_rows": len(calibration_rows),
+        "final_model_refit": "all_metered_history_after_selection_and_calibration",
         "metrics": {
-            "heldout_mae_kwh": _mae(validation_values, validation_predictions),
-            "weekly_profile_mae_kwh": baseline_mae,
-            "temperature_candidate_mae_kwh": temperature_mae,
+            "selection_mae_kwh": _mae(selection_values, selection_predictions),
+            "weekly_profile_selection_mae_kwh": baseline_selection_mae,
+            "temperature_candidate_selection_mae_kwh": candidate_selection_mae,
+            "calibration_mae_kwh": _mae(calibration_values, calibration_predictions),
+            "weekly_profile_calibration_mae_kwh": _mae(
+                calibration_values, baseline_calibration
+            ),
+            "temperature_candidate_calibration_mae_kwh": candidate_calibration_mae,
+            "heldout_mae_kwh": _mae(heldout_actuals, heldout_selected),
+            "weekly_profile_mae_kwh": _mae(heldout_actuals, heldout_baseline),
+            "temperature_candidate_mae_kwh": combined_candidate_mae,
         },
+        "heldout_diagnostics_note": (
+            "Combined heldout diagnostics include the model-selection window and are not "
+            "independent benchmark scores."
+        ),
         "context_used": selected_method == "temperature_adjusted_weekly_profile",
         "context": model_context,
-        "temperature_effect_kwh_per_c": temperature_beta,
+        "temperature_effect_kwh_per_c": final_temperature_beta,
         "nominal_interval_coverage": coverage,
-        "band_method": "symmetric empirical absolute heldout errors",
+        "band_method": "symmetric empirical absolute errors from the independent final 7-day calibration window",
         "band_width_kwh": band_width,
-        "validation_order": "chronological_last_14_days",
+        "validation_order": "chronological_7day_selection_then_7day_calibration",
     }
     return EnergyResult(
         data={
@@ -355,11 +413,12 @@ def forecast(
         field_units={"value": "kWh", "lower": "kWh", "upper": "kWh"},
         assumptions=[
             "The weekly calendar profile and optional temperature adjustment are empirical models of past consumption.",
-            "The interval band is calibrated from the final 14 days of historical data; nominal coverage is not guaranteed.",
+            "The interval band uses the final 7 days of a frozen evaluation model selected on the preceding 7 days; nominal coverage is not guaranteed.",
+            "After selection and calibration, the chosen point model is refit on all history; combined heldout diagnostics are not independent benchmark scores.",
             "Per-interval coverage does not describe the probability that the complete forecast horizon is covered.",
         ],
         warnings=[
-            "This offline forecast is provider-independent and has no live provider evidence."
+            "This empirical estimate depends on the supplied data quality and representativeness; check source data and provider evidence before operational use."
         ],
         quality="empirical_forecast",
         provenance=provenance,
@@ -418,7 +477,8 @@ def _energy_intervals(
         assert value is not None
         if value < 0:
             raise EnergyError("invalid_value", "Historical energy must be nonnegative.")
-        intervals.append((start, end, value * conversion))
+        converted_value = _finite(value * conversion, "history unit conversion")
+        intervals.append((start, end, converted_value))
     intervals.sort(key=lambda item: item[0])
     for previous, current in zip(intervals, intervals[1:], strict=False):
         if current[0] < previous[1]:
@@ -469,8 +529,6 @@ def _context_values(
 def _matching_site(history: EnergyResult, context: EnergyResult, label: str) -> None:
     if history.site_id is not None and context.site_id is not None and history.site_id != context.site_id:
         raise EnergyError("invalid_context", f"{label} context belongs to a different site.")
-    if history.asset_id is not None and context.asset_id is not None and history.asset_id != context.asset_id:
-        raise EnergyError("invalid_context", f"{label} context belongs to a different asset.")
 
 
 def _calendar_profile(
@@ -480,11 +538,14 @@ def _calendar_profile(
     counts: dict[int, int] = defaultdict(int)
     for start, _, value in rows:
         key = _calendar_key(start, zone, interval_minutes)
-        totals[key] += value
+        totals[key] = _finite(totals[key] + value, "weekly profile accumulation")
         counts[key] += 1
     if not totals:
         raise EnergyError("insufficient_history", "Could not build a weekly calendar profile.")
-    return {key: total / counts[key] for key, total in totals.items()}
+    return {
+        key: _finite(total / counts[key], "weekly calendar profile")
+        for key, total in totals.items()
+    }
 
 
 def _calendar_key(instant: datetime, zone: ZoneInfo, interval_minutes: int) -> int:
@@ -511,6 +572,73 @@ def _profile_predictions(
     ]
 
 
+def _fit_temperature_adjustment(
+    rows: list[_Interval],
+    values: list[float],
+    temperatures: list[float],
+    profile: dict[int, float],
+    zone: ZoneInfo,
+    interval_minutes: int,
+) -> tuple[float, dict[int, float]]:
+    if len(rows) != len(values) or len(rows) != len(temperatures):
+        raise EnergyError("invalid_context", "Temperature rows must align with consumption history.")
+    slot_values: dict[int, list[float]] = defaultdict(list)
+    for (instant, _, _), temperature in zip(rows, temperatures, strict=True):
+        slot_values[_calendar_key(instant, zone, interval_minutes)].append(temperature)
+    slot_means = {
+        key: _mean(slot_temperatures, "temperature profile mean")
+        for key, slot_temperatures in slot_values.items()
+    }
+    baseline = _profile_predictions(profile, rows, zone, interval_minutes)
+    residuals = [
+        _finite(value - prediction, "training residual")
+        for value, prediction in zip(values, baseline, strict=True)
+    ]
+    centered = [
+        _finite(
+            temperature - slot_means[_calendar_key(row[0], zone, interval_minutes)],
+            "centered temperature",
+        )
+        for row, temperature in zip(rows, temperatures, strict=True)
+    ]
+    denominator = _finite(
+        sum(_finite(value * value, "temperature covariance term") for value in centered),
+        "temperature covariance",
+    )
+    if denominator <= 1e-12:
+        return 0.0, slot_means
+    numerator = _finite(
+        sum(
+            _finite(x * residual, "temperature regression term")
+            for x, residual in zip(centered, residuals, strict=True)
+        ),
+        "temperature regression numerator",
+    )
+    coefficient = _finite(numerator / denominator, "temperature regression coefficient")
+    return coefficient, slot_means
+
+
+def _temperature_predictions(
+    rows: list[_Interval],
+    baseline: list[float],
+    temperatures: list[float],
+    coefficient: float,
+    slot_means: dict[int, float],
+    zone: ZoneInfo,
+    interval_minutes: int,
+) -> list[float]:
+    predictions: list[float] = []
+    for row, profile_value, temperature in zip(
+        rows, baseline, temperatures, strict=True
+    ):
+        key = _calendar_key(row[0], zone, interval_minutes)
+        delta = _finite(temperature - slot_means[key], "temperature deviation")
+        adjustment = _finite(coefficient * delta, "temperature adjustment")
+        prediction = _finite(profile_value + adjustment, "temperature candidate prediction")
+        predictions.append(max(0.0, prediction))
+    return predictions
+
+
 def _future_intervals(
     start: datetime, count: int, interval: timedelta
 ) -> list[_Interval]:
@@ -523,7 +651,12 @@ def _future_intervals(
 def _mae(actual: list[float], predicted: list[float]) -> float:
     if len(actual) != len(predicted) or not actual:
         raise EnergyError("insufficient_history", "Chronological validation set is empty or mismatched.")
-    return sum(abs(a - p) for a, p in zip(actual, predicted, strict=True)) / len(actual)
+    errors = [
+        _finite(abs(a - p), "absolute validation error")
+        for a, p in zip(actual, predicted, strict=True)
+    ]
+    total_error = _finite(sum(errors), "validation error accumulation")
+    return _finite(total_error / len(actual), "validation mean absolute error")
 
 
 def _quantile(values: list[float], probability: float) -> float:
@@ -534,7 +667,24 @@ def _quantile(values: list[float], probability: float) -> float:
     lower_index = int(position)
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
-    return ordered[lower_index] + fraction * (ordered[upper_index] - ordered[lower_index])
+    return _finite(
+        ordered[lower_index] + fraction * (ordered[upper_index] - ordered[lower_index]),
+        "empirical error quantile",
+    )
+
+
+def _mean(values: list[float], label: str) -> float:
+    try:
+        result = mean(values)
+    except (OverflowError, ValueError) as exc:
+        raise EnergyError("numeric_overflow", f"{label} overflowed or could not be computed.") from exc
+    return _finite(float(result), label)
+
+
+def _finite(value: float, label: str) -> float:
+    if not isfinite(value):
+        raise EnergyError("numeric_overflow", f"{label} overflowed or became non-finite.")
+    return value
 
 
 def _timestamp(value: Any, label: str) -> datetime:
