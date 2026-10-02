@@ -373,15 +373,18 @@ workflow through an explicit `consumption_transform`. Conversion runs before
 window selection so the final boundary observation remains available.
 
 ```python
-result = await session.skill("yesterday-consumption", {
-    "start": "2026-09-29T00:00:00Z",
-    "end": "2026-09-30T00:00:00Z",
-    "artifacts": {"get_energy_consumption": counter_artifact_id},
-    "consumption_transform": {
-        "operation": "counter",
-        "parameters": {"column": "cumulative_kwh", "frequency": "30min"},
+result = await session.skill(
+    "yesterday-consumption",
+    {
+        "start": "2026-09-29T00:00:00Z",
+        "end": "2026-09-30T00:00:00Z",
+        "artifacts": {"get_energy_consumption": counter_artifact_id},
+        "consumption_transform": {
+            "operation": "counter",
+            "parameters": {"column": "cumulative_kwh", "frequency": "30min"},
+        },
     },
-})
+)
 ```
 
 The input must declare `kind: metered`, `quantity_shape: counter` and an
