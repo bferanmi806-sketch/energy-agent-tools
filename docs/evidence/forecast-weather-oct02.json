@@ -36,6 +36,17 @@
     "rows": 24
   },
   "validation": {
+    "ci": {
+      "container": "passed",
+      "home_assistant": "passed",
+      "log_sha256": "12d6578a28c9696bacc43fbfc0170da957c2f4268824a6efc524fc13ad309fd6",
+      "python_3_11": "600 passed in 154.12s",
+      "python_3_12": "600 passed in 166.17s",
+      "python_3_13": "600 passed in 129.07s",
+      "revision": "63eb711dbc2e46650c32e69a1381e0c248974084",
+      "upgrade": "passed",
+      "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37054250497"
+    },
     "context_gap_acceptance": "9 passed in 21.49s, includes two added gap cases",
     "default_cutoff_acceptance": "4 passed in 7.92s, SDK and MCP",
     "final_collection": "600 tests collected",

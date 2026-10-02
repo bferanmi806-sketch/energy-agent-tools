@@ -63,8 +63,8 @@ alone does not establish interval semantics.
 ## Temperature context and model validation
 
 `context_mode` controls weather retrieval. It defaults to `auto`: if no context
-artifacts are supplied, the workflow attempts one `get_historical_weather`
-request and one `get_weather` request for the history and forecast windows. Site
+artifacts are supplied, the workflow retrieves `get_historical_weather`
+in bounded chunks and makes one `get_weather` request for the forecast window. Site
 coordinates are used when configured. Choose a source with `account_ids` or
 `tools`, or pass capability-specific request values in `arguments`. If either
 context source is unavailable or cannot be aligned, `auto` records the
@@ -89,12 +89,15 @@ Change `context_mode` to `"required"` to require a complete pair. For explicit
 context, use
 `{"context_mode": "explicit", "artifacts": {"historical_context": "<history-artifact-id>", "future_context": "<forecast-artifact-id>"}}`.
 
-The automatic weather workflow makes one historical-weather request. The
-historical connector accepts at most 366 days per request and the workflow does
-not split a longer weather window into multiple requests. With `auto`, a
-weather-range failure leaves the calendar baseline available; `required`
-returns an error. Meter-history retrieval has its separate 30-day chunking
-behavior described above.
+Historical weather uses logical windows of at most 30 days. Each request may
+include up to one preceding hour for temperature alignment. The selected tool
+and account stay fixed across chunks. Each chunk must align completely; the
+combined context preserves all source references, assumptions and warnings.
+A failure in any chunk makes the context pair unavailable, with partial
+acquisition evidence retained. `auto` can use the calendar baseline; `required`
+returns an error. The native historical connector's individual 366-day limit
+still applies to direct calls. Meter-history retrieval has its separate
+30-day chunking behavior described above.
 
 Open-Meteo historical temperature is hourly, `estimated` gridded
 analysis/reanalysis data, not a physical thermometer reading. Future weather

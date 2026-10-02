@@ -156,10 +156,10 @@ async def test_forecast_bill_autonomously_fetches_and_preserves_weather_kinds(
                 and bill.data["calculation_basis"] == "forecast_consumption"
             )
             assert "metered" in str(bill.provenance) and "estimated" in str(bill.provenance)
-    assert [request.url.path for request in requests] == ["/v1/archive", "/v1/forecast"]
-    assert requests[0].url.params["end_date"] == "2026-03-31"
+    assert [request.url.path for request in requests] == ["/v1/archive"] * 3 + ["/v1/forecast"]
+    assert requests[-2].url.params["end_date"] == "2026-03-31"
     assert (
-        requests[1].url.params["start_date"]
+        requests[-1].url.params["start_date"]
         == (START + timedelta(days=gap_days)).date().isoformat()
     )
 
