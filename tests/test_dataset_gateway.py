@@ -183,3 +183,40 @@ async def test_streamed_summary_keeps_small_energy_terms_in_large_net_flows(tmp_
         assert result["ok"], result
         assert result["result"]["data"]["sum"] == 2
         assert result["result"]["data"]["mean"] == 0.5
+
+
+@pytest.mark.parametrize("end_column", [None, "finishes"])
+async def test_dataset_window_refuses_start_cutting_prior_interval(tmp_path, end_column):
+    data = tmp_path / "data"
+    data.mkdir()
+    endpoint = end_column or "end"
+    (data / "intervals.csv").write_text(
+        f"timestamp,{endpoint},value\n2026-01-01T00:00:00Z,2026-01-01T01:00:00Z,2\n"
+        "2026-01-01T01:00:00Z,2026-01-01T02:00:00Z,2\n"
+    )
+    async with EnergyAgentTools(tmp_path / "state", data_root=data) as energy:
+        session = energy.session("owner")
+        imported = await session.execute(
+            "DATASET_IMPORT_CSV",
+            {
+                "file": "intervals.csv",
+                "kind": "metered",
+                "unit": "kWh",
+                "timezone": "UTC",
+                "quantity_shape": "interval",
+            },
+        )
+        assert imported["ok"], imported
+        arguments = {
+            "artifact_id": imported["result"]["data"]["dataset_id"],
+            "start": "2026-01-01T00:30:00Z",
+            "end": "2026-01-01T02:00:00Z",
+            "timestamp": "timestamp",
+        }
+        if end_column:
+            arguments["end_column"] = end_column
+        for tool in ("WORKBENCH_WINDOW", "DATASET_WINDOW"):
+            refused = await session.execute(tool, arguments)
+            assert not refused["ok"] and refused["error"]["code"] == "interval_boundary_mismatch", (
+                refused
+            )

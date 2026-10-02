@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import pandas as pd
+
 from ..models import (
     Action,
     DataKind,
@@ -293,6 +295,7 @@ def register(registry: Registry, root: Path) -> None:
                     "start": {"type": "string", "format": "date-time"},
                     "end": {"type": "string", "format": "date-time"},
                     "timestamp": column,
+                    "end_column": column,
                 },
                 ["artifact_id", "start", "end"],
             ),
@@ -318,6 +321,15 @@ async def select_dataset_window(args: Json, ctx: ExecutionContext) -> EnergyResu
     dataset_id, result = _source(ctx, args["artifact_id"])
     left, right = bounds(args["start"], args["end"])
     timestamp = args.get("timestamp", "timestamp")
+    end_column = args.get("end_column")
+    step = None
+    if result.resolution:
+        try:
+            candidate = pd.Timedelta(result.resolution).to_pytimedelta()
+            if candidate.total_seconds() > 0:
+                step = candidate
+        except (ValueError, TypeError, OverflowError):
+            pass
 
     def select() -> EnergyResult:
         rows: list[dict[str, Any]] = []
@@ -325,7 +337,25 @@ async def select_dataset_window(args: Json, ctx: ExecutionContext) -> EnergyResu
             for row in chunk:
                 if timestamp not in row:
                     raise EnergyError("column_not_found", "Timestamp column is missing.")
-                if left <= instant(row[timestamp]) < right:
+                point = instant(row[timestamp])
+                if point < left:
+                    if end_column and end_column not in row:
+                        raise EnergyError(
+                            "column_not_found", "Declared interval end column is missing."
+                        )
+                    edge = (
+                        row[end_column]
+                        if end_column
+                        else next(
+                            (row[key] for key in ("interval_end", "to", "end") if key in row), None
+                        )
+                    )
+                    finish = instant(edge) if edge is not None else point + step if step else None
+                    if finish is not None and left < finish:
+                        raise EnergyError(
+                            "interval_boundary_mismatch", "The start cuts an observed interval."
+                        )
+                if left <= point < right:
                     if len(rows) >= 100_000:
                         raise EnergyError(
                             "output_too_large",
@@ -338,6 +368,7 @@ async def select_dataset_window(args: Json, ctx: ExecutionContext) -> EnergyResu
             args["start"],
             args["end"],
             timestamp,
+            args.get("end_column"),
         )
         return selected
 

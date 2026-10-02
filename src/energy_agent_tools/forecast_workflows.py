@@ -32,7 +32,9 @@ class ForecastWorkflowRequest(StrictModel):
     billing: Json | None = None
 
 
-def _timestamp_column(result: Json) -> str:
+def _timestamp_column(result: Json, declared: str | None = None) -> str:
+    if declared is not None:
+        return declared
     rows = result.get("data")
     if isinstance(rows, dict) and rows.get("storage") == "partitioned-timeseries.v1":
         return rows.get("timestamp_column", "timestamp")
@@ -44,7 +46,9 @@ def _timestamp_column(result: Json) -> str:
     raise EnergyError("timestamp_required", "Source rows require an explicit timestamp.")
 
 
-def _end_column(result: Json) -> str:
+def _end_column(result: Json, declared: str | None = None) -> str:
+    if declared is not None:
+        return declared
     rows = result.get("data")
     if isinstance(rows, list) and rows:
         for column in ("end", "to", "interval_end"):
@@ -71,6 +75,15 @@ async def run_forecast_skill(
             "future_context",
         }:
             raise EnergyError("invalid_skill_parameters", "Unknown forecast source role.")
+        for column in ("timestamp", "end_column"):
+            if column in request.forecast and (
+                not isinstance(request.forecast[column], str) or not request.forecast[column]
+            ):
+                raise EnergyError(
+                    "invalid_skill_parameters", "Column mappings require nonempty names."
+                )
+        declared_timestamp = request.forecast.get("timestamp")
+        declared_end = request.forecast.get("end_column")
         site = agent.sites[session.site_id]
         zone = ZoneInfo(site.timezone)
         if request.start is None and request.end is None:
@@ -111,7 +124,8 @@ async def run_forecast_skill(
                         "artifact_id": ref,
                         "start": source_start,
                         "end": source_end,
-                        "timestamp": _timestamp_column(source_value),
+                        "timestamp": _timestamp_column(source_value, declared_timestamp),
+                        **({"end_column": declared_end} if declared_end else {}),
                     },
                     input_artifacts=[ref],
                     persist=True,
@@ -164,7 +178,8 @@ async def run_forecast_skill(
                         "artifact_id": ref,
                         "start": source_start,
                         "end": source_end,
-                        "timestamp": _timestamp_column(original),
+                        "timestamp": _timestamp_column(original, declared_timestamp),
+                        **({"end_column": declared_end} if declared_end else {}),
                     },
                     input_artifacts=[ref],
                     persist=True,
@@ -247,7 +262,10 @@ async def run_forecast_skill(
         history_value = history.model_dump(mode="json")
         # Full requested history is evidence, not a silent shorter substitution.
         rows = history.data
-        timestamp, end_column = _timestamp_column(history_value), _end_column(history_value)
+        timestamp = _timestamp_column(history_value, declared_timestamp)
+        end_column = _end_column(history_value, declared_end)
+        if any(timestamp not in row or end_column not in row for row in rows):
+            raise EnergyError("column_not_found", "Declared history interval columns are missing.")
         starts = [instant(row[timestamp]) for row in rows]
         ends = [instant(row[end_column]) for row in rows]
         if min(starts) != history_start.tz_convert("UTC") or max(ends) != start.tz_convert("UTC"):

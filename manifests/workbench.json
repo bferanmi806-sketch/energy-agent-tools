@@ -31,6 +31,10 @@
           "timestamp": {
             "type": "string",
             "minLength": 1
+          },
+          "end_column": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [

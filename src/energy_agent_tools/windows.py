@@ -27,7 +27,12 @@ def bounds(start: str, end: str) -> tuple[datetime, datetime]:
 
 
 def select_window(
-    result: EnergyResult, artifact_id: str, start: str, end: str, timestamp: str
+    result: EnergyResult,
+    artifact_id: str,
+    start: str,
+    end: str,
+    timestamp: str,
+    end_column: str | None = None,
 ) -> EnergyResult:
     left, right = bounds(start, end)
     if not isinstance(result.data, list) or len(result.data) > 100_000:
@@ -49,7 +54,13 @@ def select_window(
         if not isinstance(row, dict) or timestamp not in row:
             raise EnergyError("timestamp_required", "Every row requires the timestamp column.")
         point = instant(row[timestamp])
-        edge = next((row[key] for key in ("interval_end", "to", "end") if key in row), None)
+        if end_column is not None and end_column not in row:
+            raise EnergyError("column_not_found", "Declared interval end column is missing.")
+        edge = (
+            row[end_column]
+            if end_column
+            else next((row[key] for key in ("interval_end", "to", "end") if key in row), None)
+        )
         finish = instant(edge) if edge is not None else point + step if step else None
         if finish is not None and finish <= point:
             raise EnergyError("invalid_interval", "Interval end must follow its start.")

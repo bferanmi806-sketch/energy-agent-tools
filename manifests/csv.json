@@ -294,6 +294,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "end_column": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
           }
         },
         "required": [

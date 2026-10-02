@@ -79,3 +79,21 @@ def test_window_refuses_double_counting_energy_intervals(rows):
     )
     with pytest.raises(EnergyError, match="overlap|duplicate"):
         select_window(source, "source", "2026-01-01T00:00:00Z", "2026-01-01T02:00:00Z", "timestamp")
+
+
+def test_declared_end_column_controls_boundary_validation():
+    source = EnergyResult(
+        data=[{"begins": "2026-01-01T00:00:00Z", "finishes": "2026-01-01T02:00:00Z", "value": 2}],
+        kind=DataKind.METERED,
+        unit="kWh",
+        source="synthetic",
+        resolution="1h",
+    )
+    with pytest.raises(EnergyError, match="cuts an observed interval"):
+        select_window(
+            source, "source", "2026-01-01T00:00:00Z", "2026-01-01T01:00:00Z", "begins", "finishes"
+        )
+    with pytest.raises(EnergyError, match="end column is missing"):
+        select_window(
+            source, "source", "2026-01-01T00:00:00Z", "2026-01-01T02:00:00Z", "begins", "missing"
+        )

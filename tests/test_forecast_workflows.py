@@ -88,16 +88,36 @@ def _configuration(data, provider):
     return config
 
 
-@pytest.mark.parametrize("provider", ["csv", "csv-dataset", "octopus"])
+@pytest.mark.parametrize(
+    "provider", ["csv", "csv-dataset", "octopus", "csv-custom", "csv-dataset-custom"]
+)
 @pytest.mark.parametrize("interface", ["sdk", "mcp"])
 async def test_three_months_to_eight_day_forecast_bill(tmp_path, monkeypatch, provider, interface):
+    custom_columns = provider.endswith("-custom")
+    provider = provider.removesuffix("-custom")
     monkeypatch.setenv("TEST_FORECAST_METER_KEY", "synthetic-fixture-credential")
     data = tmp_path / "data"
     data.mkdir()
     with (data / "history.csv").open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=["timestamp", "end", "value", "physical_meter"])
+        names = (
+            ["begins", "finishes", "value", "physical_meter"]
+            if custom_columns
+            else ["timestamp", "end", "value", "physical_meter"]
+        )
+        writer = csv.DictWriter(stream, fieldnames=names)
         writer.writeheader()
-        writer.writerows(_history())
+        rows = _history()
+        if custom_columns:
+            rows = (
+                {
+                    "begins": row["timestamp"],
+                    "finishes": row["end"],
+                    "value": row["value"],
+                    "physical_meter": row["physical_meter"],
+                }
+                for row in rows
+            )
+        writer.writerows(rows)
     (data / "tariff.csv").write_text(
         "timestamp,end,value,physical_meter\n2026-09-01T00:00:00Z,2026-11-01T00:00:00Z,20,false\n"
     )
@@ -125,14 +145,17 @@ async def test_three_months_to_eight_day_forecast_bill(tmp_path, monkeypatch, pr
             },
         )
 
+    configuration = _configuration(data, provider)
+    if custom_columns:
+        configuration["bindings"][-1]["fixed_arguments"]["timestamp"] = "begins"
     async with httpx.AsyncClient(transport=httpx.MockTransport(provider_request)) as transport:
-        async with EnergyAgentTools(
-            tmp_path / "state", _configuration(data, provider), data_root=data
-        ) as energy:
+        async with EnergyAgentTools(tmp_path / "state", configuration, data_root=data) as energy:
             if provider == "octopus":
                 energy.agent.http = transport
             session = energy.session("owner", "home")
             parameters = {"start": START.isoformat(), "end": END.isoformat(), "billing": BILLING}
+            if custom_columns:
+                parameters["forecast"] = {"timestamp": "begins", "end_column": "finishes"}
             if interface == "sdk":
                 response = await session.skill("forecast-bill", parameters)
             else:

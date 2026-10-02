@@ -47,6 +47,7 @@ def register(registry: Registry) -> None:
             args["start"],
             args["end"],
             args["timestamp"],
+            args.get("end_column"),
         )
 
     registry.add(
@@ -60,6 +61,7 @@ def register(registry: Registry) -> None:
                     "start": {"type": "string"},
                     "end": {"type": "string"},
                     "timestamp": column,
+                    "end_column": column,
                 },
                 ["artifact_id", "start", "end", "timestamp"],
             ),

@@ -94,3 +94,11 @@ foreign-scope rejection and backup/restore. Python allocation tracing is bounded
 below 32 MiB; that threshold is not an RSS or native SQLite memory claim. All
 meter values are synthetic. This qualification does not establish physical-site
 access, a concurrent service load target, or a sustained soak.
+
+Custom source schemas can supply `timestamp` and `end_column` to
+`DATASET_WINDOW` or `WORKBENCH_WINDOW`. The declared end column controls
+interval-boundary validation even when a resolution is also declared.
+A window whose start cuts an earlier interval is refused rather than silently
+omitting that interval. Forecast workflows accept the same column names in
+`forecast.timestamp` and `forecast.end_column` and retain those mappings across
+history retrieval, window selection and model validation.
