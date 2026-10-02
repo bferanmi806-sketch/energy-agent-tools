@@ -43,11 +43,18 @@ values only; import/export reconciliation remains missing. The `grid-conditions`
 workflow is evidence-only and produces no combined grid metric. A balanced
 steady-state power flow does not cover protection, transient behavior, or
 operational switching. Its feeder input is identified in the report by its
-session artifact and CSV provenance, while the current workflow result does
-not copy that artifact ID into the solver provenance.
+session artifact and CSV provenance. The power-flow call supplies that artifact
+as an input reference, and the solver result retains its source kind and unit
+through the normal scoped capability gateway.
 
 Run the subprocess acceptance check with the same project environment:
 
 ```sh
 PYTHONPATH=src:. python -m pytest tests/test_model_workflow_reference_projects.py
 ```
+
+Acceptance checks also compare feeder voltage drop and resistive loss against
+first-order equations for the declared 11 kV line and 0.8 MW/0.2 Mvar load.
+The standalone headless script uses the same supported bundled-font startup
+mode described in [simulation jobs](simulation-jobs.md), avoiding macOS system
+font discovery during numerical initialization.

@@ -240,3 +240,28 @@ Current-power capabilities require an observation timestamp and default to a
 Retrieval time alone does not establish observation freshness. Results retain
 `quantity_shape` (`interval`, `instantaneous`, or `counter`) when reviewed or
 reported by the provider. See [job lifecycle](simulation-jobs.md).
+
+## Model input lineage
+
+`session.capability` accepts `input_artifacts`, a list of up to ten same-session
+artifact IDs. `ENERGY_EXECUTE_CAPABILITY` exposes the same field through MCP.
+The normal execution gateway reads these artifacts before invoking the selected
+handler and retains their source kind, unit and provenance in the output.
+Foreign or expired references block execution.
+
+The power-flow workflow accepts the same list at the top level:
+
+```python
+result = await session.skill(
+    "power-flow",
+    {
+        "arguments": {"run_power_flow": network_arguments},
+        "tools": {"run_power_flow": "engineering.run_power_flow"},
+        "input_artifacts": [load_artifact_id],
+    },
+)
+```
+
+The caller still supplies the network model and identifies the source artifacts
+used to construct it. Other workflows record their derived inputs internally
+and reject this top-level field.

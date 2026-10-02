@@ -45,6 +45,7 @@ runtime accepts exactly these top-level fields:
 | `consumption_transform` | object | Explicit `counter` or `integrate_power` operation and parameters for a preloaded measured artifact; see the conversion example below. |
 | `billing` | object | Explicit standing charge, tax treatment, and source for a complete local-day cost workflow; see [tariff components](tariff-components.md). |
 | `alternative_billing` | object | Separate explicit schedule required with `billing` for `tariff-comparison`. |
+| `input_artifacts` | array of strings | Up to ten same-session model input artifacts for `power-flow`; rejected by other recipes. |
 
 Unknown top-level fields return `invalid_skill_parameters`. `start` and `end`
 are passed to provider capabilities that support ranges (`get_energy_consumption`,
@@ -156,6 +157,8 @@ be contiguous and cover the full requested window. The workflow persists the
 alignment as evidence before calculating positive `duration_hours` values.
 The resulting intervals pass
 `load_kw: 0` and `pv_kw: 0` because the workflow has no load/PV input field.
+Carbon totals retain the source's CO2 or CO2-equivalent basis. The result records
+`carbon_species` and explicit gram units for per-interval and total emissions.
 
 Supply a `battery` object with this shape:
 
@@ -176,9 +179,9 @@ Supply a `battery` object with this shape:
 required. Capacity and both power limits must be strictly positive. The other
 fields default to `0`, `0.95`, `0.95`, and the initial state of charge,
 respectively. The optimizer also supports the schema-level fields
-`timezone`, `carbon_price_gbp_per_tonne`, `carbon_weight`,
-`allow_grid_charging`, and `allow_grid_export`, but the current workflow passes
-only `intervals`, `battery`, and its objective (`cost` or `carbon`). Plans are
+`timezone`, `carbon_price_gbp_per_tonne`, `carbon_weight`, `carbon_species`,
+`allow_grid_charging`, and `allow_grid_export`. The workflow supplies `intervals`,
+`battery`, its objective, and the carbon species from the source unit. Plans are
 simulated advice; they do not control equipment.
 
 ### `solar-consumption`
@@ -227,6 +230,12 @@ Site PV `get_generation` remains a separate operator-reviewed capability,
 normally with kWh semantics. Generic `telemetry` requests and any generation
 request without a reviewed source must stop with `capability_unavailable` or
 `capability_ambiguous`; never fabricate a provider, an asset, or a measurement.
+
+When network arguments are constructed from saved source data, supply
+`input_artifacts` with those artifact IDs. Capability execution checks each
+reference in the current user/session before running the solver and retains
+its source kind, unit and provenance in the result. These references do not
+replace the explicit network arguments.
 
 `power-flow` passes the provider-specific `arguments` to the selected simulation
 tool. For the built-in pandapower tool, the request is an object with a required

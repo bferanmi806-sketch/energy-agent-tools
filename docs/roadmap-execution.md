@@ -253,3 +253,23 @@ comparison workflows over Octopus, OpenEnergyMonitor and CSV source contracts.
 All 16 provider-substitution tests passed, including the prior cost cases.
 The comparisons keep the unavailable previous period and change values null.
 These checks are implementation evidence, not actual-agent or live-meter passes.
+
+All twelve current recipes now have executable offline references and actual
+failure outcomes, in two independently reviewed units. The model unit uses real
+SciPy, pvlib and pandapower solvers. Its power-flow result links the actual feeder
+CSV through scoped capability input references; acceptance also checks feeder
+voltage drop and resistive losses against independent first-order equations.
+The integrated reference, provider-substitution and new capability-lineage suite
+passed 23 tests, with repository lint/format and source mypy checks passing.
+Remaining functional work includes solar import/export reconciliation, supported
+spike explanations, combined grid analysis, large-site processing and deeper
+provider qualification. The real-site, broad agent, independent-review,
+contributor and sustained-operation gates remain open.
+
+Final model integration preserves CO2 versus CO2-equivalent emission units
+and routes battery and PV execution through the same scoped capability gateway
+as SDK/MCP calls. Model outputs retain the selected asset and reviewed binding
+semantics. The native battery API exposes an explicit `carbon_species` option,
+with its previous CO2e default retained for direct callers; workflows supply
+the actual source basis. Twenty-three focused source, engineering and model
+reference checks passed after this change.

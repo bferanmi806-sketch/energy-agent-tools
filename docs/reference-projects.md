@@ -113,5 +113,13 @@ PYTHONPATH=src:. python examples/reference_projects/workflows.py
 ```
 
 These examples use synthetic CSV inputs. Spike screening still lacks weather
-and equipment-supported explanations. The remaining six recipe references and
-live-provider workflow gates are separate work.
+and equipment-supported explanations. The [model and grid reference](model-workflow-reference-project.md) covers the
+other six recipes with actual battery, PV and network solvers. Run it with:
+
+```sh
+PYTHONPATH=src:. python examples/reference_projects/model_workflows.py
+```
+
+Together the two workflow scripts cover all twelve current recipes and twelve
+actual failure paths. Solar import/export reconciliation and combined grid
+analysis remain missing; these examples do not close the live-provider gates.
