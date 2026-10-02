@@ -81,6 +81,20 @@ class ParsedRun:
         return len(self.tool_calls)
 
     @property
+    def usage_limited(self) -> bool:
+        for event in self.events:
+            if event.get("type") == "error":
+                message = event.get("message", "")
+            elif event.get("type") == "turn.failed":
+                error = event.get("error")
+                message = error.get("message", "") if isinstance(error, dict) else ""
+            else:
+                continue
+            if isinstance(message, str) and "you've hit your usage limit" in message.lower():
+                return True
+        return False
+
+    @property
     def successful_calls(self) -> list[ToolCall]:
         return [
             call for call in self.tool_calls if call.status == "completed" and call.error is None
@@ -1198,6 +1212,7 @@ def run_suite(
         "timeout_seconds": timeout,
         "fixture_only": True,
         "synthetic_data": True,
+        "planned_case_ids": [case.id for case in selected],
         **identity,
     }
     cases_path: Path | None = None
@@ -1228,6 +1243,22 @@ def run_suite(
     try:
         with tempfile.TemporaryDirectory(prefix="energy-agent-benchmark-") as temp:
             fixture = write_fixture(Path(temp) / "fixture")
+            environments = [
+                {"id": case.environment_id, "scenario_clock": case.scenario_clock}
+                for case in selected
+                if case.environment_id
+            ]
+            if environments:
+                if all(case.environment_id for case in selected):
+                    fixture.manifest.clear()
+                    fixture.manifest.update(
+                        {
+                            "fixture_id": "energy-agent-tools-qualified-scenarios",
+                            "synthetic": True,
+                            "disclaimer": "Provider-shaped fixtures, not physical sites or live private accounts.",
+                        }
+                    )
+                fixture.manifest["scenario_environments"] = environments
             if progress_path is not None:
                 _write_json_atomic(
                     progress_path,
@@ -1273,6 +1304,12 @@ def run_suite(
                             "runner": runner_metadata,
                         },
                     )
+                if case_result.run.usage_limited:
+                    runner_metadata["interrupted_reason"] = "model_usage_limit"
+                    runner_metadata["unattempted_case_ids"] = [
+                        remaining.id for remaining in selected[index:]
+                    ]
+                    break
             final_identity = source_identity(repo)
             runner_metadata["source_unchanged"] = final_identity == identity
             runner_metadata["source_at_completion"] = final_identity
@@ -1293,7 +1330,9 @@ def run_suite(
         _write_json_atomic(
             progress_path,
             {
-                "status": "completed",
+                "status": "interrupted"
+                if runner_metadata.get("interrupted_reason")
+                else "completed",
                 "started_at": result.started_at,
                 "completed_at": result.completed_at,
                 "completed_cases": len(result.cases),

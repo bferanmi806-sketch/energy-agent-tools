@@ -91,3 +91,18 @@ The endpoint shapes used here are documented by Home Assistant's
 [REST API](https://developers.home-assistant.io/docs/api/rest/). The REST API
 documentation also explains why the minimal configuration includes the
 `api` integration when the frontend is not enabled.
+
+## Recorded real-container run
+
+The qualification passed against the pinned Home Assistant 2026.9.4 container
+on the Linux CI runner at commit `ae79406`. The recorded
+[evidence](evidence/home-assistant-qualification-oct02.json) identifies the image,
+source revision and [CI run](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/36940237723).
+The development owner and encrypted credential were generated during the run;
+only safe evidence was retained. The container and volume were removed.
+The provider returned 1.75 kW as an estimated instantaneous synthetic state,
+with an observation timestamp satisfying the 300-second freshness bound.
+
+The minimal configuration explicitly enables `onboarding`, which loads its
+`auth` dependency. Readiness uses the unauthenticated onboarding endpoint.
+Authenticated `/api/config` verifies the installed version before state seeding.

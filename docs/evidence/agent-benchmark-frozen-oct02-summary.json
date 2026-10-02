@@ -1,0 +1,1004 @@
+{
+  "started_at": "2026-10-01T23:09:15.033057+00:00",
+  "completed_at": "2026-10-01T23:22:46.151588+00:00",
+  "runner": {
+    "command": "codex exec --ignore-user-config --ephemeral --skip-git-repo-check -s read-only --json",
+    "codex": "codex",
+    "model_override": null,
+    "bypass_approvals": true,
+    "timeout_seconds": 180.0,
+    "fixture_only": true,
+    "synthetic_data": true,
+    "source_commit": "c2ea0aadba1114d52478db09bf5301d7c8a5ecef",
+    "source_dirty": false,
+    "dirty_source_sha256": "6323fd3ceb364c416d089190c3725e430065932857ebe610e45915c63639a6de",
+    "source_unchanged": true,
+    "source_at_completion": {
+      "source_commit": "c2ea0aadba1114d52478db09bf5301d7c8a5ecef",
+      "source_dirty": false,
+      "dirty_source_sha256": "6323fd3ceb364c416d089190c3725e430065932857ebe610e45915c63639a6de"
+    }
+  },
+  "summary": {
+    "cases": 19,
+    "mean_score": 0.7887,
+    "labels": {
+      "pass": 6,
+      "partial": 5,
+      "fail": 0,
+      "inconclusive": 8
+    }
+  },
+  "qualification": "Quota-interrupted actual Codex run. Inconclusive cases are not evidence of task success. Scoring unchanged.",
+  "cases": [
+    {
+      "id": "consumption_total",
+      "score": {
+        "case_id": "consumption_total",
+        "score": 0.9762,
+        "label": "partial",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 3/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, WORKBENCH_SUMMARIZE, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "argument_semantics",
+            "score": 1.0,
+            "evidence": "matched 2/2 argument expectations"
+          },
+          {
+            "name": "numeric_truth",
+            "score": 1.0,
+            "evidence": "matched 1/1 expected values; values=29.0, 2026.0, 17.0, 48.0, 2026.0, 9.0, 28.0, 0.0, 0.0, 2026.0, 9.0, 29.0, 0.0, 0.0"
+          },
+          {
+            "name": "structured_evidence",
+            "score": 1.0,
+            "evidence": "provenance; site/asset"
+          },
+          {
+            "name": "data_kind_consistency",
+            "score": 1.0,
+            "evidence": "observed calculated, metered"
+          },
+          {
+            "name": "call_budget",
+            "score": 0.7142857142857143,
+            "evidence": "14 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "peak_interval",
+      "score": {
+        "case_id": "peak_interval",
+        "score": 0.9048,
+        "label": "partial",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 3/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, WORKBENCH_SUMMARIZE, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "argument_semantics",
+            "score": 0.0,
+            "evidence": "matched 0/1 argument expectations"
+          },
+          {
+            "name": "numeric_truth",
+            "score": 1.0,
+            "evidence": "matched 1/1 expected values; values=29.0, 2026.0, 2026.0, 9.0, 29.0, 10.0, 0.0, 2026.0, 9.0, 29.0, 0.0, 0.0, 3.5, 30.0, 7.0, 3.5, 0.5"
+          },
+          {
+            "name": "data_kind_consistency",
+            "score": 1.0,
+            "evidence": "observed calculated, metered"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "5 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "unusual_usage",
+      "score": {
+        "case_id": "unusual_usage",
+        "score": 1.0,
+        "label": "pass",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 2/2 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): WORKBENCH_ANOMALY, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "7 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "cost_estimate",
+      "score": {
+        "case_id": "cost_estimate",
+        "score": 1.0,
+        "label": "pass",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 3/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, WORKBENCH_JOIN, WORKBENCH_SUMMARIZE, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "numeric_truth",
+            "score": 1.0,
+            "evidence": "matched 1/1 expected values; values=2026.0, 9.0, 29.0, 2026.0, 9.0, 28.0, 0.0, 2026.0, 9.0, 29.0, 0.0, 17.0, 48.0, 3.6925, 3.69, 0.25, 0.22, 0.055, 0.25, 0.11"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "5 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "cheapest_window",
+      "score": {
+        "case_id": "cheapest_window",
+        "score": 1.0,
+        "label": "pass",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 3/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, WORKBENCH_JOIN, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "structured_evidence",
+            "score": 1.0,
+            "evidence": "provenance"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "10 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "clean_battery",
+      "score": {
+        "case_id": "clean_battery",
+        "score": 0.8232,
+        "label": "partial",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 4/4 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 0.0,
+            "evidence": "no accepted tool path observed"
+          },
+          {
+            "name": "gateway_use",
+            "score": 0.5,
+            "evidence": "matched 1/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 0.9090909090909091,
+            "evidence": "11 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "solar_consumption",
+      "score": {
+        "case_id": "solar_consumption",
+        "score": 0.9762,
+        "label": "partial",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 3/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, WORKBENCH_JOIN, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 0.8333333333333334,
+            "evidence": "12 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "solar_forecast",
+      "score": {
+        "case_id": "solar_forecast",
+        "score": 1.0,
+        "label": "pass",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 3/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 1/1 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "argument_semantics",
+            "score": 1.0,
+            "evidence": "matched 1/1 argument expectations"
+          },
+          {
+            "name": "numeric_truth",
+            "score": 1.0,
+            "evidence": "matched 1/1 expected values; values=2026.0, 10.0, 1.0, 30.0, 48.0, 0.0, 2026.0, 10.0, 1.0, 0.0, 0.0, 1.0, 0.0, 2026.0, 10.0, 2.0, 0.0, 0.0, 1.0, 0.0"
+          },
+          {
+            "name": "data_kind_consistency",
+            "score": 1.0,
+            "evidence": "observed calculated, forecast"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "7 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "grid_carbon",
+      "score": {
+        "case_id": "grid_carbon",
+        "score": 0.9437,
+        "label": "partial",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 5/5 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, WORKBENCH_SUMMARIZE, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "argument_semantics",
+            "score": 0.5,
+            "evidence": "matched 1/2 argument expectations; wrong: kind=grid-generation (expected metered)"
+          },
+          {
+            "name": "structured_evidence",
+            "score": 1.0,
+            "evidence": "provenance"
+          },
+          {
+            "name": "data_kind_consistency",
+            "score": 1.0,
+            "evidence": "observed metered"
+          },
+          {
+            "name": "call_budget",
+            "score": 0.9090909090909091,
+            "evidence": "11 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "power_flow",
+      "score": {
+        "case_id": "power_flow",
+        "score": 1.0,
+        "label": "pass",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 1.0,
+            "evidence": "matched 4/4 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 1/1 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "3 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "building_weather",
+      "score": {
+        "case_id": "building_weather",
+        "score": 0.9048,
+        "label": "pass",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 1.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.3333333333333333,
+            "evidence": "matched 1/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, WORKBENCH_JOIN, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "10 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": false
+    },
+    {
+      "id": "tariff_comparison",
+      "score": {
+        "case_id": "tariff_comparison",
+        "score": 0.8333,
+        "label": "inconclusive",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 0.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.6666666666666666,
+            "evidence": "matched 2/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 1.0,
+            "evidence": "matched accepted path(s): CSV_READ_TIMESERIES, WORKBENCH_JOIN, ENERGY_EXECUTE_CAPABILITY"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 2/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 0.8333333333333334,
+            "evidence": "12 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": true
+    },
+    {
+      "id": "missing_private_account",
+      "score": {
+        "case_id": "missing_private_account",
+        "score": 0.4545,
+        "label": "inconclusive",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 0.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.0,
+            "evidence": "matched 0/1 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 0.0,
+            "evidence": "no accepted tool path observed"
+          },
+          {
+            "name": "gateway_use",
+            "score": 0.0,
+            "evidence": "matched 0/1 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "boundary_error",
+            "score": 0.0,
+            "evidence": "no structured boundary error"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "0 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": true
+    },
+    {
+      "id": "ambiguous_account",
+      "score": {
+        "case_id": "ambiguous_account",
+        "score": 0.4545,
+        "label": "inconclusive",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 0.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.0,
+            "evidence": "matched 0/2 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 0.0,
+            "evidence": "no accepted tool path observed"
+          },
+          {
+            "name": "gateway_use",
+            "score": 0.0,
+            "evidence": "matched 0/1 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "boundary_error",
+            "score": 0.0,
+            "evidence": "no structured boundary error"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "0 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": true
+    },
+    {
+      "id": "unit_safety",
+      "score": {
+        "case_id": "unit_safety",
+        "score": 0.5714,
+        "label": "inconclusive",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 0.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.0,
+            "evidence": "matched 0/3 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 0.0,
+            "evidence": "no accepted tool path observed"
+          },
+          {
+            "name": "gateway_use",
+            "score": 1.0,
+            "evidence": "matched 0/0 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "0 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": true
+    },
+    {
+      "id": "provenance_trace",
+      "score": {
+        "case_id": "provenance_trace",
+        "score": 0.4762,
+        "label": "inconclusive",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 0.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.0,
+            "evidence": "matched 0/6 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 0.0,
+            "evidence": "no accepted tool path observed"
+          },
+          {
+            "name": "gateway_use",
+            "score": 0.0,
+            "evidence": "matched 0/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "structured_evidence",
+            "score": 0.0,
+            "evidence": "required provenance/site fields missing"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "0 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": true
+    },
+    {
+      "id": "missing_battery_telemetry",
+      "score": {
+        "case_id": "missing_battery_telemetry",
+        "score": 0.5556,
+        "label": "inconclusive",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 0.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.0,
+            "evidence": "matched 0/2 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 0.0,
+            "evidence": "no accepted tool path observed"
+          },
+          {
+            "name": "gateway_use",
+            "score": 0.0,
+            "evidence": "matched 0/1 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "0 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": true
+    },
+    {
+      "id": "cheap_clean_window",
+      "score": {
+        "case_id": "cheap_clean_window",
+        "score": 0.5556,
+        "label": "inconclusive",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 0.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.0,
+            "evidence": "matched 0/4 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 0.0,
+            "evidence": "no accepted tool path observed"
+          },
+          {
+            "name": "gateway_use",
+            "score": 0.0,
+            "evidence": "matched 0/2 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "0 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": true
+    },
+    {
+      "id": "no_hallucinated_provider",
+      "score": {
+        "case_id": "no_hallucinated_provider",
+        "score": 0.5556,
+        "label": "inconclusive",
+        "dimensions": [
+          {
+            "name": "completion",
+            "score": 0.0,
+            "evidence": "final agent message and turn completion event"
+          },
+          {
+            "name": "semantic_terms",
+            "score": 0.0,
+            "evidence": "matched 0/2 required groups"
+          },
+          {
+            "name": "tool_selection",
+            "score": 0.0,
+            "evidence": "no accepted tool path observed"
+          },
+          {
+            "name": "gateway_use",
+            "score": 0.0,
+            "evidence": "matched 0/1 expected call roles"
+          },
+          {
+            "name": "safety_language",
+            "score": 1.0,
+            "evidence": "no forbidden claim detected"
+          },
+          {
+            "name": "tool_precision",
+            "score": 1.0,
+            "evidence": "all calls stayed inside the synthetic gateway"
+          },
+          {
+            "name": "call_budget",
+            "score": 1.0,
+            "evidence": "0 calls, budget 10"
+          }
+        ]
+      },
+      "usage_limited": true
+    }
+  ],
+  "transcript": {
+    "file": "agent-benchmark-frozen-oct02.json.gz",
+    "sha256": "8a6d01d685a4c91dac6cb20cb7fb1a8aef38de48caa5a6ca9043eb8b6942e173",
+    "format": "gzip-compressed full suite JSON"
+  }
+}

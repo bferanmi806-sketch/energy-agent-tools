@@ -129,3 +129,18 @@ Further fixes reject duplicate/overlapping energy intervals and apply current
 toolkit/site scope to saved jobs. Reviewed account/asset capability roles are
 now included in scoped search without mutating the shared catalogue. Their
 focused acceptance checks passed; final combined verification remains required.
+
+At `ae79406`, CI passed 266 tests on each Python version and the real Home
+Assistant container qualification. This validates development authentication,
+encrypted connection storage, profile reopen, scoped current-power execution
+and freshness against an installed provider. The synthetic state remains
+estimated; the physical-meter gate is still open.
+
+The immutable 19-case run completed with 6 passes, 5 partials and 8 inconclusive
+results. The model CLI reported a usage limit during tariff comparison and
+subsequent cases could not complete. The report and
+[complete traces](evidence/agent-benchmark-frozen-oct02.json.gz) are preserved in
+[the summary](evidence/agent-benchmark-frozen-oct02-summary.json). Its mean
+heuristic score of 0.7887 includes inconclusive cases and is not a success claim.
+A new runner guard stops on that infrastructure error and records unattempted
+case IDs. No quota resets, credit purchases or model substitutions were used.

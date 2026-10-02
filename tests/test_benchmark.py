@@ -470,3 +470,30 @@ def test_qualified_scenarios_preserve_frozen_truth_and_select_environment(tmp_pa
         assert case.scenario_clock in _agent_prompt(case)
     power = next(case for case in qualified if case.id == "dev_current_power_snapshot")
     assert power.scenario_clock == "2026-09-29T16:00:00Z"
+
+
+def test_run_suite_stops_on_model_quota_and_records_unattempted_cases(tmp_path):
+    cases = tuple(
+        BenchmarkCase(id=name, prompt=name, intent="read") for name in ("one", "two", "three")
+    )
+    attempted = []
+
+    def runner(command, environment, timeout):
+        attempted.append(command[-1])
+        if len(attempted) == 1:
+            return 0, _events(final="Synthetic result."), ""
+        error = {
+            "type": "turn.failed",
+            "error": {"message": "You've hit your usage limit. Try again later."},
+        }
+        return 1, json.dumps(error) + "\n", ""
+
+    output = tmp_path / "evidence"
+    result = run_suite(repo=tmp_path, output_dir=output, cases=cases, runner=runner)
+    assert len(attempted) == 2
+    assert result.cases[-1].score.label == "inconclusive"
+    assert result.runner["interrupted_reason"] == "model_usage_limit"
+    assert result.runner["unattempted_case_ids"] == ["three"]
+    assert result.runner["planned_case_ids"] == ["one", "two", "three"]
+    assert json.loads((output / "progress.json").read_text())["status"] == "interrupted"
+    assert len((output / "cases.jsonl").read_text().splitlines()) == 2
