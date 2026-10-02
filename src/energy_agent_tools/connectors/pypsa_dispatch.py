@@ -278,6 +278,7 @@ def _solve(network: Any) -> tuple[str, str]:
         snapshots=[_SNAPSHOT],
         solver_name="highs",
         solver_options={"time_limit": _SOLVER_TIME_LIMIT_SECONDS, "threads": _SOLVER_THREADS},
+        include_objective_constant=False,
         transmission_losses=0,
         linearized_unit_commitment=False,
     )

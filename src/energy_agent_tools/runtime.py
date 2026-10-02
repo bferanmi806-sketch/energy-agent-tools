@@ -178,6 +178,8 @@ class EnergyAgent:
             "power_flow": "engineering.run_power_flow",
             "battery": "engineering.schedule_battery_charging",
             "solar": "engineering.estimate_solar_generation",
+            "network_power_flow": "pypsa.power_flow",
+            "network_dispatch": "pypsa.optimize_dispatch",
         }
         try:
             self._scope(session)

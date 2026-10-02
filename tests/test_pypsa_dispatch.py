@@ -15,7 +15,6 @@ from energy_agent_tools.runtime import EnergyAgent
 def _registry() -> Registry:
     registry = Registry()
     networks.register(registry)
-    pypsa_dispatch.register(registry)
     return registry
 
 

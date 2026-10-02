@@ -225,15 +225,19 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
     async def simulation_job(
         operation: Literal["submit", "list", "status", "result", "cancel", "delete", "resume"],
         job_id: str | None = None,
-        simulation: Literal["heat_loss", "power_flow", "battery", "solar"] | None = None,
+        simulation: Literal[
+            "heat_loss", "power_flow", "battery", "solar", "network_power_flow", "network_dispatch"
+        ]
+        | None = None,
         arguments: Json | None = None,
     ) -> Json:
         """Submit bounded local numerical jobs and inspect, cancel or delete scoped results.
 
         heat_loss uses engineering.calculate_heat_loss; power_flow uses
         engineering.run_power_flow; battery uses engineering.schedule_battery_charging;
-        solar uses engineering.estimate_solar_generation. Submit the arguments
-        from that engineering tool's schema. For provider reads and artifact
+        solar uses engineering.estimate_solar_generation; network_power_flow uses
+        pypsa.power_flow; network_dispatch uses pypsa.optimize_dispatch. Submit the arguments
+        from that tool's schema. For provider reads and artifact
         analysis, use ENERGY_EXECUTE_CAPABILITY or ENERGY_MULTI_EXECUTE_TOOL.
         Jobs preserve the user, site and session; resume returns owner-verified scope
         for restoring a session after a host restart. No executable or path inputs.

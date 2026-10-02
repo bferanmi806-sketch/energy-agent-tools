@@ -3,6 +3,7 @@
 import asyncio
 
 import httpx
+import pytest
 
 from energy_agent_tools.app import build_agent
 from energy_agent_tools.hosting import Principal, create_host, token_digest
@@ -108,3 +109,58 @@ async def test_completed_jobs_obey_current_toolkit_and_site_scope(tmp_path):
         wrong_site = energy.session("alice", "other", id=session.id)
         assert (await wrong_site.job("list"))["jobs"] == []
         assert (await session.job("result", job_id=job_id))["ok"]
+
+
+async def test_pypsa_jobs_use_real_workers_and_enforce_scope(tmp_path):
+    from benchmarks.engineering_environments import _pypsa_args
+
+    async with EnergyAgentTools(tmp_path, CONFIG) as energy:
+        session = energy.session("alice", "home")
+        flow = _pypsa_args(1.0, line_id="feeder")
+        dispatch = {
+            "network": {
+                "buses": flow["network"]["buses"],
+                "lines": [
+                    {
+                        "id": "feeder",
+                        "from_bus": "grid",
+                        "to_bus": "load",
+                        "x_ohm": 0.4,
+                        "s_nom_mva": 1.0,
+                    }
+                ],
+                "loads": [{"id": "demand", "bus": "load", "p_mw": 2.0}],
+                "generators": [
+                    {"id": "cheap", "bus": "grid", "p_nom_mw": 10.0, "marginal_cost": 10.0},
+                    {"id": "local", "bus": "load", "p_nom_mw": 10.0, "marginal_cost": 50.0},
+                ],
+            }
+        }
+        ids = []
+        for simulation, arguments in (("network_power_flow", flow), ("network_dispatch", dispatch)):
+            denied = energy.session("alice", "home", allowed_actions={Action.READ})
+            assert (await denied.job("submit", simulation=simulation, arguments=arguments))[
+                "error"
+            ]["code"] == "policy_denied"
+            submitted = await session.job("submit", simulation=simulation, arguments=arguments)
+            assert submitted["ok"], submitted
+            ids.append(submitted["job"]["job_id"])
+        await asyncio.wait_for(energy.agent._job_task, timeout=40)
+        results = []
+        for job_id in ids:
+            response = await session.job("result", job_id=job_id)
+            assert response["ok"], response
+            results.append(response["result"])
+            assert response["result"]["kind"] == "simulated"
+            assert any(item.get("library") == "pypsa" for item in response["result"]["provenance"])
+            assert (await energy.session("bob").job("resume", job_id=job_id))["error"][
+                "code"
+            ] == "job_access_denied"
+            limited = energy.session("alice", "home", id=session.id, toolkits={"engineering"})
+            assert (await limited.job("result", job_id=job_id))["error"]["code"] == "tool_forbidden"
+        assert results[0]["data"]["totals"]["balance_error_mw"] == pytest.approx(0, abs=1e-6)
+        assert results[1]["data"]["objective_currency_per_hour"] == pytest.approx(60, abs=1e-6)
+        assert {row["id"]: row["dispatch_mw"] for row in results[1]["data"]["generators"]} == {
+            "cheap": 1.0,
+            "local": 1.0,
+        }

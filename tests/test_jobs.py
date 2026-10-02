@@ -222,3 +222,67 @@ def test_status_does_not_echo_private_paths(tmp_path: Path) -> None:
     encoded = json.dumps(manager.status(job.job_id, "u", "s").as_dict())
     assert "input.json" not in encoded
     assert str(tmp_path) not in encoded
+
+
+@pytest.mark.asyncio
+async def test_legacy_job_constraint_migrates_without_losing_results_or_scope(tmp_path):
+    import re
+
+    root = tmp_path / "jobs"
+    original = JobManager(root)
+    job = original.submit(
+        "owner", "session", SimulationOperation.HEAT_LOSS, heat_loss_args(), site_id="home"
+    )
+    await original.run_pending()
+    original.close()
+    legacy_constraint = "CHECK (operation IN ('heat_loss', 'power_flow', 'battery', 'solar'))"
+    with sqlite3.connect(root / "jobs.sqlite3") as connection:
+        sql = connection.execute("SELECT sql FROM sqlite_master WHERE name='jobs'").fetchone()[0]
+        old_sql = re.sub(r"CHECK \(operation IN \([^)]*\)\)", legacy_constraint, sql)
+        old_sql = old_sql.replace("CREATE TABLE jobs (", "CREATE TABLE legacy_jobs (")
+        connection.execute(old_sql)
+        connection.execute("INSERT INTO legacy_jobs SELECT * FROM jobs")
+        connection.execute("DROP TABLE jobs")
+        connection.execute("ALTER TABLE legacy_jobs RENAME TO jobs")
+    upgraded = JobManager(root)
+    try:
+        record = upgraded.status(job.job_id, "owner", "session")
+        assert record.status is JobStatus.COMPLETED
+        assert record.site_id == "home"
+        assert (
+            upgraded.result(job.job_id, "owner", "session")["result"]["data"]["gross_heat_loss_kw"]
+            == 0.38
+        )
+        queued = upgraded.submit(
+            "owner",
+            "session",
+            SimulationOperation.NETWORK_POWER_FLOW,
+            {"network": {}},
+            site_id="home",
+        )
+        assert queued.operation is SimulationOperation.NETWORK_POWER_FLOW
+        assert upgraded.status(queued.job_id, "owner", "session").status is JobStatus.PENDING
+        with sqlite3.connect(root / "jobs.sqlite3") as connection:
+            indexes = {
+                row[0]
+                for row in connection.execute("SELECT name FROM sqlite_master WHERE type='index'")
+            }
+            assert {"jobs_user_session_idx", "jobs_pending_idx"} <= indexes
+    finally:
+        upgraded.close()
+    reopened = JobManager(root)
+    try:
+        assert reopened.status(job.job_id, "owner", "session").status is JobStatus.COMPLETED
+        assert reopened.status(queued.job_id, "owner", "session").site_id == "home"
+    finally:
+        reopened.close()
+
+
+def test_numerical_worker_uses_bundled_fonts_without_inheriting_secrets(tmp_path, monkeypatch):
+    monkeypatch.setenv("ENERGY_VAULT_KEY", "must-not-enter-worker")
+    monkeypatch.setenv("MPLCONFIGDIR", "must-not-enter-worker")
+    environment = JobManager._safe_environment(tmp_path)
+    assert environment["MPL_IGNORE_SYSTEM_FONTS"] == "1"
+    assert "ENERGY_VAULT_KEY" not in environment
+    assert "MPLCONFIGDIR" not in environment
+    assert Path(environment["HOME"]) == tmp_path / "home"

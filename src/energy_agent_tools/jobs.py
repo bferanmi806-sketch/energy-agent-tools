@@ -19,6 +19,7 @@ import builtins
 import json
 import math
 import os
+import re
 import shutil
 import signal
 import sqlite3
@@ -77,6 +78,18 @@ class SimulationOperation(StrEnum):
     POWER_FLOW = "power_flow"
     BATTERY = "battery"
     SOLAR = "solar"
+    NETWORK_POWER_FLOW = "network_power_flow"
+    NETWORK_DISPATCH = "network_dispatch"
+
+
+_LEGACY_OPERATION_CONSTRAINT = (
+    "CHECK (operation IN ('heat_loss', 'power_flow', 'battery', 'solar'))"
+)
+_OPERATION_CONSTRAINT = (
+    "CHECK (operation IN ("
+    + ", ".join(f"'{operation.value}'" for operation in SimulationOperation)
+    + "))"
+)
 
 
 class JobStatus(StrEnum):
@@ -363,12 +376,12 @@ class JobManager:
         _chmod_private(self.jobs_dir, stat.S_IRWXU)
         with self._connect() as connection:
             connection.executescript(
-                """
+                f"""
                 CREATE TABLE IF NOT EXISTS jobs (
                     job_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     session_id TEXT NOT NULL,
-                    operation TEXT NOT NULL CHECK (operation IN ('heat_loss', 'power_flow', 'battery', 'solar')),
+                    operation TEXT NOT NULL {_OPERATION_CONSTRAINT},
                     status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'interrupted')),
                     input_path TEXT NOT NULL,
                     output_path TEXT NOT NULL,
@@ -389,8 +402,50 @@ class JobManager:
             columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(jobs)")}
             if "site_id" not in columns:
                 connection.execute("ALTER TABLE jobs ADD COLUMN site_id TEXT")
+            self._migrate_operations(connection)
         if self.database_path.exists():
             _chmod_private(self.database_path, stat.S_IRUSR | stat.S_IWUSR)
+
+    @staticmethod
+    def _migrate_operations(connection: sqlite3.Connection) -> None:
+        source_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='jobs'"
+        ).fetchone()[0]
+        if _OPERATION_CONSTRAINT in source_sql:
+            return
+        header = r'CREATE TABLE (?:"jobs"|jobs)\s*\('
+        if _LEGACY_OPERATION_CONSTRAINT not in source_sql or not re.match(header, source_sql):
+            raise JobError(
+                "invalid_job_store", "The job operation schema is not a recognized version."
+            )
+        replacement = re.sub(
+            header,
+            "CREATE TABLE jobs_next (",
+            source_sql.replace(_LEGACY_OPERATION_CONSTRAINT, _OPERATION_CONSTRAINT),
+            count=1,
+        )
+        columns = ", ".join(
+            '"' + str(row[1]).replace('"', '""') + '"'
+            for row in connection.execute("PRAGMA table_info(jobs)")
+        )
+        indexes = [
+            row[0]
+            for row in connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='jobs' AND sql IS NOT NULL"
+            )
+        ]
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            connection.execute(replacement)
+            connection.execute(f"INSERT INTO jobs_next ({columns}) SELECT {columns} FROM jobs")
+            connection.execute("DROP TABLE jobs")
+            connection.execute("ALTER TABLE jobs_next RENAME TO jobs")
+            for index in indexes:
+                connection.execute(index)
+            connection.execute("COMMIT")
+        except BaseException:
+            connection.execute("ROLLBACK")
+            raise
 
     def _acquire_root_lock(self) -> None:
         lock_path = self.root / "manager.lock"
@@ -845,6 +900,7 @@ class JobManager:
             "HOME": str(home),
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
+            "MPL_IGNORE_SYSTEM_FONTS": "1",
         }
         return environment
 

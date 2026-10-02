@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .connectors import engineering
+from .connectors import engineering, networks
 from .jobs import SimulationOperation
 from .models import EnergyError
 from .registry import Registry
@@ -33,6 +33,8 @@ _TOOLS: dict[SimulationOperation, str] = {
     SimulationOperation.POWER_FLOW: "engineering.run_power_flow",
     SimulationOperation.BATTERY: "engineering.schedule_battery_charging",
     SimulationOperation.SOLAR: "engineering.estimate_solar_generation",
+    SimulationOperation.NETWORK_POWER_FLOW: "pypsa.power_flow",
+    SimulationOperation.NETWORK_DISPATCH: "pypsa.optimize_dispatch",
 }
 
 
@@ -113,10 +115,12 @@ async def _execute(
     state_dir: Path, operation: SimulationOperation, arguments: dict[str, Any]
 ) -> dict[str, Any]:
     # Build the regular EnergyAgent lifecycle with a job-local root, but only
-    # register the two local numerical toolkits.  In particular, HTTP, local
+    # register only the fixed local numerical toolkits required by this job.  In particular, HTTP, local
     # CSV, MCP, and plugin connectors are never imported by this worker.
     registry = Registry()
     engineering.register(registry)
+    if operation in {SimulationOperation.NETWORK_POWER_FLOW, SimulationOperation.NETWORK_DISPATCH}:
+        networks.register(registry)
     agent = EnergyAgent(registry, state_dir / "agent")
     try:
         session = agent.session("job-worker")

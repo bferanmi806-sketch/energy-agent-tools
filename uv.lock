@@ -809,6 +809,7 @@ engineering = [
     { name = "windpowerlib" },
 ]
 network-solvers = [
+    { name = "highspy" },
     { name = "opendssdirect-py" },
     { name = "pandapipes" },
     { name = "pypsa" },
@@ -818,6 +819,7 @@ network-solvers = [
 requires-dist = [
     { name = "build", marker = "extra == 'dev'" },
     { name = "cryptography", specifier = ">=43,<46" },
+    { name = "highspy", marker = "extra == 'network-solvers'", specifier = ">=1.12,<2" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "mcp", specifier = ">=1.26,<2" },

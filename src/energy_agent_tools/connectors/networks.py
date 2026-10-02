@@ -931,5 +931,9 @@ def register(registry: Registry) -> None:
         pandapipes_pipeflow,
     )
 
+    from . import pypsa_dispatch
+
+    pypsa_dispatch.register(registry)
+
 
 __all__ = ["pandapipes_pipeflow", "pypsa_power_flow", "register"]

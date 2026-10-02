@@ -15,11 +15,14 @@ The public operation set is intentionally small:
 | `power_flow` | `engineering.run_power_flow` | Explicit local pandapower AC network calculation |
 | `battery` | `engineering.schedule_battery_charging` | Bounded local battery optimisation |
 | `solar` | `engineering.estimate_solar_generation` | Explicit local pvlib generation estimate |
+| `network_power_flow` | `pypsa.power_flow` | Bounded explicit PyPSA AC network |
+| `network_dispatch` | `pypsa.optimize_dispatch` | One-hour lossless linear economic dispatch with fixed HiGHS settings |
 
 The worker receives only an operation and its JSON arguments. It does not
 receive a provider, account, plugin, executable, Python module, command, or
 filesystem path from the caller. Its registry contains the engineering
-toolkit and the operation-to-tool map is fixed in `job_worker.py`. Authentication
+toolkit plus the fixed network adapters for PyPSA operations; the
+operation-to-tool map is fixed in `job_worker.py`. Authentication
 and provider data access remain in the normal gateway; simulation input must
 be explicit numerical data.
 
@@ -56,6 +59,16 @@ that contains only interpreter lookup, source lookup, a private temporary home,
 and locale settings. Timeouts terminate the process group, first with a
 graceful signal and then with a hard kill. Private directories are mode `0700`
 and JSON files are mode `0600` on platforms that support these permissions.
+The worker sets Matplotlib's documented [`MPL_IGNORE_SYSTEM_FONTS`](https://matplotlib.org/stable/install/environment_variables_faq.html)
+option to use bundled fonts. This avoids a macOS system-font scan during
+cold numerical imports while keeping the 30-second process deadline.
+This path was checked with Matplotlib 3.11.2 and actual PyPSA 1.2.4/HiGHS
+1.15.1; older Matplotlib versions may not honor that option.
+
+Opening a job store from the four-operation schema migrates its operation
+constraint atomically. Existing IDs, ownership, site scope, lifecycle, results
+and indexes remain usable. Reopening the upgraded store does not repeat the
+migration.
 
 ## What this boundary guarantees
 

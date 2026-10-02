@@ -21,7 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 engineering = ["pvlib>=0.13,<0.17", "pandapower>=3.1,<4", "windpowerlib>=0.2.2,<0.3"]
-network-solvers = ["pypsa>=1.0,<2", "pandapipes>=0.14,<1", "opendssdirect.py>=0.9.4,<0.10"]
+network-solvers = ["pypsa>=1.0,<2", "highspy>=1.12,<2", "pandapipes>=0.14,<1", "opendssdirect.py>=0.9.4,<0.10"]
 dev = ["pytest>=8,<10", "pytest-asyncio>=0.25,<2", "ruff>=0.11", "mypy>=1.15", "types-jsonschema", "pandas-stubs", "build"]
 
 [project.urls]
