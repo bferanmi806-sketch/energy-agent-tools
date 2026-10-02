@@ -164,3 +164,29 @@ operation, timestamp indexing and a 30-day soak remain open. Independent agent
 evaluation, outside connector contribution and private physical-site evidence
 remain separate gates. The TypeScript SDK, Connect Apps product and persistent
 connection control plane remain required parts of the active goal.
+
+
+## Core release candidate, October 2
+
+Historical weather chunking in `9a94835331fa0e9d99aff8d20c32199d9b992cd1`
+supersedes the earlier one-request limit. SDK/MCP fixtures cover 18 months,
+19 historical requests, 26,304 aligned half-hour rows and visible failure of
+a middle chunk. The published CI revision `53a5884da5ebaa8797ed42de837f593dc18dcf0e`
+passes 624 tests on Python 3.11, 3.12 and 3.13 plus container, upgrade and
+Home Assistant checks. See [chunked weather evidence](evidence/chunked-weather-oct02.json).
+
+Indexed retrieval in `1982dd5234e3aad5c41839cae010ceda80cdb1cb` supersedes the earlier timestamp-index gap.
+Conservative chunk extents prune compatible payloads while preserving uncertain
+and legacy chunks, alternate mapping fallback and exact boundary validation.
+The million-row synthetic SDK run selects 1,440 day rows after decoding 2,000
+candidate rows in two chunks, including after backup/restore. The actual query
+plan uses the range index and retains a metadata scan for uncertain chunks.
+Peak traced Python allocation is 2,340,701 bytes. The complete local regression
+suite passes 632 tests in 568.44 seconds; Ruff and mypy pass. See
+[indexed time-series evidence](evidence/indexed-timeseries-oct02.json).
+
+The v0.3.0 core release is being packaged and verified. Phase 2 proceeds with
+the TypeScript SDK and Connect Apps experience after publication. Physical
+site evidence, broad actual agent evaluation, independent review, outside
+connector contribution and sustained operation remain open and continue
+alongside the developer product. The full goal remains active.

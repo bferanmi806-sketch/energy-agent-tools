@@ -1,0 +1,38 @@
+{
+  "implementation_revision": "9a94835331fa0e9d99aff8d20c32199d9b992cd1",
+  "historical_context": {
+    "fixture": "synthetic SDK/MCP 18-month history",
+    "history_start": "2025-04-02T00:00:00Z",
+    "history_end": "2026-10-02T00:00:00Z",
+    "historical_requests": 19,
+    "aligned_half_hour_rows": 26304,
+    "forecast_kwh": 192,
+    "chunk_days": 30,
+    "maximum_request_span": "30 days plus one preceding UTC hour"
+  },
+  "acceptance": [
+    "SDK and MCP complete 18-month alignment",
+    "Failed middle chunk records completed retrievals, automatic fallback and required refusal",
+    "Kathmandu UTC+05:45 interval alignment retains complete grid"
+  ],
+  "validation": {
+    "local_context_suite": "14 passed in 94.09s",
+    "ci": {
+      "revision": "53a5884da5ebaa8797ed42de837f593dc18dcf0e",
+      "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37056527045",
+      "python_3_11": "624 passed in 134.14s",
+      "python_3_12": "624 passed in 164.71s",
+      "python_3_13": "624 passed in 159.84s",
+      "container": "passed",
+      "upgrade": "passed",
+      "home_assistant": "passed",
+      "log_sha256": "f4745c1c5b38db09c782c4a752b812e71d5a496144a22250c1df0dc0d7d26986"
+    }
+  },
+  "live_weather_evidence": "historical-weather-live-oct02.json",
+  "limits": [
+    "Historical archive responses in workflow acceptance are controlled fixtures.",
+    "Live public evidence remains one 24-hour gridded Berlin reference request; not a physical-site qualification.",
+    "Chunking removes the single-request 366-day restriction; model row limits and provider availability still apply."
+  ]
+}

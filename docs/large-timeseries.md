@@ -9,7 +9,7 @@ whole JSON artifacts. Four tools are available when the operator configures a
 | `DATASET_IMPORT_CSV` | Streams UTF-8 CSV rows into bounded SQLite chunks. Requires explicit kind, unit, timezone and quantity shape. |
 | `DATASET_PAGE` | Returns an inline page bounded by rows and bytes, with `next_offset`. Optional `columns` limits fields. |
 | `DATASET_SUMMARIZE` | Streams count, missing count, mean and extrema. Sums only explicitly declared interval energy. |
-| `DATASET_WINDOW` | Scans chunks and materializes at most 100,000 rows in an explicit time window. |
+| `DATASET_WINDOW` | Uses conservative chunk bounds when compatible, then materializes at most 100,000 rows in an explicit time window. |
 
 `WORKBENCH_WINDOW` also handles dataset references, so existing workflows can
 select ordinary bounded interval artifacts from a large source. Rows are
@@ -64,7 +64,8 @@ qualification.
 Datasets and small artifacts share the existing `artifacts.sqlite3` database,
 user/global quotas and retention policy. Default quotas are 100,000,000 bytes
 per user and 1,000,000,000 bytes globally; retention is seven days. Dataset quota
-accounting includes serialized metadata and chunk payloads. Failed generators,
+accounting includes serialized metadata, chunk payloads and logical encoded index bounds.
+Native SQLite page and index overhead is outside this logical-byte quota. Failed generators,
 invalid CSV rows or quota failures roll back the complete import. User and
 session must both match for reads and deletion. Selected site and asset metadata
 come from the gateway's scope validation.
@@ -76,10 +77,20 @@ readable. A restarted gateway can read datasets using the restored session
 identity; they are not automatically shared with a newly created session.
 
 Chunks are bounded by row count and four MiB encoded bytes. Pages have a smaller
-inline budget in the gateway. Window selection and summaries scan stored chunks;
-there is no timestamp index or distributed query engine. A window over 100,000
-rows must be narrowed. Concurrent bulk-write load qualification remains open. Bulk imports use a worker thread,
-but SQLite still has a single writer and an import commits atomically.
+inline budget in the gateway. Compatible windows use persisted minimum starts
+and maximum interval ends to prune candidate chunk payloads. Exact row checks
+still refuse intervals that cross a requested boundary. Old chunks, uncertain
+bounds and different timestamp or end mappings fall back to scanning. Streamed
+summaries read all rows. A window over 100,000 rows must be narrowed.
+
+The [indexed million-row qualification](evidence/indexed-timeseries-oct02.json)
+decodes two chunks containing 2,000 rows for a 1,440-row day window and checks
+the actual SQLite query plan. Its range branch uses `chunks_time_range`; the
+uncertain-chunk branch still scans dataset chunk metadata. Backup/restore keeps
+the same candidate count. The [local concurrency qualification](evidence/dataset-concurrency-oct02.json)
+checks four imports and a reader across five threads in one process. Gateway
+load and sustained soak remain open. Bulk imports use a worker thread; SQLite
+has a single writer and each import commits atomically.
 
 Run the reproducible offline qualification from the repository root:
 

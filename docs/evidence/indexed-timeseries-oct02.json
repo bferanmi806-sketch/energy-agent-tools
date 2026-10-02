@@ -1,0 +1,74 @@
+{
+  "implementation_revision": "1982dd5234e3aad5c41839cae010ceda80cdb1cb",
+  "qualification": {
+    "fixture": {
+      "synthetic": true,
+      "physical_meter": false,
+      "rows": 1000000,
+      "cadence": "1 minute"
+    },
+    "import": {
+      "kind": "metered",
+      "dataset_id": "3a817fa4067b4f468486db2b97c06bd1",
+      "site_id": "site",
+      "asset_id": "feeder"
+    },
+    "summary": {
+      "count": 1000000,
+      "missing": 0,
+      "sum": 5999994.0,
+      "mean": 5.999994,
+      "min": 0.0,
+      "max": 12.0,
+      "streamed": true
+    },
+    "independent_expected_kwh": 5999994,
+    "window_rows": 1440,
+    "window_candidates_decoded": {
+      "chunks": 2,
+      "rows": 2000
+    },
+    "actual_window_query_plan": [
+      "MERGE (UNION ALL)",
+      "LEFT",
+      "SEARCH chunks USING INDEX chunks_time_range (dataset_id=? AND max_end_us>?)",
+      "USE TEMP B-TREE FOR ORDER BY",
+      "RIGHT",
+      "SEARCH chunks USING INDEX sqlite_autoindex_chunks_1 (dataset_id=?)"
+    ],
+    "restored_window_candidate_rows": 2000,
+    "inline_page_rows": 548,
+    "peak_traced_python_bytes": 2340701,
+    "timings": {
+      "import_seconds": 228.11297992998152,
+      "summary_seconds": 26.998164232005365,
+      "day_window_seconds": 0.34401588400942273
+    },
+    "backup_restore": "passed",
+    "foreign_scope": "artifact_not_found",
+    "limits": [
+      "Python allocations are traced; this is not an RSS or native SQLite memory measurement.",
+      "Temporal selection uses conservative chunk indexes for compatible mappings; uncertain or mismatched chunks still scan.",
+      "Bulk writes share SQLite's single writer; this is not a concurrent load or sustained soak qualification.",
+      "Meter semantics are synthetic declarations; no physical installation was read."
+    ]
+  },
+  "validation": {
+    "local_full_suite": "632 passed in 568.44s",
+    "local_full_log_sha256": "4a76b9020fc6beec4e2c29da4579c9102f83c8c2a062c9d5c6d48ac1273dd636",
+    "index_acceptance": "8 passed in 4.28s",
+    "integration_acceptance": "38 passed in 82.19s",
+    "ruff_check": "passed",
+    "ruff_format": "201 files already formatted",
+    "mypy": "51 source files passed"
+  },
+  "reproduction": "PYTHONPATH=\"$PWD/src:$PWD\" python scripts/qualify_large_timeseries.py",
+  "script_sha256": "4bdf370e490d2ff01d550a5b2a58c380eca5670d6ae9f30fb2a1a0dce9d213b4",
+  "limits": [
+    "Synthetic local SDK qualification, not physical meter access or forecast accuracy.",
+    "Range index prunes compatible candidate payloads; uncertain chunks and alternate mappings retain scan fallback.",
+    "SQLite metadata scan remains for uncertain-chunk branch.",
+    "Timings include allocation tracing and concurrent regression activity; not a service load target.",
+    "Traced Python allocations exclude process RSS and native SQLite memory."
+  ]
+}
