@@ -49,7 +49,13 @@ def _battery_truth(result: dict[str, Any], *, expected_charge_start: str) -> Non
 def test_six_offline_model_workflows_have_source_evidence_and_real_failures() -> None:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = os.pathsep.join(
-        (str(PROJECT_ROOT / "src"), str(PROJECT_ROOT), environment.get("PYTHONPATH", ""))
+        part
+        for part in (
+            environment.get("PYTHONPATH", ""),
+            str(PROJECT_ROOT / "src"),
+            str(PROJECT_ROOT),
+        )
+        if part
     ).rstrip(os.pathsep)
     completed = subprocess.run(
         [sys.executable, str(SCRIPT)],
@@ -170,3 +176,10 @@ def test_six_offline_model_workflows_have_source_evidence_and_real_failures() ->
     assert power_flow["model_input"]["site_id"] == feeder_source["site_id"]
     assert power_flow["model_input"]["asset_id"] == feeder_source["asset_id"]
     assert power_flow["model_input"]["load_values"] == {"p_mw": 0.8, "q_mvar": 0.2}
+    assert any(
+        item.get("artifact_id") == feeder_source["artifact_id"]
+        and item.get("input_kind") == "metered"
+        and item.get("source") == "local-csv"
+        and item.get("unit") == "MW and Mvar"
+        for item in flow["provenance"]
+    )

@@ -7,6 +7,9 @@ and `session.skill(...)` calls. The script makes no network requests and
 prints one JSON report with the six successful runs, source evidence, and a
 real rejected-input outcome for each recipe.
 
+It demonstrates the composable, self-hosted path: reviewed source mappings,
+private session-scoped artifacts, offline models, and transparent provenance.
+
 The model calls use the local libraries already used by the SDK: SciPy's MILP
 solver for battery schedules, pvlib for solar estimates, and pandapower for AC
 power flow. The CSV bindings make the source mapping explicit, including the

@@ -528,6 +528,7 @@ async def run_report() -> dict[str, Any]:
                 {
                     "arguments": {"run_power_flow": network},
                     "tools": {"run_power_flow": "engineering.run_power_flow"},
+                    "input_artifacts": [meter_id],
                 },
             )
             assert power_flow["ok"], power_flow
@@ -552,6 +553,7 @@ async def run_report() -> dict[str, Any]:
                 {
                     "arguments": {"run_power_flow": invalid_network},
                     "tools": {"run_power_flow": "engineering.run_power_flow"},
+                    "input_artifacts": [meter_id],
                 },
             )
             assert not power_flow_failure["ok"], power_flow_failure
@@ -642,7 +644,7 @@ async def run_report() -> dict[str, Any]:
                     },
                     "limitations": [
                         "Power flow is a simulated balanced steady-state snapshot, not protection or transient analysis.",
-                        "The load CSV is the model input source; the current workflow result does not link that CSV artifact into solver provenance.",
+                        "The feeder load snapshot is linked to the simulated result through its session-scoped CSV artifact.",
                     ],
                 },
             ]
