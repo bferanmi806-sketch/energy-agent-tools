@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal, Inexact, Rounded, localcontext
 from numbers import Real
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pandas as pd
@@ -58,7 +58,7 @@ def calculate_bill(
         raise EnergyError("invalid_input", "The input must be an energy result.")
     if result.kind != DataKind.CALCULATED:
         raise EnergyError("invalid_input", "Billing accepts calculated interval-cost rows only.")
-    if result.quantity_shape not in (None, "interval"):
+    if result.quantity_shape != "interval":
         raise EnergyError("invalid_input", "Billing requires interval cost data.")
     if not _contains_cost_operation(result.provenance):
         raise EnergyError(
@@ -291,7 +291,10 @@ def _decimal(value: Any, description: str) -> Decimal:
         raise EnergyError("invalid_value", f"{description} must be a finite number.") from exc
     if not parsed.is_finite():
         raise EnergyError("invalid_value", f"{description} must be a finite number.")
-    if len(parsed.as_tuple().digits) > 10_000 or abs(parsed.as_tuple().exponent) > 10_000:
+    if (
+        len(parsed.as_tuple().digits) > 10_000
+        or abs(cast(int, parsed.as_tuple().exponent)) > 10_000
+    ):
         raise EnergyError("invalid_value", f"{description} exceeds the supported decimal range.")
     return parsed
 
@@ -331,7 +334,7 @@ def _calculation_precision(
     nonzero = [value for value in values if value]
     if not nonzero:
         return 64
-    lowest_exponent = min(value.as_tuple().exponent for value in nonzero)
+    lowest_exponent = min(cast(int, value.as_tuple().exponent) for value in nonzero)
     highest_adjusted = max(value.adjusted() for value in nonzero)
     count_digits = len(str(max(1, len(costs), chargeable_days)))
     rate_digits = len(tax_rate.as_tuple().digits)

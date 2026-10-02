@@ -2,7 +2,7 @@
   "toolkit": {
     "id": "pypsa",
     "name": "PyPSA",
-    "description": "Bounded explicit-network AC power flow using PyPSA.",
+    "description": "Bounded explicit-network AC power flow and linear economic dispatch using PyPSA.",
     "runtime": "python",
     "status": "experimental",
     "auth_required": false,
@@ -233,6 +233,186 @@
       "result_unit": "MW, Mvar, pu, degree",
       "dependencies": [
         "pypsa"
+      ]
+    },
+    {
+      "name": "pypsa.optimize_dispatch",
+      "toolkit": "pypsa",
+      "description": "Optimize a bounded one-hour lossless linear power network by generator marginal cost.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "network": {
+            "type": "object",
+            "properties": {
+              "buses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "v_nom_kv": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000.0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "v_nom_kv"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 100
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "from_bus": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "to_bus": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "x_ohm": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 10000.0
+                    },
+                    "s_nom_mva": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 10000.0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "from_bus",
+                    "to_bus",
+                    "x_ohm",
+                    "s_nom_mva"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              },
+              "loads": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "bus": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "p_mw": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10000.0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "bus",
+                    "p_mw"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 500
+              },
+              "generators": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "bus": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "p_nom_mw": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 10000.0
+                    },
+                    "marginal_cost": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1000000.0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "bus",
+                    "p_nom_mw",
+                    "marginal_cost"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 500
+              }
+            },
+            "required": [
+              "buses",
+              "lines",
+              "loads",
+              "generators"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "network"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "optimize_dispatch",
+        "run_network_optimization",
+        "economic dispatch",
+        "linear OPF",
+        "PyPSA"
+      ],
+      "actions": [
+        "simulation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "simulated",
+      "result_unit": "MW, caller currency/hour",
+      "dependencies": [
+        "pypsa",
+        "highspy"
       ]
     }
   ]

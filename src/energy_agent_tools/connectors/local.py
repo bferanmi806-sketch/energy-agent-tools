@@ -203,13 +203,31 @@ def register(registry: Registry) -> None:
             "window": {"type": "integer", "minimum": 1, "maximum": 10000},
             "method": {"enum": ["left", "trapezoid"]},
             "unit": column,
+            "finish": {"type": "string", "format": "date-time"},
+            "timezone": column,
+            "source": column,
+            "standing_charge": schema(
+                {
+                    "amount_per_day": {"type": "number", "minimum": 0},
+                    "currency": {"enum": ["GBP", "USD", "EUR"]},
+                    "taxable": {"type": "boolean"},
+                },
+                ["amount_per_day", "currency", "taxable"],
+            ),
+            "tax": schema(
+                {
+                    "rate": {"type": "number", "minimum": 0, "maximum": 1},
+                    "energy_taxable": {"type": "boolean"},
+                },
+                ["rate", "energy_taxable"],
+            ),
         }
     )
     registry.add(
         Tool(
             name="WORKBENCH_ENERGY_OPERATION",
             toolkit="workbench",
-            description="Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon, align, compare calendar periods or rolling baselines with strict units and lineage.",
+            description="Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon and explicit standing-charge/tax bills, align, compare calendar periods or rolling baselines with strict units and lineage.",
             input_schema=schema(
                 {
                     "operation": {
@@ -219,6 +237,7 @@ def register(registry: Registry) -> None:
                             "counter",
                             "integrate_power",
                             "cost",
+                            "bill",
                             "carbon",
                             "baseline",
                             "compare",
@@ -239,6 +258,7 @@ def register(registry: Registry) -> None:
             capabilities=[
                 "analyse_timeseries",
                 "calculate_energy_cost",
+                "calculate_electricity_bill",
                 "calculate_carbon",
                 "compare_energy_data",
             ],

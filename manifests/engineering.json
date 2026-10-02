@@ -247,8 +247,8 @@
         "estimate_solar_generation"
       ],
       "actions": [
-        "simulation",
-        "calculation"
+        "calculation",
+        "simulation"
       ],
       "idempotent": true,
       "version": "1.0.0",
@@ -779,8 +779,8 @@
         "perform_engineering_calculation"
       ],
       "actions": [
-        "simulation",
-        "calculation"
+        "calculation",
+        "simulation"
       ],
       "idempotent": true,
       "version": "1.0.0",

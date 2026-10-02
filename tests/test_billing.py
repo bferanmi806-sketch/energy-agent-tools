@@ -17,6 +17,7 @@ def _cost_result(rows, *, unit="GBP", kind=DataKind.CALCULATED, timezone="UTC", 
         source="timeseries",
         timezone=timezone,
         resolution="1D",
+        quantity_shape="interval",
         provenance=provenance or [{"operation": "cost", "inputs": [{"source": "caller"}]}],
     )
 

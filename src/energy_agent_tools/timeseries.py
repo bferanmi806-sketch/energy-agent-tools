@@ -72,6 +72,7 @@ def operate(
         "counter",
         "integrate_power",
         "cost",
+        "bill",
         "carbon",
         "baseline",
         "compare",
@@ -96,6 +97,10 @@ def operate(
         return _integrate_power(inputs, parameters)
     if operation == "cost":
         return _rate_calculation("cost", inputs, parameters)
+    if operation == "bill":
+        from .billing import calculate_bill
+
+        return calculate_bill(inputs, parameters)
     if operation == "carbon":
         return _rate_calculation("carbon", inputs, parameters)
     if operation == "baseline":

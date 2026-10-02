@@ -1,0 +1,273 @@
+{
+  "toolkit": {
+    "id": "opendss",
+    "name": "OpenDSS via DSS-Extensions",
+    "description": "Bounded in-memory balanced and unbalanced distribution-network power flow.",
+    "runtime": "python",
+    "status": "experimental",
+    "auth_required": false,
+    "docs_url": "https://dss-extensions.org/OpenDSSDirect.py/",
+    "version": "1.0.0",
+    "categories": [
+      "power flow",
+      "distribution grid",
+      "unbalanced network",
+      "engineering simulation"
+    ]
+  },
+  "tools": [
+    {
+      "name": "opendss.power_flow",
+      "toolkit": "opendss",
+      "description": "Solve a bounded explicit balanced or per-phase unbalanced network with OpenDSSDirect; no DSS files or arbitrary commands are accepted.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "network": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "balanced",
+                  "unbalanced"
+                ]
+              },
+              "frequency_hz": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1000.0
+              },
+              "buses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+                    },
+                    "kv_ll": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000.0
+                    },
+                    "phases": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 3
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kv_ll"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 100
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "bus": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+                  },
+                  "kv_ll": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1000.0
+                  },
+                  "phases": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3
+                  },
+                  "pu": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 2
+                  },
+                  "angle_deg": {
+                    "type": "number",
+                    "minimum": -360,
+                    "maximum": 360
+                  }
+                },
+                "required": [
+                  "bus"
+                ],
+                "additionalProperties": false
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+                    },
+                    "from_bus": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+                    },
+                    "to_bus": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+                    },
+                    "phases": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 3
+                    },
+                    "length_km": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000.0
+                    },
+                    "r1_ohm_per_km": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10000.0
+                    },
+                    "x1_ohm_per_km": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10000.0
+                    },
+                    "r0_ohm_per_km": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10000.0
+                    },
+                    "x0_ohm_per_km": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10000.0
+                    },
+                    "ampacity_a": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 10000000.0
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "from_bus",
+                    "to_bus",
+                    "length_km",
+                    "r1_ohm_per_km",
+                    "x1_ohm_per_km"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 500
+              },
+              "loads": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+                    },
+                    "bus": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+                    },
+                    "phases": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 3
+                    },
+                    "connection": {
+                      "type": "string",
+                      "enum": [
+                        "wye",
+                        "delta"
+                      ]
+                    },
+                    "kv": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 1000.0
+                    },
+                    "kw": {
+                      "type": "number",
+                      "minimum": -10000000.0,
+                      "maximum": 10000000.0
+                    },
+                    "kvar": {
+                      "type": "number",
+                      "minimum": -10000000.0,
+                      "maximum": 10000000.0
+                    },
+                    "kw_by_phase": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -10000000.0,
+                        "maximum": 10000000.0
+                      },
+                      "minItems": 1,
+                      "maxItems": 3
+                    },
+                    "kvar_by_phase": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": -10000000.0,
+                        "maximum": 10000000.0
+                      },
+                      "minItems": 1,
+                      "maxItems": 3
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "bus"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 500
+              }
+            },
+            "required": [
+              "buses",
+              "source",
+              "loads"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "network"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "power flow",
+        "distribution network",
+        "unbalanced power flow",
+        "phase voltage",
+        "line current",
+        "DSS-Extensions"
+      ],
+      "actions": [
+        "simulation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "simulated",
+      "result_unit": "kW, kvar, A, pu, degree",
+      "dependencies": [
+        "opendssdirect"
+      ]
+    }
+  ]
+}

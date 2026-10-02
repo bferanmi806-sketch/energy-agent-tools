@@ -877,7 +877,7 @@ def register(registry: Registry) -> None:
         Toolkit(
             id=_PYPSA_TOOLKIT,
             name="PyPSA",
-            description="Bounded explicit-network AC power flow using PyPSA.",
+            description="Bounded explicit-network AC power flow and linear economic dispatch using PyPSA.",
             runtime="python",
             status="experimental" if _pypsa_available() else "unavailable",
             docs_url=PYPSA_DOCS,

@@ -44,8 +44,8 @@
         "electricity"
       ],
       "actions": [
-        "read-only",
-        "external-data"
+        "external-data",
+        "read-only"
       ],
       "idempotent": true,
       "version": "1.0.0",

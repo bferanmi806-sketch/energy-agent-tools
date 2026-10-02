@@ -12,6 +12,49 @@
   },
   "tools": [
     {
+      "name": "WORKBENCH_WINDOW",
+      "toolkit": "workbench",
+      "description": "Select a half-open time window, preserve source kind and report observed coverage. Never prorates intervals.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "artifact_id",
+          "start",
+          "end",
+          "timestamp"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "analyse_timeseries"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    },
+    {
       "name": "WORKBENCH_SUMMARIZE",
       "toolkit": "workbench",
       "description": "Summarize interval energy consumption, weather, tariff or carbon time series locally.",
@@ -231,7 +274,7 @@
     {
       "name": "WORKBENCH_ENERGY_OPERATION",
       "toolkit": "workbench",
-      "description": "Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon, align, compare calendar periods or rolling baselines with strict units and lineage.",
+      "description": "Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon and explicit standing-charge/tax bills, align, compare calendar periods or rolling baselines with strict units and lineage.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -242,6 +285,7 @@
               "counter",
               "integrate_power",
               "cost",
+              "bill",
               "carbon",
               "baseline",
               "compare",
@@ -274,6 +318,10 @@
                 "minLength": 1
               },
               "second_column": {
+                "type": "string",
+                "minLength": 1
+              },
+              "second_end": {
                 "type": "string",
                 "minLength": 1
               },
@@ -315,6 +363,61 @@
               "unit": {
                 "type": "string",
                 "minLength": 1
+              },
+              "finish": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "timezone": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "standing_charge": {
+                "type": "object",
+                "properties": {
+                  "amount_per_day": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "currency": {
+                    "enum": [
+                      "GBP",
+                      "USD",
+                      "EUR"
+                    ]
+                  },
+                  "taxable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "amount_per_day",
+                  "currency",
+                  "taxable"
+                ],
+                "additionalProperties": false
+              },
+              "tax": {
+                "type": "object",
+                "properties": {
+                  "rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "energy_taxable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "rate",
+                  "energy_taxable"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [],
@@ -330,6 +433,7 @@
       "capabilities": [
         "analyse_timeseries",
         "calculate_energy_cost",
+        "calculate_electricity_bill",
         "calculate_carbon",
         "compare_energy_data"
       ],

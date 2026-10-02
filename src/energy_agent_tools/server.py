@@ -213,6 +213,8 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         Preloaded measured counters or power can use consumption_transform with
         operation counter or integrate_power and explicit operation parameters.
         Conversion precedes window selection and remains calculated evidence.
+        Cost workflows accept billing with standing_charge, tax and source for
+        complete local-day windows; tariff-comparison needs alternative_billing too.
         start/end are offset-aware ranges; artifacts maps capabilities to scoped
         artifact IDs. Battery workflows require battery constraints; weather-based
         solar estimation requires solar model inputs. Missing inputs stay explicit.

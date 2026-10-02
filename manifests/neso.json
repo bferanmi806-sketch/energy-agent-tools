@@ -44,8 +44,8 @@
         "neso_dataset_catalogue"
       ],
       "actions": [
-        "read-only",
-        "external-data"
+        "external-data",
+        "read-only"
       ],
       "idempotent": true,
       "version": "1.0.0",
@@ -112,8 +112,8 @@
         "neso_datastore"
       ],
       "actions": [
-        "read-only",
-        "external-data"
+        "external-data",
+        "read-only"
       ],
       "idempotent": true,
       "version": "1.0.0",

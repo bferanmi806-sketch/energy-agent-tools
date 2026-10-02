@@ -209,7 +209,9 @@ class Tool(StrictModel):
     dependencies: list[str] = Field(default_factory=list)
 
     def public(self) -> Json:
-        return self.model_dump(mode="json")
+        data = self.model_dump(mode="json")
+        data["actions"] = sorted(action.value for action in self.actions)
+        return data
 
 
 class EnergyError(Exception):

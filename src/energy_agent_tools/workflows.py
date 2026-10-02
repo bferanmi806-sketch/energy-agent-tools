@@ -81,6 +81,39 @@ def _end_column(result: Json) -> str | None:
     return next((column for column in ("end", "to", "interval_end") if column in rows[0]), None)
 
 
+async def _bill_cost(
+    agent: EnergyAgent, session: Session, cost: Json, window: Json, schedule: Json
+) -> Json:
+    if not cost["ok"]:
+        return cost
+    if not isinstance(schedule, dict) or set(schedule) != {"standing_charge", "tax", "source"}:
+        raise EnergyError(
+            "invalid_skill_parameters",
+            "Billing requires explicit standing_charge, tax and source only.",
+        )
+    if not session.site_id or not window:
+        raise EnergyError(
+            "billing_window_required",
+            "Billing requires a selected site and a complete local-day start/end window.",
+        )
+    ref = cost["result"]["data"]["artifact_id"]
+    return await agent.execute(
+        session,
+        "WORKBENCH_ENERGY_OPERATION",
+        {
+            "operation": "bill",
+            "artifact_ids": [ref],
+            "parameters": {
+                **schedule,
+                "start": window["start"],
+                "finish": window["end"],
+                "timezone": agent.sites[session.site_id].timezone,
+            },
+        },
+        input_artifacts=[ref],
+    )
+
+
 async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, parameters: Json) -> Json:
     evidence: list[Json] = []
     output: Json | None = None
@@ -104,11 +137,24 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             "alternative_tariff",
             "comparison_artifact",
             "consumption_transform",
+            "billing",
+            "alternative_billing",
         }
         if set(parameters) - allowed:
             raise EnergyError("invalid_skill_parameters", "Unknown workflow parameters.")
         recipe = RECIPES[skill_id]
         operation = recipe["operation"]
+        if {"billing", "alternative_billing"} & parameters.keys():
+            if operation != "cost" or "billing" not in parameters:
+                raise EnergyError(
+                    "invalid_skill_parameters",
+                    "Billing applies to cost workflows and requires the primary schedule.",
+                )
+            if bool(recipe.get("alternative")) != ("alternative_billing" in parameters):
+                raise EnergyError(
+                    "invalid_skill_parameters",
+                    "Tariff comparison requires a separate explicit billing schedule for each tariff.",
+                )
         arguments = parameters.get("arguments", {})
         if not isinstance(arguments, dict):
             raise EnergyError("invalid_skill_parameters", "Capability arguments must be an object.")
@@ -331,7 +377,11 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 "WORKBENCH_ENERGY_OPERATION",
                 {"operation": operation, "artifact_ids": inputs, "parameters": params},
                 input_artifacts=inputs,
+                persist="billing" in parameters,
             )
+            if "billing" in parameters:
+                evidence.append({"energy_cost": output})
+                output = await _bill_cost(agent, session, output, window, parameters["billing"])
             if recipe.get("alternative"):
                 alternative = parameters.get("alternative_tariff")
                 if not isinstance(alternative, str):
@@ -349,8 +399,20 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                     "WORKBENCH_ENERGY_OPERATION",
                     {"operation": "cost", "artifact_ids": alt_inputs, "parameters": params},
                     input_artifacts=alt_inputs,
+                    persist="alternative_billing" in parameters,
                 )
+                if "alternative_billing" in parameters:
+                    evidence.append({"alternative_energy_cost": alternative_output})
+                    alternative_output = await _bill_cost(
+                        agent,
+                        session,
+                        alternative_output,
+                        window,
+                        parameters["alternative_billing"],
+                    )
                 evidence.append({"alternative_tariff": alternative_output})
+                if not alternative_output["ok"]:
+                    return {"ok": False, "skill_id": skill_id, "evidence": evidence}
         elif operation == "battery":
             import pandas as pd
 
