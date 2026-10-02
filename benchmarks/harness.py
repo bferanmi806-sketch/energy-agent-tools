@@ -428,9 +428,10 @@ def benchmark_cases() -> tuple[BenchmarkCase, ...]:
 def qualified_scenario_cases() -> tuple[BenchmarkCase, ...]:
     """Expose only independently qualified environments, retaining frozen truths."""
 
-    from .environments import QUALIFIED_ENVIRONMENT_CASE_IDS
+    from .environments import qualified_environment_clocks
     from .scenarios import scenario_cases
 
+    clocks = qualified_environment_clocks()
     return tuple(
         BenchmarkCase(
             id=case.id,
@@ -438,14 +439,10 @@ def qualified_scenario_cases() -> tuple[BenchmarkCase, ...]:
             intent=case.intent,
             **{key: value for key, value in asdict(case.expected).items() if key != "outcome"},
             environment_id=case.id,
-            scenario_clock=(
-                "2026-09-29T16:00:00Z"
-                if case.id == "dev_current_power_snapshot"
-                else "2026-09-30T12:00:00Z"
-            ),
+            scenario_clock=clocks[case.id].isoformat().replace("+00:00", "Z"),
         )
         for case in scenario_cases()
-        if case.id in QUALIFIED_ENVIRONMENT_CASE_IDS
+        if case.id in clocks
     )
 
 

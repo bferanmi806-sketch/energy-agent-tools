@@ -221,3 +221,28 @@ async def test_two_octopus_accounts_are_ambiguous_until_asset_selected(tmp_path:
         assert result["result"]["provenance"][-1]["account_id"] == "octopus-home"
     finally:
         await built.close()
+
+
+@pytest.mark.asyncio
+async def test_shared_dispatch_qualifies_all_family_environments(tmp_path: Path):
+    from benchmarks.environments import (
+        BuiltEnvironment,
+        ScenarioContext,
+        qualified_environment_clocks,
+    )
+
+    clocks = qualified_environment_clocks()
+    assert len(clocks) == 9
+    for case_id, clock in clocks.items():
+        built = build_environment(case_id, tmp_path / "root", tmp_path / "state")
+        try:
+            assert isinstance(built, BuiltEnvironment)
+            assert isinstance(built.context, ScenarioContext)
+            assert built.context.case_id == case_id
+            assert built.context.scenario_clock == clock
+            session = built.agent.session(built.context.user_id, built.context.site_id)
+            assert built.agent.sites[session.site_id].user_id == session.user_id
+            assert built.agent.catalogue(session)
+        finally:
+            await built.close()
+        assert built._http.is_closed
