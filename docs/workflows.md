@@ -42,6 +42,9 @@ runtime accepts exactly these top-level fields:
 | `solar` | object | PV model and weather overrides for `solar-forecast`. |
 | `alternative_tariff` | string | Existing same-session tariff artifact for `tariff-comparison`. |
 | `comparison_artifact` | string | Existing same-session metered interval-energy artifact for `building-comparison`. |
+| `consumption_transform` | object | Explicit `counter` or `integrate_power` operation and parameters for a preloaded measured artifact; see the conversion example below. |
+| `billing` | object | Explicit standing charge, tax treatment, and source for a complete local-day cost workflow; see [tariff components](tariff-components.md). |
+| `alternative_billing` | object | Separate explicit schedule required with `billing` for `tariff-comparison`. |
 
 Unknown top-level fields return `invalid_skill_parameters`. `start` and `end`
 are passed to provider capabilities that support ranges (`get_energy_consumption`,
