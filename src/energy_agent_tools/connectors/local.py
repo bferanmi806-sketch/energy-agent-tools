@@ -33,8 +33,16 @@ def register(registry: Registry) -> None:
     async def window(args: Json, ctx: ExecutionContext) -> EnergyResult:
         from ..windows import select_window
 
+        original = ctx.workbench.read(ctx.session, args["artifact_id"])
+        if (
+            isinstance(original.data, dict)
+            and original.data.get("storage") == "partitioned-timeseries.v1"
+        ):
+            from .datasets import select_dataset_window
+
+            return await select_dataset_window(args, ctx)
         return select_window(
-            ctx.workbench.read(ctx.session, args["artifact_id"]),
+            original,
             args["artifact_id"],
             args["start"],
             args["end"],

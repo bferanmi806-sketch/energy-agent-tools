@@ -6,18 +6,42 @@
     "runtime": "native",
     "status": "stable",
     "auth_required": false,
-    "docs_url": null
+    "docs_url": null,
+    "version": "1.0.0",
+    "categories": []
   },
   "tools": [
     {
       "name": "CSV_READ_TIMESERIES",
       "toolkit": "csv",
-      "description": "Import local meter consumption, PV, battery, tariff or building telemetry CSV.",
+      "description": "Import local CSV with caller-declared measurement kind, optional quantity shape and resolution.",
       "input_schema": {
         "type": "object",
         "properties": {
           "file": {
             "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "window_mode": {
+            "enum": [
+              "starts",
+              "overlap"
+            ],
+            "default": "starts"
+          },
+          "end_column": {
+            "type": "string",
+            "minLength": 1
           },
           "kind": {
             "enum": [
@@ -34,6 +58,20 @@
           },
           "timezone": {
             "type": "string"
+          },
+          "quantity_shape": {
+            "enum": [
+              "interval",
+              "instantaneous",
+              "counter"
+            ],
+            "description": "Caller-declared quantity semantics; never inferred from CSV content."
+          },
+          "resolution": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S",
+            "description": "Caller-declared sampling or interval resolution."
           }
         },
         "required": [
@@ -53,7 +91,230 @@
       "actions": [
         "read-only"
       ],
-      "idempotent": true
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    },
+    {
+      "name": "DATASET_IMPORT_CSV",
+      "toolkit": "csv",
+      "description": "Stream an approved CSV into a private partitioned dataset with declared semantics; never load the complete file into memory.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "kind": {
+            "enum": [
+              "metered",
+              "calculated",
+              "estimated",
+              "simulated",
+              "forecast"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "quantity_shape": {
+            "enum": [
+              "interval",
+              "instantaneous",
+              "counter"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "field_units": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "required": [
+          "file",
+          "kind",
+          "unit",
+          "timezone",
+          "quantity_shape"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "large_timeseries"
+      ],
+      "actions": [
+        "read-only"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    },
+    {
+      "name": "DATASET_PAGE",
+      "toolkit": "csv",
+      "description": "Read a bounded page of a session-scoped dataset, preserving source kind and row order.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 1,
+            "maxItems": 64,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "artifact_id"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "large_timeseries"
+      ],
+      "actions": [
+        "read-only"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    },
+    {
+      "name": "DATASET_SUMMARIZE",
+      "toolkit": "csv",
+      "description": "Stream a numeric column summary; sum only explicitly declared interval energy, never power or cumulative counters.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "artifact_id",
+          "column"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "large_timeseries"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    },
+    {
+      "name": "DATASET_WINDOW",
+      "toolkit": "csv",
+      "description": "Scan a large dataset for a bounded time window; preserve source semantics and report observed coverage without prorating intervals.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "artifact_id",
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "large_timeseries"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
     }
   ]
 }

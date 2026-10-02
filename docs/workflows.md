@@ -481,3 +481,10 @@ Cost calculations still require matching tariff coverage and explicit interval
 ends when consumption has explicit ends. The workbench's `second_end` parameter
 selects the second input's end column. Workflows recognize `end`, `to`, and
 `interval_end` without altering the supplied timestamps or durations.
+
+## Partitioned sources
+
+[Large time-series datasets](large-timeseries.md) can supply bounded windows
+to the existing recipes. Approved CSV dataset bindings filter while streaming;
+`WORKBENCH_WINDOW` materializes the selected observations and preserves their
+kind. Cadence, units and coverage still need to satisfy each recipe.

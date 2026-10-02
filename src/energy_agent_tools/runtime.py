@@ -529,7 +529,22 @@ class EnergyAgent:
                     or (asset.account_ids and account.id not in asset.account_ids)
                 ):
                     raise EnergyError("asset_forbidden", "Account is not connected to this asset.")
-            context = ExecutionContext(session, account, credential, self.http, self.workbench)
+            context = ExecutionContext(
+                session,
+                account,
+                credential,
+                self.http,
+                self.workbench,
+                asset_id=asset_id,
+                site_id=session.site_id
+                or (
+                    self.assets[asset_id].site_id
+                    if asset_id
+                    else account.site_id
+                    if account
+                    else None
+                ),
+            )
             result = await self.registry.handlers[name](args, context)
             if (
                 expected_quantity_shape is not None
@@ -745,6 +760,7 @@ class EnergyAgent:
                     call.get("account_id"),
                     call.get("persist", False),
                     call.get("input_artifacts"),
+                    asset_id=call.get("asset_id"),
                 )
             )
         return outputs

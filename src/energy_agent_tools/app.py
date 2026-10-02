@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .capabilities import CapabilityBinding
-from .connectors import analytics, dss, engineering, extended, http, local, networks
+from .connectors import analytics, datasets, dss, engineering, extended, http, local, networks
 from .models import Asset, ConnectedAccount, Json, Site
 from .registry import Registry
 from .runtime import EnergyAgent
@@ -46,6 +46,7 @@ def build_agent(
     load_plugins(registry, config.get("plugins", []))
     if data_root:
         local.register_csv(registry, data_root)
+        datasets.register(registry, data_root)
     auth_store = None
     accounts = [ConnectedAccount.model_validate(a) for a in config.get("accounts", [])]
     if config.get("vault"):

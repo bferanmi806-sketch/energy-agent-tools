@@ -34,6 +34,8 @@ class ForecastWorkflowRequest(StrictModel):
 
 def _timestamp_column(result: Json) -> str:
     rows = result.get("data")
+    if isinstance(rows, dict) and rows.get("storage") == "partitioned-timeseries.v1":
+        return rows.get("timestamp_column", "timestamp")
     if not isinstance(rows, list) or not rows:
         raise EnergyError("insufficient_data", "A source must contain interval rows.")
     for column in ("timestamp", "from", "time", "interval_start"):

@@ -79,6 +79,11 @@ class ConsumptionTransform(BaseModel):
 
 
 def _time_column(result: Json) -> str:
+    if (
+        isinstance(result.get("data"), dict)
+        and result["data"].get("storage") == "partitioned-timeseries.v1"
+    ):
+        return result["data"].get("timestamp_column", "timestamp")
     rows = result.get("data")
     if not isinstance(rows, list) or not rows:
         raise EnergyError("insufficient_data", "Workflow requires nonempty interval rows.")

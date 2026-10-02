@@ -16,6 +16,7 @@ from uuid import uuid4
 import pandas as pd
 
 from .models import DataKind, EnergyError, EnergyResult, Json, Session
+from .partitioned_timeseries import PartitionedTimeseriesStore, storage_usage
 
 
 class Workbench:
@@ -31,6 +32,7 @@ class Workbench:
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(root, 0o700)
         self.path = root / "artifacts.sqlite3"
+        self._partitioned: PartitionedTimeseriesStore | None = None
         self.inline_bytes = inline_bytes
         self.max_bytes = max_bytes
         if min(user_quota_bytes, global_quota_bytes, retention_seconds) <= 0:
@@ -50,8 +52,22 @@ class Workbench:
             db.execute("CREATE INDEX IF NOT EXISTS artifact_owner ON artifacts(user_id,session_id)")
         os.chmod(self.path, 0o600)
 
+    @property
+    def partitioned(self) -> PartitionedTimeseriesStore:
+        if self._partitioned is None:
+            self._partitioned = PartitionedTimeseriesStore(
+                self.path.parent,
+                database_path=self.path,
+                user_quota_bytes=self.user_quota_bytes,
+                global_quota_bytes=self.global_quota_bytes,
+                retention_seconds=self.retention_seconds,
+            )
+        return self._partitioned
+
     def connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.path, timeout=10)
+        db = sqlite3.connect(self.path, timeout=10)
+        db.execute("PRAGMA foreign_keys=ON")
+        return db
 
     def persist(self, session: Session, result: EnergyResult) -> Json:
         payload = result.model_dump_json()
@@ -64,13 +80,12 @@ class Workbench:
             db.execute(
                 "DELETE FROM artifacts WHERE created_at < ?", (created_at - self.retention_seconds,)
             )
-            usage = db.execute(
-                "SELECT COALESCE(SUM(length(CAST(payload AS BLOB))),0) FROM artifacts WHERE user_id=?",
-                (session.user_id,),
-            ).fetchone()[0]
-            total = db.execute(
-                "SELECT COALESCE(SUM(length(CAST(payload AS BLOB))),0) FROM artifacts"
-            ).fetchone()[0]
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='datasets'").fetchone():
+                db.execute(
+                    "DELETE FROM datasets WHERE created_at<?",
+                    (time.time() - self.retention_seconds,),
+                )
+            usage, total = storage_usage(db, session.user_id)
             size = len(payload.encode())
             if usage + size > self.user_quota_bytes or total + size > self.global_quota_bytes:
                 raise EnergyError(
@@ -123,11 +138,22 @@ class Workbench:
                 (artifact_id, session.user_id, session.id, time.time() - self.retention_seconds),
             ).fetchone()
         if row is None:
+            with self.connect() as db:
+                has_datasets = db.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name='datasets'"
+                ).fetchone()
+            if has_datasets:
+                return self.partitioned.describe(session, artifact_id)
             raise EnergyError("artifact_not_found", "Artifact does not exist in this session.")
         return EnergyResult.model_validate_json(row[0])
 
     def delete(self, session: Session, artifact_id: str) -> None:
         with self.connect() as db:
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='datasets'").fetchone():
+                db.execute(
+                    "DELETE FROM datasets WHERE id=? AND user_id=? AND session_id=?",
+                    (artifact_id, session.user_id, session.id),
+                )
             db.execute(
                 "DELETE FROM artifacts WHERE id=? AND user_id=? AND session_id=?",
                 (artifact_id, session.user_id, session.id),
@@ -135,10 +161,17 @@ class Workbench:
 
     def list_artifacts(self, session: Session) -> list[Json]:
         with self.connect() as db:
-            rows = db.execute(
-                "SELECT id,length(CAST(payload AS BLOB)),created_at FROM artifacts WHERE user_id=? AND session_id=? AND created_at>=? ORDER BY created_at DESC LIMIT 1000",
-                (session.user_id, session.id, time.time() - self.retention_seconds),
-            ).fetchall()
+            condition = "user_id=? AND session_id=? AND created_at>=?"
+            params: tuple[Any, ...] = (
+                session.user_id,
+                session.id,
+                time.time() - self.retention_seconds,
+            )
+            query = f"SELECT id,length(CAST(payload AS BLOB)),created_at FROM artifacts WHERE {condition}"
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='datasets'").fetchone():
+                query += f" UNION ALL SELECT id,bytes,created_at FROM datasets WHERE {condition}"
+                params += params
+            rows = db.execute(query + " ORDER BY created_at DESC LIMIT 1000", params).fetchall()
         return [
             {
                 "artifact_id": row[0],

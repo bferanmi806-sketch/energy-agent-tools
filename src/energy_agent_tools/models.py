@@ -229,6 +229,8 @@ class ExecutionContext:
     credential: str | None
     http: httpx.AsyncClient
     workbench: Any
+    asset_id: str | None = None
+    site_id: str | None = None
 
 
 Handler = Callable[[Json, ExecutionContext], Awaitable[EnergyResult]]

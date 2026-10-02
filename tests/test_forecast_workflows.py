@@ -53,11 +53,13 @@ def _configuration(data, provider):
             }
         ],
     }
-    if provider == "csv":
+    if provider in {"csv", "csv-dataset"}:
         config["bindings"].append(
             {
                 "capability": "get_energy_consumption",
-                "tool": "CSV_READ_TIMESERIES",
+                "tool": "DATASET_IMPORT_CSV"
+                if provider == "csv-dataset"
+                else "CSV_READ_TIMESERIES",
                 "reviewed": True,
                 "kind": "metered",
                 "unit": "kWh",
@@ -86,7 +88,7 @@ def _configuration(data, provider):
     return config
 
 
-@pytest.mark.parametrize("provider", ["csv", "octopus"])
+@pytest.mark.parametrize("provider", ["csv", "csv-dataset", "octopus"])
 @pytest.mark.parametrize("interface", ["sdk", "mcp"])
 async def test_three_months_to_eight_day_forecast_bill(tmp_path, monkeypatch, provider, interface):
     monkeypatch.setenv("TEST_FORECAST_METER_KEY", "synthetic-fixture-credential")

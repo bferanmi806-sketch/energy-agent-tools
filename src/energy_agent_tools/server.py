@@ -21,6 +21,7 @@ class ExecutionCall(BaseModel):
     tool: str
     arguments: Json = Field(default_factory=dict)
     account_id: str | None = None
+    asset_id: str | None = None
     persist: bool = False
     input_artifacts: Annotated[list[str], Field(max_length=10)] = Field(default_factory=list)
 

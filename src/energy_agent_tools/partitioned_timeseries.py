@@ -11,6 +11,7 @@ import json
 import math
 import os
 import sqlite3
+import time
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
@@ -31,18 +32,29 @@ class PartitionedTimeseriesStore:
         root: Path,
         chunk_rows: int = 1000,
         max_bytes: int = 1_000_000_000,
+        *,
+        database_path: Path | None = None,
+        user_quota_bytes: int = 1_000_000_000,
+        global_quota_bytes: int = 10_000_000_000,
+        retention_seconds: int = 604800,
     ) -> None:
         if type(chunk_rows) is not int or chunk_rows < 1:
             raise ValueError("chunk_rows must be a positive integer")
         if type(max_bytes) is not int or max_bytes < 1:
             raise ValueError("max_bytes must be a positive integer")
+        if min(user_quota_bytes, global_quota_bytes, retention_seconds) <= 0:
+            raise ValueError("Storage quotas and retention must be positive")
+        self.user_quota_bytes = user_quota_bytes
+        self.global_quota_bytes = global_quota_bytes
+        self.retention_seconds = retention_seconds
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(root, 0o700)
-        self.path = root / "timeseries.sqlite3"
+        self.path = database_path or root / "timeseries.sqlite3"
         self.chunk_rows = chunk_rows
         self.max_bytes = max_bytes
         db = self.connect()
         try:
+            db.execute("BEGIN IMMEDIATE")
             db.execute(
                 "CREATE TABLE IF NOT EXISTS datasets ("
                 "id TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_id TEXT NOT NULL, "
@@ -58,6 +70,11 @@ class PartitionedTimeseriesStore:
                 "row_count INTEGER NOT NULL, payload TEXT NOT NULL, bytes INTEGER NOT NULL, "
                 "PRIMARY KEY(dataset_id,chunk_index))"
             )
+            columns = {row[1] for row in db.execute("PRAGMA table_info(datasets)")}
+            if "created_at" not in columns:
+                db.execute("ALTER TABLE datasets ADD COLUMN created_at REAL NOT NULL DEFAULT 0")
+                db.execute("UPDATE datasets SET created_at=? WHERE created_at=0", (time.time(),))
+            db.execute("CREATE INDEX IF NOT EXISTS dataset_created ON datasets(created_at)")
             db.commit()
         finally:
             db.close()
@@ -106,11 +123,35 @@ class PartitionedTimeseriesStore:
         total_bytes = metadata_bytes
         try:
             db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                "DELETE FROM datasets WHERE created_at<?", (time.time() - self.retention_seconds,)
+            )
+            if _table_exists(db, "artifacts"):
+                db.execute(
+                    "DELETE FROM artifacts WHERE created_at<?",
+                    (time.time() - self.retention_seconds,),
+                )
+            user_usage, global_usage = storage_usage(db, session.user_id)
+            quota_remaining = min(
+                self.user_quota_bytes - user_usage, self.global_quota_bytes - global_usage
+            )
+            if metadata_bytes > quota_remaining:
+                raise EnergyError(
+                    "artifact_quota_exceeded",
+                    "Delete old artifacts or increase the operator quota.",
+                )
             # The row stays invisible to other connections until every chunk commits.
             db.execute(
-                "INSERT INTO datasets(id,user_id,session_id,metadata,total_rows,bytes) "
-                "VALUES (?,?,?,?,0,?)",
-                (artifact_id, session.user_id, session.id, metadata_json, metadata_bytes),
+                "INSERT INTO datasets(id,user_id,session_id,metadata,total_rows,bytes,created_at) "
+                "VALUES (?,?,?,?,0,?,?)",
+                (
+                    artifact_id,
+                    session.user_id,
+                    session.id,
+                    metadata_json,
+                    metadata_bytes,
+                    time.time(),
+                ),
             )
 
             encoded_rows: list[str] = []
@@ -148,6 +189,7 @@ class PartitionedTimeseriesStore:
                         encoded_rows,
                         encoded_chunk_bytes,
                         total_bytes,
+                        quota_remaining,
                     )
                     total_rows += len(encoded_rows)
                     chunk_index += 1
@@ -166,6 +208,7 @@ class PartitionedTimeseriesStore:
                     encoded_rows,
                     encoded_chunk_bytes,
                     total_bytes,
+                    quota_remaining,
                 )
                 total_rows += len(encoded_rows)
 
@@ -191,6 +234,7 @@ class PartitionedTimeseriesStore:
         encoded_rows: list[str],
         payload_bytes: int,
         current_bytes: int,
+        quota_remaining: int,
     ) -> int:
         payload = "[" + ",".join(encoded_rows) + "]"
         # JSON is emitted with ASCII escapes, so character length equals byte length.
@@ -200,6 +244,10 @@ class PartitionedTimeseriesStore:
         updated_bytes = current_bytes + actual_bytes
         if updated_bytes > self.max_bytes:
             raise EnergyError("timeseries_quota_exceeded", "Dataset exceeds its byte quota.")
+        if updated_bytes > quota_remaining:
+            raise EnergyError(
+                "artifact_quota_exceeded", "Delete old artifacts or increase the operator quota."
+            )
         db.execute(
             "INSERT INTO chunks(dataset_id,chunk_index,first_row,row_count,payload,bytes) "
             "VALUES (?,?,?,?,?,?)",
@@ -213,6 +261,9 @@ class PartitionedTimeseriesStore:
         artifact_id: str,
         offset: int = 0,
         limit: int = 1000,
+        *,
+        byte_limit: int = _MAX_PAGE_BYTES,
+        columns: list[str] | None = None,
     ) -> Json:
         """Read at most ``limit`` rows, preserving their insertion order."""
         if type(offset) is not int or offset < 0:
@@ -221,6 +272,14 @@ class PartitionedTimeseriesStore:
             raise EnergyError(
                 "invalid_page", f"Page limit must be between 1 and {_MAX_PAGE_LIMIT}."
             )
+        if type(byte_limit) is not int or not 1 <= byte_limit <= _MAX_PAGE_BYTES:
+            raise EnergyError("invalid_page", "Page byte limit is outside its supported range.")
+        if columns is not None and (
+            not columns
+            or len(columns) > 64
+            or any(not isinstance(c, str) or not c for c in columns)
+        ):
+            raise EnergyError("invalid_page", "Page columns must contain 1 to 64 names.")
         db = self.connect()
         try:
             db.execute("BEGIN")
@@ -244,9 +303,20 @@ class PartitionedTimeseriesStore:
                     start_in_chunk = max(0, offset - first_row)
                     end_in_chunk = min(row_count, end - first_row)
                     for row in chunk_rows[start_in_chunk:end_in_chunk]:
+                        if columns is not None:
+                            if any(column not in row for column in columns):
+                                raise EnergyError(
+                                    "column_not_found", "Requested page column is missing."
+                                )
+                            row = {column: row[column] for column in columns}
                         row_bytes = len(_encode_json(row).encode("utf-8"))
                         additional_bytes = row_bytes + (1 if page_rows else 0)
-                        if page_bytes + additional_bytes > _MAX_PAGE_BYTES:
+                        if page_bytes + additional_bytes > byte_limit:
+                            if not page_rows:
+                                raise EnergyError(
+                                    "row_too_large",
+                                    "Select fewer columns; one row exceeds the page byte budget.",
+                                )
                             page_full = True
                             break
                         page_rows.append(row)
@@ -261,6 +331,26 @@ class PartitionedTimeseriesStore:
                 "total_rows": total_rows,
                 "next_offset": next_offset if next_offset < total_rows else None,
             }
+        finally:
+            db.close()
+
+    def describe(self, session: Session, artifact_id: str) -> EnergyResult:
+        db = self.connect()
+        try:
+            record = self._dataset_record(db, session, artifact_id)
+            if record is None:
+                raise _not_found()
+            metadata_json, count = record
+            result = EnergyResult.model_validate_json(metadata_json)
+            result.data = {
+                "storage": "partitioned-timeseries.v1",
+                "dataset_id": artifact_id,
+                "rows": count,
+                "timestamp_column": result.provenance[0].get("timestamp_column", "timestamp")
+                if result.provenance
+                else "timestamp",
+            }
+            return result
         finally:
             db.close()
 
@@ -296,13 +386,12 @@ class PartitionedTimeseriesStore:
         finally:
             db.close()
 
-    @staticmethod
     def _dataset_record(
-        db: sqlite3.Connection, session: Session, artifact_id: str
+        self, db: sqlite3.Connection, session: Session, artifact_id: str
     ) -> tuple[str, int] | None:
         return db.execute(
-            "SELECT metadata,total_rows FROM datasets WHERE id=? AND user_id=? AND session_id=?",
-            (artifact_id, session.user_id, session.id),
+            "SELECT metadata,total_rows FROM datasets WHERE id=? AND user_id=? AND session_id=? AND created_at>=?",
+            (artifact_id, session.user_id, session.id, time.time() - self.retention_seconds),
         ).fetchone()
 
 
@@ -352,3 +441,25 @@ def _validate_json_value(value: Any) -> None:
                 raise ValueError("non-finite number")
         else:
             raise TypeError(f"unsupported JSON value: {type(item).__name__}")
+
+
+def _table_exists(db: sqlite3.Connection, name: str) -> bool:
+    return (
+        db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone()
+        is not None
+    )
+
+
+def storage_usage(db: sqlite3.Connection, user_id: str) -> tuple[int, int]:
+    """Count small artifacts and dataset chunks in the same transactional quota ledger."""
+    owned, total = 0, 0
+    for table, expression in (
+        ("artifacts", "length(CAST(payload AS BLOB))"),
+        ("datasets", "bytes"),
+    ):
+        if _table_exists(db, table):
+            owned += db.execute(
+                f"SELECT COALESCE(SUM({expression}),0) FROM {table} WHERE user_id=?", (user_id,)
+            ).fetchone()[0]
+            total += db.execute(f"SELECT COALESCE(SUM({expression}),0) FROM {table}").fetchone()[0]
+    return owned, total
