@@ -1,0 +1,49 @@
+{
+  "context_acceptance": [
+    "SDK and MCP historical estimated/future forecast retrieval",
+    "bounded temperature hold and propagated assumptions",
+    "source substitution with reviewed CSV weather binding",
+    "wrong-location refusal before HTTP",
+    "visible calendar fallback on provider rate limit",
+    "required context failure",
+    "explicit mode without automatic HTTP",
+    "separate weather history cutoff and forecast start"
+  ],
+  "default_cutoff_fixture": {
+    "clock": "2026-10-02T12:00:00Z",
+    "expected_forecast_kwh": 192,
+    "forecast_end": "2026-10-11T00:00:00Z",
+    "forecast_start": "2026-10-03T00:00:00Z",
+    "gap_seconds": 86400,
+    "history_end": "2026-10-02T00:00:00Z",
+    "history_kind": "metered",
+    "history_start": "2026-07-02T00:00:00Z",
+    "prediction_kind": "forecast",
+    "synthetic": true
+  },
+  "implementation_revision": "5b0c5b5ae20e9c8e37e204724123e880e424ac8e",
+  "limits": [
+    "Gridded reference weather is not physical-site forecast accuracy qualification.",
+    "Automatic weather currently makes one historical request, with native 366-day limit.",
+    "Store concurrency is separately qualified; gateway load, multi-host operation and 30-day soak remain open.",
+    "TypeScript SDK, web product and full persistent connection control plane remain unfinished."
+  ],
+  "live_weather": {
+    "evidence": "historical-weather-live-oct02.json",
+    "kind": "estimated",
+    "physical_meter": false,
+    "physical_thermometer": false,
+    "rows": 24
+  },
+  "validation": {
+    "context_gap_acceptance": "9 passed in 21.49s, includes two added gap cases",
+    "default_cutoff_acceptance": "4 passed in 7.92s, SDK and MCP",
+    "final_collection": "600 tests collected",
+    "local_full_log_sha256": "ca0d8aa7ed6aab73679efab04fbe3ddededfae7672e810b192c7706da656c21d",
+    "local_full_suite": "594 passed in 547.74s; six added cases were separately validated after this collection",
+    "mypy": "50 source files passed",
+    "reference_and_assumption_acceptance": "8 passed in 23.24s",
+    "ruff_check": "passed",
+    "ruff_format": "197 files already formatted"
+  }
+}

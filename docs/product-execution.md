@@ -10,10 +10,10 @@ gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 | Requirement | Current evidence | Status and next proof |
 | --- | --- | --- |
 | One gateway, Python SDK, scoped MCP, sites/assets/accounts | Runtime, capability resolver, SDK/MCP acceptance and twelve references | Implemented; broader live qualification remains open. |
-| Consumption forecasting and forecast bill composition | No consumption forecast tool or composed recipe exists | Missing; implement scoped historical/context inputs, honest forecast uncertainty and tariff/billing lineage. |
-| Supported spike explanations | Anomaly screening only | Missing; use available weather/equipment evidence and explicit missing evidence without claiming causation. |
-| Combined grid analysis | Generation and carbon are fetched separately | Missing; align quantities, quantify useful conditions and explain limits without conflating grid/local readings. |
-| Large-site processing | Bounded whole-artifact operations | Partial; representative partitioned processing, pagination, memory/load measurements and recovery needed. |
+| Consumption forecasting and forecast bill composition | Native forecast and forecast-bill SDK/MCP workflows; chronological model selection/calibration; synthetic three-month and high-resolution evidence | Implemented; automatic weather and cutoff acceptance. Physical-site forecast accuracy remains open. |
+| Supported spike explanations | Scoped weather/equipment associations with matching windows and explicit missing evidence | Implemented; real-site qualification remains open. Associations do not establish causation. |
+| Combined grid analysis | Aligned generation power and carbon intensity with known-value acceptance | Implemented; broader live qualification remains open. |
+| Large-site processing | Million-row partitioned SDK qualification, bounded paging/streamed summaries, shared quotas/backup, high-resolution observed aggregation | Partial; timestamp indexing, gateway load and sustained operations remain open; a separate local store concurrency check is recorded below. |
 | Complete workflows and provider substitution | Twelve offline success/failure references; three consumption provider contracts | Partial; contextual workflows, longer histories and deeper provider combinations needed. |
 | Real connection lifecycle and provider qualification | Encrypted vault, onboarding, refresh/revoke, installed Home Assistant development qualification | Partial; physical-site access and remaining provider verification required. |
 | Legitimate credential/application acquisition | Public providers qualified; private permissions not available | Open; use permitted applications/access, never fabricate identity, entitlement or hardware. |
@@ -52,7 +52,7 @@ spike and grid analysis modules and their focused tests in isolated worktrees.
 Workers use GPT-6 Luna/max. Shared runtime files have one writer.
 
 The forecasting path must retrieve historical metered interval energy,
-optionally use explicitly supplied past/future contextual data, predict a
+use supplied or resolved past/future contextual data when available, predict a
 future interval series with uncertainty and model-validation diagnostics, and
 resolve tariffs for that same future window. Historical data remains metered;
 predicted energy is forecast; monetary estimates are calculated with explicit
@@ -106,8 +106,9 @@ paging, foreign-scope rejection and restored dataset access. Peak traced Python
 allocation is 2,336,690 bytes. This excludes native SQLite memory and is not an
 RSS measurement. Timing includes allocation-tracing overhead.
 
-Temporal selection still scans chunks. Timestamp indexing, concurrent-load and
-sustained-operation qualification remain open. The fixture is synthetic and does not establish physical meter access.
+Temporal selection still scans chunks. Timestamp indexing, gateway-load and
+sustained-operation qualification remain open. A later local store concurrency
+check is recorded separately below. The fixture is synthetic and does not establish physical meter access.
 The TypeScript SDK, Connect Apps application and full connection control plane
 remain in the completion scope.
 
@@ -127,3 +128,39 @@ The full 546-test suite, Ruff and mypy pass. The pinned record is
 Automatic contextual weather retrieval is the next integration unit. Physical
 meter access, real forecast accuracy, independent agent evaluation, outside
 connector contributions and sustained operation remain qualification gates.
+
+## Automatic weather and historical cutoff, October 2
+
+Commit `5b0c5b5ae20e9c8e37e204724123e880e424ac8e` integrates automatic historical
+and future temperature retrieval, bounded alignment, provider substitution and
+visible fallback/refusal evidence. Historical weather remains estimated analysis
+and future weather remains forecast. Alignment assumptions reach the consumption
+forecast. The default historical cutoff is today's local midnight; predictions
+begin tomorrow. The model reports the gap and trains only through that cutoff.
+SDK/MCP acceptance checks a frozen midday clock and forbids future meter requests.
+
+The local full run passed 594 tests in 547.74 seconds. Six subsequently added
+cases passed separately; the final collection contains 600 tests. Ruff and mypy
+pass. The pinned record is [forecast weather evidence](evidence/forecast-weather-oct02.json).
+A registered gateway request returned 24 finite hourly estimated temperatures
+for one public Berlin reference day. The [live record](evidence/historical-weather-live-oct02.json)
+and `scripts/qualify_historical_weather.py` preserve its actual response and
+reproduction path. This does not qualify physical meters or forecast accuracy.
+Automatic weather still uses one historical request, limited to 366 days.
+
+## Local storage concurrency and recovery, October 2
+
+Commit `79732b3790c8aed38d77ad834a7eaa5192f884f3` adds a reproducible local store
+qualification. Four separate store instances import 100,000 generated rows
+while another store pages and streams a preloaded dataset during an open write
+transaction. SQLite serializes writes. All 25 foreign-scope checks and both
+shared-quota probes pass. One backup restores all five datasets; every row and
+independently calculated total is checked before and after restore, for 102,000
+rows. The [pinned record](evidence/dataset-concurrency-oct02.json) includes timings
+and `scripts/qualify_dataset_concurrency.py` reproduces the assertions.
+
+This is five threads in one process on local SQLite. Gateway load, multi-host
+operation, timestamp indexing and a 30-day soak remain open. Independent agent
+evaluation, outside connector contribution and private physical-site evidence
+remain separate gates. The TypeScript SDK, Connect Apps product and persistent
+connection control plane remain required parts of the active goal.

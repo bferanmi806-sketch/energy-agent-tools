@@ -1,0 +1,56 @@
+{
+  "assertions": {
+    "all_writer_rows_committed": true,
+    "every_stored_and_restored_row_and_closed_form_total_verified": true,
+    "foreign_user_and_session_reads_rejected": true,
+    "global_quota_shared_across_store_instances": "artifact_quota_exceeded",
+    "page_and_stream_window_read_during_uncommitted_write": true,
+    "restored_rows_verified": 102000,
+    "scope_denial_checks": 25,
+    "single_sqlite_backup_restored_all_datasets": true,
+    "user_quota_shared_across_store_instances_and_sessions": "artifact_quota_exceeded"
+  },
+  "concurrent_reader": {
+    "overlapped_uncommitted_writer": 1,
+    "page_rows": 77,
+    "seconds": 0.008439448982244357,
+    "streamed_summary_count": 2000,
+    "streamed_summary_sum": 11989,
+    "streamed_window_count": 500,
+    "streamed_window_sum": 3015
+  },
+  "implementation_revision": "79732b3790c8aed38d77ad834a7eaa5192f884f3",
+  "inputs": {
+    "concurrent_store_instances": 5,
+    "concurrent_writer_datasets": 4,
+    "concurrent_writer_rows": 100000,
+    "preloaded_reader_rows": 2000,
+    "rows_per_concurrent_dataset": 25000,
+    "total_dataset_count": 5,
+    "total_rows": 102000
+  },
+  "limitations": [
+    "Rows are generated fixtures; no physical meter or live provider was exercised.",
+    "Concurrency used five threads in one Python process on one local SQLite file.",
+    "The run pauses one active transaction to prove read/write overlap; it is not a multi-host qualification or 30-day soak.",
+    "The window total is computed from streamed stored rows; this does not qualify a production gateway or external connector path."
+  ],
+  "python": {
+    "implementation": "CPython",
+    "version": "3.12.14"
+  },
+  "scenario": "same-process, separate SQLite store instances with four concurrent imports",
+  "script_sha256": "c83960d1cc374735e92d3198b2af697945ffeafdddbedbec9acad46dd790f6b8",
+  "status": "passed",
+  "thread_count": 5,
+  "timings_seconds": {
+    "backup_and_restore": 1.031772,
+    "concurrent_scenario_wall": 2.159462,
+    "writer_imports": {
+      "writer_0": 1.605035,
+      "writer_1": 1.062651,
+      "writer_2": 0.555905,
+      "writer_3": 2.156687
+    }
+  }
+}
