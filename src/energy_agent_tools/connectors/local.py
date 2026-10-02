@@ -296,18 +296,35 @@ def register_csv(registry: Registry, root: Path) -> None:
             unit=args["unit"],
             source="local-csv",
             timezone=args["timezone"],
+            resolution=args.get("resolution"),
+            quantity_shape=args.get("quantity_shape"),
             quality="user-declared",
             warnings=[
                 "CSV measurement kind and units are declared by the caller, not verified against hardware."
             ],
-            provenance=[{"file": path.relative_to(root).as_posix(), "declared_kind": args["kind"]}],
+            provenance=[
+                {
+                    "file": path.relative_to(root).as_posix(),
+                    "declared_kind": args["kind"],
+                    **(
+                        {"declared_quantity_shape": args["quantity_shape"]}
+                        if args.get("quantity_shape") is not None
+                        else {}
+                    ),
+                    **(
+                        {"declared_resolution": args["resolution"]}
+                        if args.get("resolution") is not None
+                        else {}
+                    ),
+                }
+            ],
         )
 
     registry.add(
         Tool(
             name="CSV_READ_TIMESERIES",
             toolkit="csv",
-            description="Import local meter consumption, PV, battery, tariff or building telemetry CSV.",
+            description="Import local CSV with caller-declared measurement kind, optional quantity shape and resolution.",
             capabilities=[
                 "get_energy_consumption",
                 "get_generation",
@@ -323,6 +340,16 @@ def register_csv(registry: Registry, root: Path) -> None:
                     "kind": {"enum": [k.value for k in DataKind]},
                     "unit": {"type": "string", "minLength": 1},
                     "timezone": {"type": "string"},
+                    "quantity_shape": {
+                        "enum": ["interval", "instantaneous", "counter"],
+                        "description": "Caller-declared quantity semantics; never inferred from CSV content.",
+                    },
+                    "resolution": {
+                        "type": "string",
+                        "minLength": 1,
+                        "pattern": r"\S",
+                        "description": "Caller-declared sampling or interval resolution.",
+                    },
                 },
                 ["file", "kind", "unit", "timezone"],
             ),
