@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from math import isfinite
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -817,6 +817,15 @@ def _rate_calculation(
     energy_values = dict(zip(energy.times, energy.values, strict=True))
     rate_values = dict(zip(rate.times, rate.values, strict=True))
     output: list[Json] = []
+    energy_end_column = (
+        parameters.get("end", "end")
+        if energy is left
+        else parameters.get("second_end", parameters.get("end", "end"))
+    )
+    energy_ends = _optional_ends(energy, cast(str, energy_end_column))
+    interval_ends = (
+        dict(zip(energy.times, energy_ends, strict=True)) if energy_ends is not None else {}
+    )
     missing_energy = 0
     for timestamp in energy.times:
         energy_value = energy_values[timestamp]
@@ -836,6 +845,8 @@ def _rate_calculation(
             "rate": rate_value,
             "cost" if operation == "cost" else "carbon": computed,
         }
+        if timestamp in interval_ends:
+            row["end"] = _timestamp_text(interval_ends[timestamp], energy.result.timezone)
         output.append(row)
     if operation == "cost":
         output_unit = rate_unit.currency or "currency"
@@ -862,6 +873,7 @@ def _rate_calculation(
             "Inputs were joined by exact UTC interval start; no fill or nearest match was used.",
         ],
         warnings=warnings,
+        quantity_shape="interval",
     )
 
 

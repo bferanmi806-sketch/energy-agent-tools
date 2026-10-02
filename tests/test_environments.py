@@ -232,7 +232,7 @@ async def test_shared_dispatch_qualifies_all_family_environments(tmp_path: Path)
     )
 
     clocks = qualified_environment_clocks()
-    assert len(clocks) == 13
+    assert len(clocks) == 14
     for case_id, clock in clocks.items():
         built = build_environment(case_id, tmp_path / "root", tmp_path / "state")
         try:

@@ -371,3 +371,23 @@ def test_counter_operation_refuses_known_interval_energy():
     with pytest.raises(EnergyError) as failure:
         operate("counter", [("meter", raw)], {})
     assert failure.value.code == "quantity_shape_mismatch"
+
+
+@pytest.mark.parametrize("operation,rate_unit", [("cost", "GBP/kWh"), ("carbon", "gCO2e/kWh")])
+def test_derived_rate_rows_preserve_explicit_ends_with_energy_as_second_input(operation, rate_unit):
+    energy = _result(
+        [{"timestamp": "2026-01-01T00:00:00Z", "interval_end": "2026-01-01T00:30:00Z", "value": 2}],
+        resolution="30min",
+    )
+    rate = _result(
+        [{"timestamp": "2026-01-01T00:00:00Z", "to": "2026-01-01T00:30:00Z", "value": 0.2}],
+        rate_unit,
+        kind=DataKind.FORECAST,
+        resolution="30min",
+    )
+    output = operate(
+        operation, [("rate", rate), ("energy", energy)], {"end": "to", "second_end": "interval_end"}
+    )
+    assert output.data[0]["end"] == "2026-01-01T00:30:00+00:00"
+    assert output.quantity_shape == "interval"
+    assert output.data[0][operation] == pytest.approx(0.4)
