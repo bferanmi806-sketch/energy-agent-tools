@@ -116,7 +116,7 @@ structured boundary-error and provenance evidence. Scoring was not weakened.
 and [compressed complete traces](evidence/agent-benchmark-qualified-oct02.json.gz)
 preserve the results. These runs add development evidence, not held-out or
 physical-meter evidence. The separate 19-case run in the same immutable checkout
-is underway. The earlier 11-pass/8-partial run remains exploratory because
+finished with the quota interruption recorded below. The earlier 11-pass/8-partial run remains exploratory because
 source changes continued while it was running.
 
 Container host qualification passed in CI at `9c20850`: bearer enforcement,
@@ -144,3 +144,25 @@ subsequent cases could not complete. The report and
 heuristic score of 0.7887 includes inconclusive cases and is not a success claim.
 A new runner guard stops on that infrastructure error and records unattempted
 case IDs. No quota resets, credit purchases or model substitutions were used.
+
+
+CI at `2e3eccd` passed 283 tests on Python 3.11, 3.12 and 3.13, container
+qualification, actual Home Assistant stale-read and foreign-user denial checks,
+and the installed published-v0.2.0 upgrade/backup/restore check. Evidence is in
+[the provider check](evidence/home-assistant-negative-checks-oct02.json) and
+[the upgrade check](evidence/state-upgrade-ci-oct02.json).
+
+Nine additional independently checked development environments now cover five
+telemetry and four engineering cases. Together with the first four, the harness
+can select 13 qualified scenario environments. These environment checks are
+not additional model passes. The 19 original agent cases remain the default;
+select the new scenarios explicitly with `--case`. Three candidate cases stay
+excluded because reviewed CSV counter semantics, capacity-constrained PyPSA
+dispatch, and a bounded PyPSA job operation are missing. The frozen scenario
+truths and all held-out cases remain unchanged.
+
+Counter conversion now emits explicit interval starts and ends, preserving the
+last interval when selecting a day. Tests reproduce the previous boundary
+loss with 49 counter observations and independently require 48 intervals and
+50 kWh. Quantity shape survives filtering, normalization and missing-row
+expansion, and raw counters cannot enter cost/carbon multiplication.
