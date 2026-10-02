@@ -58,6 +58,7 @@ class CapabilityRequest(StrictModel):
     resolution: str | None = None
     tool: str | None = None
     max_age_seconds: int | None = Field(default=None, ge=1, le=86400)
+    input_artifacts: list[str] = Field(default_factory=list, max_length=10)
 
 
 def builtins(agent: EnergyAgent) -> list[CapabilityBinding]:
@@ -417,4 +418,5 @@ class CapabilityResolver:
             max_age_seconds=request.max_age_seconds
             or (300 if request.capability == "get_current_power" else None),
             expected_arguments=selected["fixed_arguments"],
+            input_artifacts=request.input_artifacts,
         )

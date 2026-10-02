@@ -178,6 +178,7 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         resolution: str | None = None,
         tool: str | None = None,
         max_age_seconds: Annotated[int | None, Field(ge=1, le=86400)] = None,
+        input_artifacts: Annotated[list[str] | None, Field(max_length=10)] = None,
     ) -> Json:
         """Execute a uniquely selected reviewed capability binding through normal policies. Never substitutes incompatible schemas."""
         from .capabilities import CapabilityRequest
@@ -193,6 +194,7 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
                 resolution=resolution,
                 tool=tool,
                 max_age_seconds=max_age_seconds,
+                input_artifacts=input_artifacts or [],
             )
             return await agent.resolver.execute(session, request, persist)
         except (EnergyError, ValueError) as exc:

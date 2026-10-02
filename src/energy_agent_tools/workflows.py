@@ -140,9 +140,15 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             "consumption_transform",
             "billing",
             "alternative_billing",
+            "input_artifacts",
         }
         if set(parameters) - allowed:
             raise EnergyError("invalid_skill_parameters", "Unknown workflow parameters.")
+        if "input_artifacts" in parameters and skill_id != "power-flow":
+            raise EnergyError(
+                "invalid_skill_parameters",
+                "Explicit solver input artifacts apply to the power-flow workflow.",
+            )
         recipe = RECIPES[skill_id]
         operation = recipe["operation"]
         if {"billing", "alternative_billing"} & parameters.keys():
@@ -316,6 +322,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 if capability == "get_solar_forecast"
                 else None,
                 unit="kWh" if capability == "get_solar_forecast" else None,
+                input_artifacts=parameters.get("input_artifacts", []),
             )
             output = await agent.resolver.execute(session, request, persist=True)
             evidence.append({"capability": capability, **output})
