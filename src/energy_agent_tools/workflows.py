@@ -446,7 +446,8 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             evidence.append({"alignment": alignment})
             if not alignment["ok"]:
                 raise EnergyError(alignment["error"]["code"], alignment["error"]["message"])
-            aligned = agent.workbench.read(session, alignment["result"]["data"]["artifact_id"])
+            alignment_id = alignment["result"]["data"]["artifact_id"]
+            aligned = agent.workbench.read(session, alignment_id)
             intervals = []
             previous_end = None
             for row in aligned.data:
@@ -504,7 +505,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 session,
                 selected["tool"],
                 selected["arguments"],
-                input_artifacts=list(artifacts.values()),
+                input_artifacts=[*inputs, alignment_id],
             )
         elif operation == "solar":
             weather = results["get_weather"]

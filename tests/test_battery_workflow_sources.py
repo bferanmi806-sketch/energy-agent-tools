@@ -70,6 +70,16 @@ async def test_csv_forecasts_plan_distinct_cheapest_and_cleanest_charge_hours(
     assert response["ok"], response
     result = response["evidence"][-1]["analysis"]["result"]
     assert result["kind"] == "simulated"
+    alignment = next(item["alignment"] for item in response["evidence"] if "alignment" in item)
+    alignment_id = alignment["result"]["data"]["artifact_id"]
+    aligned_input = next(
+        row for row in result["provenance"] if row.get("artifact_id") == alignment_id
+    )
+    assert aligned_input["input_kind"] == "calculated"
+    assert aligned_input["source"] == "workbench"
+    assert {row["source"] for row in aligned_input["provenance"] if "artifact_id" in row} == {
+        "local-csv"
+    }
     schedule = result["data"]["schedule"]
     assert schedule[-1]["soc_kwh"] == pytest.approx(1, abs=1e-6)
     assert sum(row["charge_kw"] * row["duration_hours"] for row in schedule) == pytest.approx(
