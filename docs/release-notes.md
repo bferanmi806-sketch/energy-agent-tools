@@ -1,4 +1,4 @@
-# Energy Agent Tools v0.3.0 (pending release)
+# Energy Agent Tools v0.3.0
 
 This core release adds a provider-independent consumption forecast and bill
 workflow, automatic historical and future weather context, aggregation of

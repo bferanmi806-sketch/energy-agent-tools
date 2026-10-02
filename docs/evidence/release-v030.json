@@ -1,0 +1,68 @@
+{
+  "version": "0.3.0",
+  "source_revision": "5d4628173f84a531dea7010cb1009d60c33a630c",
+  "release_url": "https://github.com/bferanmi806-sketch/energy-agent-tools/releases/tag/v0.3.0",
+  "build": {
+    "wheel_and_sdist": "passed",
+    "build_log_sha256": "8d8d16d67b75cf557b509b9d298c7b07782a4b13690710cb5ca26f582f444904",
+    "assets": [
+      {
+        "name": "energy_agent_tools-0.3.0-py3-none-any.whl",
+        "sha256": "fd6ef4176d6911f9234a5b1d19788509beb4b9d2665da9958b403cdd000ae6e9",
+        "bytes": 260965
+      },
+      {
+        "name": "energy_agent_tools-0.3.0.tar.gz",
+        "sha256": "5560bfd09ab510170acd6800bd55c0e2a2b88d18ec4c38999495283ba3570317",
+        "bytes": 1921659
+      }
+    ]
+  },
+  "validation": {
+    "ci": {
+      "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37059471789",
+      "revision": "5d4628173f84a531dea7010cb1009d60c33a630c",
+      "python": {
+        "3.13": "632 passed in 172.25s (0:02:52)",
+        "3.12": "632 passed in 171.06s (0:02:51)",
+        "3.11": "632 passed in 176.43s (0:02:56)"
+      },
+      "container": "passed",
+      "upgrade": "passed",
+      "home_assistant": "passed",
+      "log_sha256": "3e726353af6379fd316807c480a1eadf527c6635572fe19f6115b66acf9954c6"
+    },
+    "local_full_suite": "632 passed in 568.44s",
+    "isolated_base_wheel": {
+      "installation": "passed",
+      "forecast_bill_reference": "passed, synthetic 384-interval eight-day forecast and missing tariff coverage refusal",
+      "forecast_log_sha256": "8e257e9d9048b93101c486adf0f8c5eca782c1ce4cb09902c563d51d6069d637",
+      "configuration_validation": "passed",
+      "encrypted_vault_and_artifact_backup_restore": "passed",
+      "real_stdio_mcp": {
+        "ok": true,
+        "transport": "real stdio MCP child using isolated installed wheel",
+        "helper_count": 11,
+        "metered_input": true,
+        "calculated_total_kwh": 3,
+        "physical_meter": false
+      }
+    }
+  },
+  "core_evidence": [
+    "indexed-timeseries-oct02.json",
+    "chunked-weather-oct02.json",
+    "forecast-weather-oct02.json",
+    "historical-weather-live-oct02.json",
+    "high-resolution-forecast-oct02.json",
+    "dataset-concurrency-oct02.json"
+  ],
+  "remaining_scope": [
+    "TypeScript SDK and Connect Apps web application",
+    "Persistent workspace/users/API keys/connection control plane",
+    "Physical-site and private-provider evidence with legitimate access",
+    "100+ actual held-out agent tasks across two model families",
+    "Independent discovery review and outside-authored connector",
+    "Gateway load and 30-day sustained operational qualification"
+  ]
+}

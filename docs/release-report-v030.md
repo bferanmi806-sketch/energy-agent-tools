@@ -1,6 +1,6 @@
 # Energy Agent Tools v0.3.0 core report
 
-Release status: pending final verification and publication. This release extends
+Release status: [published v0.3.0](https://github.com/bferanmi806-sketch/energy-agent-tools/releases/tag/v0.3.0). This release extends
 the open-source, self-hostable Python gateway for energy data and engineering
 tools. It adds a composed consumption forecast and bill workflow, automatic
 weather context, observed high-resolution meter aggregation, and persistent

@@ -185,8 +185,13 @@ Peak traced Python allocation is 2,340,701 bytes. The complete local regression
 suite passes 632 tests in 568.44 seconds; Ruff and mypy pass. See
 [indexed time-series evidence](evidence/indexed-timeseries-oct02.json).
 
-The v0.3.0 core release is being packaged and verified. Phase 2 proceeds with
-the TypeScript SDK and Connect Apps experience after publication. Physical
+The [v0.3.0 core release](https://github.com/bferanmi806-sketch/energy-agent-tools/releases/tag/v0.3.0)
+is published at `5d4628173f84a531dea7010cb1009d60c33a630c`. All 632 tests pass
+on Python 3.11, 3.12 and 3.13. Container, upgrade and Home Assistant CI checks
+pass. The isolated base-wheel passes the forecast/bill reference, recovery,
+configuration validation and a real stdio MCP child. Exact hashes and limits
+are in [release evidence](evidence/release-v030.json). Phase 2 now proceeds
+with the TypeScript SDK and Connect Apps experience. Physical
 site evidence, broad actual agent evaluation, independent review, outside
 connector contribution and sustained operation remain open and continue
 alongside the developer product. The full goal remains active.
