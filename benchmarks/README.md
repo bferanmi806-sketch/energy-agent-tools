@@ -85,3 +85,8 @@ whole run. If the model CLI reports that its usage limit has been reached, the
 runner preserves the inconclusive case, stops, and records
 `interrupted_reason: model_usage_limit` and `unattempted_case_ids`. It does not
 purchase credits, reset usage, or switch models.
+
+To select the cheaper configured worker model explicitly for a new evaluation,
+use `--model gpt-6-luna --reasoning-effort max`. The runner records both
+overrides; older runs with null model metadata retain that limitation. Model
+settings do not change fixture truth, scoring or the release thresholds.

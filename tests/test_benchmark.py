@@ -497,3 +497,14 @@ def test_run_suite_stops_on_model_quota_and_records_unattempted_cases(tmp_path):
     assert result.runner["planned_case_ids"] == ["one", "two", "three"]
     assert json.loads((output / "progress.json").read_text())["status"] == "interrupted"
     assert len((output / "cases.jsonl").read_text().splitlines()) == 2
+
+
+def test_codex_command_records_explicit_cheaper_worker_settings(tmp_path):
+    fixture = write_fixture(tmp_path / "fixture")
+    command = codex_command(
+        fixture, "natural request", repo=tmp_path, model="gpt-6-luna", reasoning_effort="max"
+    )
+    assert 'model="gpt-6-luna"' in command
+    assert 'model_reasoning_effort="max"' in command
+    with pytest.raises(ValueError, match="reasoning effort"):
+        codex_command(fixture, "natural request", repo=tmp_path, reasoning_effort="unbounded")

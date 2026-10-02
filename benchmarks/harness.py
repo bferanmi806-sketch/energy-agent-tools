@@ -1046,8 +1046,10 @@ def codex_command(
     codex: str = "codex",
     bypass_approvals: bool = True,
     environment_id: str | None = None,
+    model: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> list[str]:
-    """Build a no-model-override Codex command with one local MCP server."""
+    """Build a Codex command with one local MCP server and explicit optional overrides."""
 
     server_command = [
         sys.executable,
@@ -1091,6 +1093,21 @@ def codex_command(
     )
     if bypass_approvals:
         command[-1:-1] = ["-c", 'mcp_servers.energy.default_tools_approval_mode="approve"']
+    if model is not None:
+        command[-1:-1] = ["-c", "model=" + _toml_literal(model)]
+    if reasoning_effort is not None:
+        if reasoning_effort not in {
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+            "ultra",
+        }:
+            raise ValueError("Unsupported reasoning effort")
+        command[-1:-1] = ["-c", "model_reasoning_effort=" + _toml_literal(reasoning_effort)]
     return command
 
 
@@ -1158,6 +1175,8 @@ def run_case(
     codex: str = "codex",
     bypass_approvals: bool = True,
     runner: Runner = _subprocess_runner,
+    model: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> CaseResult:
     command = codex_command(
         fixture,
@@ -1166,6 +1185,8 @@ def run_case(
         codex=codex,
         bypass_approvals=bypass_approvals,
         environment_id=case.environment_id,
+        model=model,
+        reasoning_effort=reasoning_effort,
     )
     try:
         returncode, stdout, stderr = runner(command, _safe_environment(), timeout)
@@ -1193,6 +1214,8 @@ def run_suite(
     codex: str = "codex",
     bypass_approvals: bool = True,
     runner: Runner = _subprocess_runner,
+    model: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> SuiteResult:
     """Run each case in a fresh Codex process and persist auditable JSONL."""
 
@@ -1204,7 +1227,8 @@ def run_suite(
     runner_metadata = {
         "command": "codex exec --ignore-user-config --ephemeral --skip-git-repo-check -s read-only --json",
         "codex": codex,
-        "model_override": None,
+        "model_override": model,
+        "reasoning_effort_override": reasoning_effort,
         "bypass_approvals": bypass_approvals,
         "timeout_seconds": timeout,
         "fixture_only": True,
@@ -1278,6 +1302,8 @@ def run_suite(
                     codex=codex,
                     bypass_approvals=bypass_approvals,
                     runner=runner,
+                    model=model,
+                    reasoning_effort=reasoning_effort,
                 )
                 results.append(case_result)
                 if case_stream is not None:
@@ -1370,6 +1396,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--case", action="append", dest="case_ids")
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--codex", default="codex")
+    parser.add_argument("--model")
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
+    )
     parser.add_argument(
         "--no-approval-bypass",
         action="store_true",
@@ -1391,6 +1422,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         timeout=args.timeout,
         codex=args.codex,
         bypass_approvals=not args.no_approval_bypass,
+        model=args.model,
+        reasoning_effort=args.reasoning_effort,
     )
     _print_summary(result)
     return 0 if all(item.score.label != "inconclusive" for item in result.cases) else 2

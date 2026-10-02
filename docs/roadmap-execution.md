@@ -14,7 +14,7 @@ commit `5354d32`. Completed implementation is distinct from live qualification.
 - [ ] Expand and execute real-agent evaluation without weakening scoring.
 - [x] Qualify OpenDSS and EnergyPlus with real engines and reference inputs.
 - [x] Integrate bounded jobs, deployment and recovery checks; upgrade and soak gates remain open.
-- [ ] Publish verified improvements and update the evidence matrix.
+- [x] Publish verified improvements and update the evidence matrix; later batches retain separate checks.
 - [ ] Review the complete supported experience against the roadmap gates.
 
 The primary owns integration contracts, shared runtime, CLI and final review.
@@ -166,3 +166,34 @@ last interval when selecting a day. Tests reproduce the previous boundary
 loss with 49 counter observations and independently require 48 intervals and
 50 kWh. Quantity shape survives filtering, normalization and missing-row
 expansion, and raw counters cannot enter cost/carbon multiplication.
+
+## Orchestrated implementation on 2 October
+
+Workers use GPT-6 Luna with maximum reasoning effort. The primary retains
+shared contracts, integration, acceptance checks and release review.
+
+The current batch adds caller-declared CSV interval/counter/power semantics,
+explicit consumption transformations before date filtering, three runnable
+reference projects with scoped source artifacts, real PyPSA linear dispatch,
+and bounded PyPSA jobs with atomic migration of the prior job store.
+The integrated pre-billing suite passed 322 tests. Billing adds explicit
+standing charges and caller-defined tax treatment, preserving complete
+interval boundaries and refusing incomplete coverage; its combined focused
+checks passed 78 tests. These test counts are implementation checks, not
+real-agent task passes.
+
+The [221-intent discovery measurement](discovery-evaluation.md) preserves
+ambiguous labels and capability gaps. The [actual 13-case agent diagnosis](agent-run-diagnosis-oct02.md)
+records 5 passes and 8 partial results from unchanged source `ad769dc`.
+No scoring thresholds or frozen scenario truths were changed. The diagnosed
+cold numerical import delay was reproduced and fixed after that run; the
+archived scores remain unchanged.
+
+The project goal remains the open-source, self-hostable energy-agent gateway.
+Unfinished gates include complete examples and failure evidence for all twelve
+workflows across provider combinations; real owner-authorized site data;
+100 or more actual tasks and held-out qualification with two available model
+families; independent relevance review of at least 200 intents; a representative
+30-day soak; and an independently authored connector. The three reference
+projects use synthetic inputs and real numerical solvers. They do not clear
+the real-site gate. v0.2.0 remains the published release.
