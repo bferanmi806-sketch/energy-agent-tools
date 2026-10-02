@@ -37,6 +37,7 @@ def test_qualified_set_has_only_supported_development_cases() -> None:
         "dev_units_kw_kwh",
         "dev_counter_reset_quality",
         "dev_field_units_provenance",
+        "dev_consumption_counter_reset",
     }
     for case_id in QUALIFIED_TELEMETRY_CASE_IDS:
         case = CASE_INDEX[case_id]
@@ -47,17 +48,13 @@ def test_qualified_set_has_only_supported_development_cases() -> None:
 
 
 def test_unqualified_cases_fail_closed(tmp_path: Path) -> None:
-    with pytest.raises(EnvironmentUnavailable, match="quantity_shape"):
-        build_telemetry_environment(
-            "dev_consumption_counter_reset", tmp_path / "root", tmp_path / "state"
-        )
     with pytest.raises(EnvironmentUnavailable):
         build_telemetry_environment(
             "holdout_consumption_emoncms", tmp_path / "root", tmp_path / "state"
         )
     with pytest.raises(EnvironmentUnavailable):
         build_telemetry_environment("unknown", tmp_path / "root", tmp_path / "state")
-    assert "dev_consumption_counter_reset" in EXCLUDED_TELEMETRY_CASES
+    assert "dev_consumption_counter_reset" not in EXCLUDED_TELEMETRY_CASES
 
 
 @pytest.mark.asyncio
@@ -373,6 +370,93 @@ async def test_counter_reset_quality_marks_only_monotonic_intervals(tmp_path: Pa
         )
         assert wrong_shape["ok"] is False
         assert wrong_shape["error"]["code"] == "binding_semantics_changed"
+    finally:
+        await built.close()
+
+
+@pytest.mark.asyncio
+async def test_csv_counter_reset_is_declared_and_differenced_with_exact_interval(
+    tmp_path: Path,
+) -> None:
+    built = build_telemetry_environment(
+        "dev_consumption_counter_reset", tmp_path / "root", tmp_path / "state"
+    )
+    try:
+        context = built.context
+        truth = json.loads((context.root / "provider-truth.json").read_text())
+        with (context.root / "counter.csv").open(newline="", encoding="utf-8") as stream:
+            csv_rows = list(csv.DictReader(stream))
+        assert csv_rows == truth["rows"]
+        assert truth["quantity_shape"] == "counter"
+        assert truth["resolution"] == "1h"
+        source_values = [Decimal(row["value"]) for row in csv_rows]
+        assert source_values == [
+            Decimal("9998"),
+            Decimal("12"),
+            Decimal("13"),
+            Decimal("15"),
+            Decimal("16"),
+        ]
+        independent_deltas = [
+            current - previous
+            for previous, current in zip(source_values[:-1], source_values[1:], strict=True)
+            if current >= previous
+        ]
+        assert independent_deltas == [Decimal("1"), Decimal("2"), Decimal("1")]
+        assert all(delta > 0 for delta in independent_deltas)
+        assert independent_deltas == [Decimal(value) for value in truth["valid_deltas_kwh"]]
+
+        session = built.agent.session(context.user_id, context.site_id)
+        provider = await built.agent.resolver.execute(
+            session,
+            CapabilityRequest(
+                capability="get_energy_consumption",
+                asset_id="reykjavik-cabin-meter",
+                arguments=context.arguments(),
+            ),
+            persist=True,
+        )
+        raw_id = _artifact_id(provider)
+        raw = built.agent.workbench.read(session, raw_id)
+        assert raw.quantity_shape == "counter"
+        assert raw.resolution == "1h"
+        assert raw.site_id == context.site_id
+        assert raw.asset_id == "reykjavik-cabin-meter"
+        assert raw.provenance[0]["declared_quantity_shape"] == "counter"
+        assert raw.provenance[0]["declared_resolution"] == "1h"
+
+        summary = await built.agent.execute(
+            session,
+            "WORKBENCH_SUMMARIZE",
+            {"artifact_id": raw_id, "column": "value"},
+        )
+        assert summary["ok"] is True
+        assert summary["result"]["data"]["sum"] is None
+
+        transformed = await built.agent.execute(
+            session,
+            "WORKBENCH_ENERGY_OPERATION",
+            {
+                "operation": "counter",
+                "artifact_ids": [raw_id],
+                "parameters": {"timestamp": "timestamp", "column": "value"},
+            },
+            expected_kind=DataKind.CALCULATED,
+            expected_unit="kWh",
+            persist=True,
+        )
+        result = built.agent.workbench.read(session, _artifact_id(transformed))
+        assert result.kind == DataKind.CALCULATED
+        assert result.quantity_shape == "interval"
+        assert result.resolution == "1h"
+        reset = result.data[1]
+        assert reset["status"] == "counter_reset"
+        assert reset["value"] is None
+        assert reset["timestamp"] == truth["reset_interval"]["start"].replace("Z", "+00:00")
+        assert reset["end"] == truth["reset_interval"]["end"].replace("Z", "+00:00")
+        produced_deltas = [row["value"] for row in result.data if row["status"] == "ok"]
+        assert produced_deltas == [1, 2, 1]
+        assert sum(produced_deltas) == pytest.approx(float(sum(independent_deltas)))
     finally:
         await built.close()
 

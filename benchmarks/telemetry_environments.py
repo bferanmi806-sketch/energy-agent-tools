@@ -39,16 +39,11 @@ QUALIFIED_TELEMETRY_CASE_IDS: frozenset[str] = frozenset(
         "dev_units_kw_kwh",
         "dev_counter_reset_quality",
         "dev_field_units_provenance",
+        "dev_consumption_counter_reset",
     }
 )
 
-EXCLUDED_TELEMETRY_CASES: dict[str, str] = {
-    "dev_consumption_counter_reset": (
-        "The production CSV connector preserves declared kind and unit but has no reviewed "
-        "quantity_shape field. A cumulative counter cannot receive a generic consumption "
-        "binding until the connector carries an explicit counter declaration."
-    )
-}
+EXCLUDED_TELEMETRY_CASES: dict[str, str] = {}
 
 _SCENARIO_DATE = date(2026, 9, 29)
 _USER_ID = "telemetry-development-user"
@@ -92,7 +87,7 @@ def _local_day(timezone: str, day: date) -> tuple[datetime, datetime]:
 
 def _context(case: ScenarioCase, root: Path, state_dir: Path) -> ScenarioContext:
     local_start, local_end = _local_day(case.timezone, _SCENARIO_DATE)
-    if case.id == "dev_counter_reset_quality":
+    if case.id in {"dev_counter_reset_quality", "dev_consumption_counter_reset"}:
         zone = ZoneInfo(case.timezone)
         local_start = datetime.combine(date(2026, 9, 28), time(23), tzinfo=zone)
         local_end = local_start + timedelta(hours=5)
@@ -158,6 +153,17 @@ def _emon_reset_rows(context: ScenarioContext) -> list[list[float]]:
     values = [9998.0, 12.0, 13.0, 15.0, 16.0]
     return [
         [(context.window_start + timedelta(hours=index)).timestamp(), value]
+        for index, value in enumerate(values)
+    ]
+
+
+def _reykjavik_counter_rows(context: ScenarioContext) -> list[dict[str, str]]:
+    values = ["9998", "12", "13", "15", "16"]
+    return [
+        {
+            "timestamp": _iso(context.window_start + timedelta(hours=index)),
+            "value": value,
+        }
         for index, value in enumerate(values)
     ]
 
@@ -334,6 +340,15 @@ def _sites_and_assets(
             account_ids=account_ids,
             metadata={"feed_id": 11, "unit": "kWh", "quantity_shape": "counter"},
         )
+    elif case_id == "dev_consumption_counter_reset":
+        asset = Asset(
+            id="reykjavik-cabin-meter",
+            site_id=site.id,
+            kind="meter",
+            name="Reykjavik cabin cumulative energy counter",
+            account_ids=account_ids,
+            metadata={"unit": "kWh", "quantity_shape": "counter", "resolution": "1h"},
+        )
     elif case_id == "dev_units_kw_kwh":
         asset = Asset(
             id="manchester-power-reading",
@@ -412,6 +427,30 @@ def _bindings(
                 reviewed=True,
             )
         ]
+    if case_id == "dev_consumption_counter_reset":
+        return [
+            CapabilityBinding(
+                capability="get_energy_consumption",
+                tool="CSV_READ_TIMESERIES",
+                asset_id="reykjavik-cabin-meter",
+                kind=DataKind.METERED,
+                unit="kWh",
+                quantity_shape="counter",
+                resolution="1h",
+                quality="fixture-declared",
+                preference=100,
+                defaults={
+                    "file": "counter.csv",
+                    "kind": "metered",
+                    "unit": "kWh",
+                    "timezone": context.timezone,
+                    "timestamp": "timestamp",
+                    "quantity_shape": "counter",
+                    "resolution": "1h",
+                },
+                reviewed=True,
+            )
+        ]
     if case_id == "dev_units_kw_kwh":
         return [
             CapabilityBinding(
@@ -469,6 +508,23 @@ def _write_case_fixture(case_id: str, context: ScenarioContext) -> None:
         _write_json(
             context.root / "provider-truth.json",
             {"rows": rows, "unit": "kWh", "quantity_shape": "counter", "valid_delta_kwh": 4.0},
+        )
+    elif case_id == "dev_consumption_counter_reset":
+        rows = _reykjavik_counter_rows(context)
+        _write_csv(context.root / "counter.csv", rows)
+        _write_json(
+            context.root / "provider-truth.json",
+            {
+                "rows": rows,
+                "unit": "kWh",
+                "quantity_shape": "counter",
+                "resolution": "1h",
+                "valid_deltas_kwh": [1, 2, 1],
+                "reset_interval": {
+                    "start": rows[0]["timestamp"],
+                    "end": rows[1]["timestamp"],
+                },
+            },
         )
     elif case_id == "dev_units_kw_kwh":
         rows = [
@@ -534,7 +590,11 @@ def build_telemetry_environment(case_id: str, root: Path, state_dir: Path) -> Bu
     registry = Registry()
     http.register(registry)
     local.register(registry)
-    if case_id in {"dev_units_kw_kwh", "dev_field_units_provenance"}:
+    if case_id in {
+        "dev_units_kw_kwh",
+        "dev_field_units_provenance",
+        "dev_consumption_counter_reset",
+    }:
         local.register_csv(registry, context.root)
     sites, assets = _sites_and_assets(case_id, context, accounts)
     agent = EnergyAgent(
