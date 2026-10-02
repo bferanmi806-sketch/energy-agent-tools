@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -244,7 +245,7 @@ def _configuration() -> dict[str, Any]:
             "tool": "engineering.schedule_battery_charging",
             "asset_id": BATTERY_ASSET,
             "kind": "simulated",
-            "unit": "kW, kWh, currency, gCO2e",
+            "unit": "kW, kWh, currency, gCO2",
             "quality": "verified",
             "reviewed": True,
         },
@@ -672,4 +673,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    os.environ.setdefault("MPL_IGNORE_SYSTEM_FONTS", "1")
     asyncio.run(main())

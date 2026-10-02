@@ -501,7 +501,9 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                     "intervals": intervals,
                     "battery": parameters.get("battery", {}),
                     "objective": recipe["objective"],
+                    "carbon_species": "CO2" if carbon["unit"] == "gCO2/kWh" else "CO2e",
                 },
+                input_artifacts=[*inputs, alignment_id],
             )
             selected = agent.resolver.resolve(session, request)["selected"]
             if not selected:
@@ -509,12 +511,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                     "battery_inputs_required",
                     "Supply battery capacity, state and charge/discharge limits.",
                 )
-            output = await agent.execute(
-                session,
-                selected["tool"],
-                selected["arguments"],
-                input_artifacts=[*inputs, alignment_id],
-            )
+            output = await agent.resolver.execute(session, request)
         elif operation == "solar":
             weather = results["get_weather"]
             if weather["kind"] != "forecast":
@@ -572,24 +569,17 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 site = agent.sites[session.site_id]
                 for key in ("latitude", "longitude", "timezone"):
                     solar.setdefault(key, getattr(site, key))
-            request = CapabilityRequest(capability="estimate_solar_generation", arguments=solar)
+            request = CapabilityRequest(
+                capability="estimate_solar_generation",
+                arguments=solar,
+                input_artifacts=[artifacts["get_weather"], pivot_id],
+            )
             selected = agent.resolver.resolve(session, request)["selected"]
             if not selected:
                 raise EnergyError(
                     "solar_inputs_required", "Supply PV capacity and forecast irradiance in W/m2."
                 )
-            output = await agent.execute(
-                session,
-                selected["tool"],
-                selected["arguments"],
-                account_id=selected["account_id"],
-                expected_kind=selected["kind"],
-                expected_unit=selected["unit"],
-                expected_resolution=selected["resolution"],
-                expected_arguments=selected["fixed_arguments"],
-                asset_id=selected["asset_id"],
-                input_artifacts=[artifacts["get_weather"], pivot_id],
-            )
+            output = await agent.resolver.execute(session, request)
         if output:
             evidence.append({"analysis": output})
         return {

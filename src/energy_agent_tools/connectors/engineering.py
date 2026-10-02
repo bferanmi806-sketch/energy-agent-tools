@@ -350,6 +350,7 @@ def _battery_schema() -> Json:
             "objective": {"enum": ["cost", "carbon", "cost_and_carbon"]},
             "carbon_price_gbp_per_tonne": {"type": "number", "minimum": 0},
             "carbon_weight": {"type": "number", "minimum": 0},
+            "carbon_species": {"type": "string", "enum": ["CO2", "CO2e"], "default": "CO2e"},
             "allow_grid_charging": {"type": "boolean"},
             "allow_grid_export": {"type": "boolean"},
         },
@@ -1029,6 +1030,9 @@ async def schedule_battery_charging(args: Json, ctx: ExecutionContext) -> Energy
         raise _dependency_error("scipy", exc) from exc
 
     args = _required_mapping(args, "args")
+    carbon_species = args.get("carbon_species", "CO2e")
+    if carbon_species not in ("CO2", "CO2e"):
+        raise _error("invalid_input", "carbon_species must be CO2 or CO2e")
     interval_specs = _required_list(
         args.get("intervals"), "intervals", max_items=_MAX_BATTERY_INTERVALS
     )
@@ -1278,6 +1282,7 @@ async def schedule_battery_charging(args: Json, ctx: ExecutionContext) -> Energy
                 "baseline_cost_without_battery": baseline_cost,
                 "cost_savings": baseline_cost - total_cost,
                 "total_carbon_g": total_carbon,
+                "carbon_species": carbon_species,
                 "total_grid_import_kwh": sum(
                     item["grid_import_kw"] * item["duration_hours"] for item in schedule
                 ),
@@ -1290,7 +1295,8 @@ async def schedule_battery_charging(args: Json, ctx: ExecutionContext) -> Energy
             },
         },
         kind=DataKind.SIMULATED,
-        unit="kW, kWh, currency, gCO2e",
+        unit=f"kW, kWh, currency, g{carbon_species}",
+        field_units={"carbon_g": f"g{carbon_species}", "total_carbon_g": f"g{carbon_species}"},
         source="energy-agent-tools:battery-optimizer",
         # Interval timestamps may carry a fixed UTC offset (for example ``+01:00``),
         # which is not an IANA zone accepted by EnergyResult.  The result envelope
@@ -1301,6 +1307,7 @@ async def schedule_battery_charging(args: Json, ctx: ExecutionContext) -> Energy
             "battery state transitions use the supplied charge/discharge efficiencies and power limits",
             "load and PV values are treated as interval-average real power",
             "grid import/export prices and carbon intensities are exogenous inputs; degradation and demand charges are omitted",
+            f"Carbon totals retain the supplied {carbon_species} basis.",
             "a local mixed-integer linear optimizer prevents simultaneous charging and discharging",
         ],
         warnings=[],

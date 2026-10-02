@@ -30,6 +30,9 @@ def _model_result(recipe: dict[str, Any]) -> dict[str, Any]:
 def _battery_truth(result: dict[str, Any], *, expected_charge_start: str) -> None:
     assert result["kind"] == "simulated"
     assert result["source"] == "energy-agent-tools:battery-optimizer"
+    assert result["asset_id"] == "reference-home-battery"
+    assert result["unit"].endswith("gCO2")
+    assert result["data"]["summary"]["carbon_species"] == "CO2"
     schedule = result["data"]["schedule"]
     assert len(schedule) == 3
     charges = [row for row in schedule if row["charge_kw"] > 1e-6]
@@ -169,6 +172,11 @@ def test_six_offline_model_workflows_have_source_evidence_and_real_failures() ->
     totals = flow["data"]["totals"]
     assert totals["line_loss_mw"] > 0
     assert abs(totals["balance_error_mw"]) < 1e-6
+    load_bus = next(bus for bus in flow["data"]["buses"] if bus["id"] == "load")
+    expected_drop_pu = (0.5 * 0.8 + 0.4 * 0.2) / 11**2
+    assert math.isclose(load_bus["vm_pu"], 1 - expected_drop_pu, abs_tol=2e-4)
+    expected_loss_mw = 0.5 * (0.8**2 + 0.2**2) / 11**2
+    assert math.isclose(totals["line_loss_mw"], expected_loss_mw, abs_tol=5e-5)
     assert math.isclose(flow["data"]["loads"][0]["p_mw"], 0.8, abs_tol=1e-12)
     assert math.isclose(flow["data"]["loads"][0]["q_mvar"], 0.2, abs_tol=1e-12)
     feeder_source = power_flow["sources"][0]

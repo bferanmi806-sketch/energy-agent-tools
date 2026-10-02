@@ -756,6 +756,14 @@
             "type": "number",
             "minimum": 0
           },
+          "carbon_species": {
+            "type": "string",
+            "enum": [
+              "CO2",
+              "CO2e"
+            ],
+            "default": "CO2e"
+          },
           "allow_grid_charging": {
             "type": "boolean"
           },

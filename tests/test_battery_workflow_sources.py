@@ -70,6 +70,8 @@ async def test_csv_forecasts_plan_distinct_cheapest_and_cleanest_charge_hours(
     assert response["ok"], response
     result = response["evidence"][-1]["analysis"]["result"]
     assert result["kind"] == "simulated"
+    assert result["unit"].endswith("gCO2e")
+    assert result["field_units"]["total_carbon_g"] == "gCO2e"
     alignment = next(item["alignment"] for item in response["evidence"] if "alignment" in item)
     alignment_id = alignment["result"]["data"]["artifact_id"]
     aligned_input = next(
@@ -216,6 +218,10 @@ async def test_battery_workflow_substitutes_reviewed_source_schemas(
         assert summary["total_carbon_g"] == pytest.approx(expected_carbon)
         charge = [row for row in result["data"]["schedule"] if row["charge_kw"] > 0.99]
         assert len(charge) == 1 and expected_hour in charge[0]["timestamp"]
+        expected_species = "CO2" if local_price else "CO2e"
+        assert result["unit"].endswith(f"g{expected_species}")
+        assert result["data"]["summary"]["carbon_species"] == expected_species
+        assert result["field_units"]["total_carbon_g"] == f"g{expected_species}"
         expected_source = "carbon-intensity-gb" if local_price else "octopus-energy"
         assert {row["source"] for row in result["provenance"] if "artifact_id" in row} == {
             "local-csv",
