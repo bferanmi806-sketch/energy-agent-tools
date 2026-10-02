@@ -1,0 +1,64 @@
+{
+  "sdk_version": "0.1.0",
+  "source_revision": "bd9cbb3547ee24d9d338f458f4a36d4e5e8240ba",
+  "package": {
+    "name": "@energy-agent-tools/sdk",
+    "file": "energy-agent-tools-sdk-0.1.0.tgz",
+    "sha256": "a18379c2f2ccbad7570c44349e30d22532bf715ab2b81ad3f85e64b5ca0f769c",
+    "bytes": 18082,
+    "published_to_npm": false
+  },
+  "verification": {
+    "node_suite": "11 passed, 0 failed",
+    "node_log_sha256": "968baf6741ccb5cd61a3b3973f8f58b504506f01e1ae91d29cd40eaf1305f4e4",
+    "python_integration": "15 passed in 14.20s",
+    "python_log_sha256": "a02a24031e1358650fc24ca4af6115e0011f2a9bea61c3e5ad96ef11095a2cee",
+    "strict_typescript": "passed",
+    "isolated_consumer_rest_acceptance": "1 passed, installed tarball files match built SDK",
+    "isolated_consumer_public_types": "passed, including expected invalid-kind and unknown-data checks",
+    "consumer_log_sha256": "f79b2823f02749ae157a14eda16ca86f459ea1a73f3973d32832e58c5da7a107",
+    "generated_contracts": "checked",
+    "ruff": "passed",
+    "ruff_format": "209 files already formatted",
+    "mypy": "51 source files passed",
+    "python_sdk_verifier_test": "1 passed in 93.28s before the later catalogue route addition",
+    "local_runtime": {
+      "node": "24.15.0",
+      "npm": "11.12.1",
+      "python": "3.12.14"
+    }
+  },
+  "ci": {
+    "revision": "bd9cbb3547ee24d9d338f458f4a36d4e5e8240ba",
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37074460742",
+    "status": "success",
+    "python": {
+      "3.13": "637 passed in 122.64s (0:02:02)",
+      "3.12": "637 passed in 198.78s (0:03:18)",
+      "3.11": "637 passed in 179.17s (0:02:59)"
+    },
+    "container": "passed",
+    "upgrade": "passed",
+    "home_assistant": "passed",
+    "log_sha256": "468c1911a4e679858e3331c6b5ee91276da608511d9f758499d34d157e21b609",
+    "node_acceptance": "Included in Python suite; 637 passed with no skipped runtime verifier on each matrix version"
+  },
+  "coverage": [
+    "Authenticated REST sessions/search/toolkits/execute/resolve/capability/connections/artifacts/skills/workflows/jobs",
+    "Real official Streamable HTTP MCP initialize/list/search/capability execution",
+    "HTTP timeout and caller cancellation including late token resolution",
+    "Pre-aborted MCP connection/helper refusal and idempotent close",
+    "Cross-origin redirect refusal without authenticated POST replay",
+    "Bounded HTTP response bytes and malformed payload refusal",
+    "Generated Python-model schemas and response semantics validation",
+    "User/session isolation and synthetic REST forecast/bill composition"
+  ],
+  "limits": [
+    "SDK targets current source gateway; REST workflow and catalogue routes postdate v0.3.0.",
+    "Python/Node fixtures use synthetic local data; no physical meter, live private provider or forecast accuracy is qualified.",
+    "Provider-specific data remains unknown until parsed against its own schema.",
+    "Connect Apps UI and persistent workspace/connection control plane remain unfinished.",
+    "Broad actual agent evaluation, independent review/contribution and sustained operation remain open."
+  ],
+  "reproduction": "uv run python scripts/verify_typescript_sdk.py"
+}

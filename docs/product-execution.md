@@ -225,3 +225,11 @@ This is the SDK foundation, not completion of Phase 2 or the full goal. The
 Connect Apps application, persistent workspace/connection control plane and
 remaining real-world qualification gates are still required. The SDK is not
 published to npm; the current source and local tarball are reviewable.
+
+The SDK implementation revision `bd9cbb3547ee24d9d338f458f4a36d4e5e8240ba`
+passes [published CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37074460742):
+637 tests on each of Python 3.11, 3.12 and 3.13, with no skipped Node verifier.
+Container, upgrade and Home Assistant checks also pass. The
+[SDK evidence](evidence/typescript-sdk-oct02.json) pins the source and package
+qualification. These checks qualify software contracts, not physical sites or
+the remaining independent evaluation and deployment gates.
