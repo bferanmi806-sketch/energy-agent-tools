@@ -52,6 +52,7 @@ def register(registry: Registry) -> None:
                     "historical_context_artifact": artifact,
                     "future_context_artifact": artifact,
                     "start": {"type": "string", "format": "date-time"},
+                    "history_end": {"type": "string", "format": "date-time"},
                     "end": {"type": "string", "format": "date-time"},
                     "timezone": column,
                     "interval_minutes": {"enum": [15, 30, 60]},

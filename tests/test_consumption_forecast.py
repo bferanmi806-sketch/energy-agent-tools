@@ -137,6 +137,8 @@ def test_forecasts_eight_days_from_ninety_days_of_exact_weekly_history() -> None
     assert result.provenance[0]["inputs"][0]["kind"] == "metered"
     assert result.data["model"]["selection_rows"] == 7 * 96
     assert result.data["model"]["calibration_rows"] == 7 * 96
+    assert result.data["model"]["history_end"] == result.data["model"]["forecast_start"]
+    assert result.data["model"]["history_to_forecast_gap_seconds"] == 0
     assert (
         result.data["model"]["final_training_start"]
         == result.data["model"]["evaluation_training_start"]
@@ -149,6 +151,65 @@ def test_forecasts_eight_days_from_ninety_days_of_exact_weekly_history() -> None
         == pytest.approx(_weekly_value(datetime.fromisoformat(row["timestamp"]).astimezone(UTC)))
         for row in intervals
     )
+
+
+def test_forecasts_from_ninety_days_ending_one_day_before_forecast_start() -> None:
+    forecast_start = datetime.fromisoformat(_PARAMETERS["start"]).astimezone(UTC)
+    history_end = forecast_start - timedelta(days=1)
+    history = _history(start=history_end - timedelta(days=90), days=90)
+    parameters = dict(_PARAMETERS, history_end=history_end.isoformat())
+
+    result = _forecast(history, parameters)
+    model = result.data["model"]
+
+    assert len(result.data["intervals"]) == 8 * 96
+    assert model["history_end"] == history_end.isoformat()
+    assert model["forecast_start"] == forecast_start.isoformat()
+    assert model["history_to_forecast_gap_seconds"] == 24 * 60 * 60
+    assert model["selection_rows"] == 7 * 96
+    assert model["calibration_rows"] == 7 * 96
+    assert model["selection_start"] == (history_end - timedelta(days=14)).isoformat()
+    assert model["selection_end"] == (history_end - timedelta(days=7)).isoformat()
+    assert model["calibration_start"] == (history_end - timedelta(days=7)).isoformat()
+    assert model["calibration_end"] == history_end.isoformat()
+    assert model["final_training_end"] == history_end.isoformat()
+    assert "unobserved changes during this gap are not modeled" in " ".join(result.assumptions)
+    assert "unobserved changes during this gap are not modeled" in " ".join(result.warnings)
+
+
+def test_rejects_history_rows_after_explicit_history_end() -> None:
+    history = _history()
+    forecast_start = datetime.fromisoformat(_PARAMETERS["start"]).astimezone(UTC)
+    parameters = dict(_PARAMETERS, history_end=(forecast_start - timedelta(days=1)).isoformat())
+
+    with pytest.raises(EnergyError, match="end by history_end"):
+        _forecast(history, parameters)
+
+
+def test_rejects_history_end_after_forecast_start() -> None:
+    history = _history()
+    forecast_start = datetime.fromisoformat(_PARAMETERS["start"]).astimezone(UTC)
+    parameters = dict(_PARAMETERS, history_end=(forecast_start + _STEP).isoformat())
+
+    with pytest.raises(EnergyError, match="at or before forecast start"):
+        _forecast(history, parameters)
+
+
+def test_rejects_history_end_more_than_seven_days_before_forecast_start() -> None:
+    history = _history()
+    forecast_start = datetime.fromisoformat(_PARAMETERS["start"]).astimezone(UTC)
+    parameters = dict(_PARAMETERS, history_end=(forecast_start - timedelta(days=8)).isoformat())
+
+    with pytest.raises(EnergyError, match="within seven days"):
+        _forecast(history, parameters)
+
+
+def test_history_end_requires_an_explicit_utc_offset() -> None:
+    history = _history()
+    parameters = dict(_PARAMETERS, history_end="2025-03-28T00:00:00")
+
+    with pytest.raises(EnergyError, match="explicit UTC offset"):
+        _forecast(history, parameters)
 
 
 def test_accepts_three_calendar_months_that_are_under_ninety_days() -> None:
@@ -325,7 +386,7 @@ def test_holdout_residual_bands_are_ordered_and_nonzero_for_noisy_history() -> N
 def test_forecast_keeps_exact_utc_cadence_across_dst(
     start: datetime, finish: datetime, expected_date: str, expected_count: int
 ) -> None:
-    history = _history()
+    history = _history(start=start - timedelta(days=90))
     parameters = {
         "timezone": _ZONE,
         "interval_minutes": 15,

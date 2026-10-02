@@ -110,4 +110,6 @@ any interval requiring a split at a target boundary. The output uses canonical
 `timestamp`, `end` and `value` columns, with at most 100,000 output bins. This is
 observed aggregation, not a meter-quality upgrade or estimated gap filling.
 `forecast-bill` and `consumption-forecast` use it for historical input before
-model fitting. Contextual weather time alignment remains separate.
+model fitting. The [forecast workflow](consumption-forecasting.md) can also resolve
+historical and future temperature and align it separately, with explicit
+weather kinds and bounded hold assumptions.

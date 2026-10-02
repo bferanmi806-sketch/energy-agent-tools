@@ -101,6 +101,13 @@ def builtins(agent: EnergyAgent) -> list[CapabilityBinding]:
             None,
         ),
         ("get_weather", "open_meteo.get_forecast", DataKind.FORECAST, None, "1h"),
+        (
+            "get_historical_weather",
+            "open_meteo.get_historical_temperature",
+            DataKind.ESTIMATED,
+            "degC",
+            "1h",
+        ),
         ("get_tariff", "octopus_energy.get_tariffs", DataKind.CALCULATED, "p/kWh", None),
         (
             "estimate_solar_generation",
@@ -364,11 +371,18 @@ class CapabilityResolver:
                         reasons.append("arguments_incompatible_with_capability")
                     else:
                         args[key] = value
-                if session.site_id and request.capability == "get_weather":
+                if session.site_id and request.capability in {
+                    "get_weather",
+                    "get_historical_weather",
+                }:
                     site = self.agent.sites[session.site_id]
-                    if site.latitude is not None:
+                    if site.latitude is not None and "latitude" in tool.input_schema.get(
+                        "properties", {}
+                    ):
                         args.setdefault("latitude", site.latitude)
-                    if site.longitude is not None:
+                    if site.longitude is not None and "longitude" in tool.input_schema.get(
+                        "properties", {}
+                    ):
                         args.setdefault("longitude", site.longitude)
                 for key in binding.required_arguments_or_settings:
                     required_value = args.get(key) or (

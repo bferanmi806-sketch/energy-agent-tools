@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -21,8 +21,10 @@ class ForecastWorkflowRequest(StrictModel):
     start: str | None = None
     end: str | None = None
     days: int = Field(default=8, ge=1, le=31)
+    context_mode: Literal["auto", "explicit", "required"] = "auto"
     history_months: int = Field(default=3, ge=1, le=24)
     history_start: str | None = None
+    history_end: str | None = None
     artifacts: dict[str, str] = Field(default_factory=dict)
     arguments: dict[str, Json] = Field(default_factory=dict)
     account_ids: dict[str, str] = Field(default_factory=dict)
@@ -86,10 +88,15 @@ async def run_forecast_skill(
         declared_end = request.forecast.get("end_column")
         site = agent.sites[session.site_id]
         zone = ZoneInfo(site.timezone)
+        now = agent.calendar_clock().astimezone(zone)
         if request.start is None and request.end is None:
-            tomorrow = agent.calendar_clock().astimezone(zone).date() + timedelta(days=1)
-            start = pd.Timestamp(tomorrow).tz_localize(zone)
-            end = pd.Timestamp(tomorrow + timedelta(days=request.days)).tz_localize(zone)
+            tomorrow = now.date() + timedelta(days=1)
+            start = pd.Timestamp(tomorrow).tz_localize(
+                zone, ambiguous=True, nonexistent="shift_forward"
+            )
+            end = pd.Timestamp(tomorrow + timedelta(days=request.days)).tz_localize(
+                zone, ambiguous=True, nonexistent="shift_forward"
+            )
         elif request.start is not None and request.end is not None:
             start_bound, end_bound = bounds(request.start, request.end)
             start, end = (
@@ -98,12 +105,27 @@ async def run_forecast_skill(
             )
         else:
             raise EnergyError("time_window_required", "Supply both future start and end.")
+        today = pd.Timestamp(now.date()).tz_localize(
+            zone, ambiguous=True, nonexistent="shift_forward"
+        )
+        history_end = (
+            pd.Timestamp(instant(request.history_end)).tz_convert(zone)
+            if request.history_end
+            else min(start, today)
+        )
+        from .consumption_forecast import MAX_HISTORY_GAP
+
+        if history_end > start or start - history_end > MAX_HISTORY_GAP:
+            raise EnergyError(
+                "invalid_history_end",
+                "Historical cutoff must precede forecast start by at most seven days.",
+            )
         history_start = (
             pd.Timestamp(instant(request.history_start)).tz_convert(zone)
             if request.history_start
-            else start - pd.DateOffset(months=request.history_months)
+            else history_end - pd.DateOffset(months=request.history_months)
         )
-        bounds(history_start.isoformat(), start.isoformat())
+        bounds(history_start.isoformat(), history_end.isoformat())
         if end - start > pd.Timedelta(days=32):
             raise EnergyError(
                 "invalid_time_range", "Forecast workflows cover at most 31 local days."
@@ -148,7 +170,7 @@ async def run_forecast_skill(
             if capability == "get_energy_consumption":
                 for key, expected in (
                     ("start", history_start.isoformat()),
-                    ("end", start.isoformat()),
+                    ("end", history_end.isoformat()),
                 ):
                     supplied = args.pop(key, None)
                     if supplied is not None and instant(supplied) != instant(expected):
@@ -260,7 +282,7 @@ async def run_forecast_skill(
             return stored["artifact_id"]
 
         history_id = await source(
-            "get_energy_consumption", history_start.isoformat(), start.isoformat()
+            "get_energy_consumption", history_start.isoformat(), history_end.isoformat()
         )
         history = agent.workbench.read(session, history_id)
         history_value = history.model_dump(mode="json")
@@ -272,7 +294,9 @@ async def run_forecast_skill(
             raise EnergyError("column_not_found", "Declared history interval columns are missing.")
         starts = [instant(row[timestamp]) for row in rows]
         ends = [instant(row[end_column]) for row in rows]
-        if min(starts) != history_start.tz_convert("UTC") or max(ends) != start.tz_convert("UTC"):
+        if min(starts) != history_start.tz_convert("UTC") or max(ends) != history_end.tz_convert(
+            "UTC"
+        ):
             raise EnergyError(
                 "incomplete_history",
                 "Meter history must cover the complete requested historical window.",
@@ -283,6 +307,7 @@ async def run_forecast_skill(
             "end",
             "timezone",
             "history_artifact",
+            "history_end",
             "historical_context_artifact",
             "future_context_artifact",
         ):
@@ -296,14 +321,46 @@ async def run_forecast_skill(
             end=end.isoformat(),
             timezone=site.timezone,
             history_artifact=history_id,
+            history_end=history_end.isoformat(),
         )
         forecast_args.setdefault("interval_minutes", 30)
         # Input schema mappings are consumed by observed aggregation; model rows are canonical.
         forecast_args.update(timestamp=timestamp, end_column=end_column, column="value")
         refs = [history_id]
+        context_refs: dict[str, str] = {
+            role: request.artifacts[role]
+            for role in ("historical_context", "future_context")
+            if role in request.artifacts
+        }
+        context_resolution: Json = {"status": "explicit" if context_refs else "disabled"}
+        if not context_refs and request.context_mode != "explicit":
+            from .forecast_context import fetch_forecast_context
+
+            context_refs, context_resolution = await fetch_forecast_context(
+                agent,
+                session,
+                history_start=history_start.isoformat(),
+                history_end=history_end.isoformat(),
+                forecast_start=start.isoformat(),
+                forecast_end=end.isoformat(),
+                interval_minutes=forecast_args["interval_minutes"],
+                arguments=request.arguments,
+                account_ids=request.account_ids,
+                tools=request.tools,
+            )
+            if context_refs:
+                forecast_args.update(
+                    context_timestamp="timestamp", temperature_column="temperature"
+                )
+        evidence.append({"context_resolution": context_resolution})
+        if request.context_mode == "required" and len(context_refs) != 2:
+            raise EnergyError(
+                "context_unavailable",
+                "Required historical/future temperature context is not available; inspect context_resolution evidence.",
+            )
         for role in ("historical_context", "future_context"):
-            if role in request.artifacts:
-                ref = request.artifacts[role]
+            if role in context_refs:
+                ref = context_refs[role]
                 agent.workbench.read(session, ref)
                 forecast_args[role + "_artifact"] = ref
                 refs.append(ref)
@@ -357,12 +414,13 @@ async def run_forecast_skill(
             "forecast_artifact": forecast_id,
             "forecast_summary": model.data["summary"],
             "model": model.data["model"],
+            "context_resolution": context_resolution,
             "calculation_basis": "forecast_consumption"
             if skill_id == "forecast-bill"
             else "forecast",
             "window": {
                 "history_start": history_start.isoformat(),
-                "history_end": start.isoformat(),
+                "history_end": history_end.isoformat(),
                 "start": start.isoformat(),
                 "end": end.isoformat(),
                 "timezone": site.timezone,

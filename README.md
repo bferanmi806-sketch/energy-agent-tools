@@ -31,6 +31,12 @@ The example CSV is synthetic and its measurement label is declared input metadat
 Run `uv run python examples/reference_agent.py` for a deterministic MCP walkthrough
 or `uv run python examples/bound_sdk.py` for the bound SDK.
 
+The [consumption forecast workflow](docs/consumption-forecasting.md) retrieves
+meter history, attempts relevant weather context, predicts future intervals
+and can estimate a bill from covering tariffs. It preserves measured, estimated
+and forecast source kinds. The offline reference is
+`uv run python examples/reference_projects/forecast_workflow.py`.
+
 ## Agent interface
 
 The endpoint exports eleven helpers:

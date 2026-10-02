@@ -73,6 +73,53 @@
       "result_kind": null,
       "result_unit": null,
       "dependencies": []
+    },
+    {
+      "name": "open_meteo.get_historical_temperature",
+      "toolkit": "open-meteo",
+      "description": "Get bounded hourly historical 2 m air temperature from Open-Meteo gridded analysis/reanalysis data.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "longitude": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "latitude",
+          "longitude",
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "get_historical_weather"
+      ],
+      "actions": [
+        "read-only"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "estimated",
+      "result_unit": "degC",
+      "dependencies": []
     }
   ]
 }

@@ -136,6 +136,8 @@ async def _run() -> dict[str, Any]:
                 "start": FORECAST_START.isoformat(),
                 "end": FORECAST_END.isoformat(),
                 "billing": BILLING,
+                "context_mode": "explicit",
+                "history_end": FORECAST_START.isoformat(),
             }
             response = await session.skill("forecast-bill", parameters)
             if not response["ok"]:

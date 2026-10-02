@@ -41,6 +41,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "history_end": {
+            "type": "string",
+            "format": "date-time"
+          },
           "end": {
             "type": "string",
             "format": "date-time"

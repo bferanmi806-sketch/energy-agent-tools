@@ -18,6 +18,7 @@ _MIN_HISTORY = timedelta(days=70)
 _HOLDOUT = timedelta(days=14)
 _SELECTION = timedelta(days=7)
 _CALIBRATION = timedelta(days=7)
+MAX_HISTORY_GAP = timedelta(days=7)
 _MAX_HISTORY_ROWS = 100_000
 _MAX_FORECAST_ROWS = 10_000
 _MAX_HORIZON = timedelta(days=31)
@@ -33,6 +34,7 @@ _ALLOWED_PARAMETERS = {
     "timestamp",
     "end_column",
     "coverage",
+    "history_end",
     "temperature_column",
     "context_timestamp",
 }
@@ -51,7 +53,9 @@ def forecast(
 
     The final fourteen days are divided chronologically: the first seven select
     the model and the last seven calibrate its error bands. The selected model is
-    then refit on all history before it produces the requested forecast.
+    then refit on all history through ``history_end`` before it produces the
+    requested forecast. If omitted, ``history_end`` defaults to forecast start;
+    an explicit history end may be up to seven days before forecast start.
     """
 
     if not isinstance(parameters, dict):
@@ -99,8 +103,17 @@ def forecast(
 
     start = _timestamp(parameters["start"], "forecast start")
     finish = _timestamp(parameters["end"], "forecast end")
+    history_end = _timestamp(parameters.get("history_end", parameters["start"]), "history end")
     if finish <= start:
         raise EnergyError("invalid_range", "Forecast end must be after forecast start.")
+    if history_end > start:
+        raise EnergyError("invalid_history_end", "History end must be at or before forecast start.")
+    history_to_forecast_gap = start - history_end
+    if history_to_forecast_gap > MAX_HISTORY_GAP:
+        raise EnergyError(
+            "stale_history", "History end must be within seven days before forecast start."
+        )
+    history_to_forecast_gap_seconds = int(history_to_forecast_gap.total_seconds())
     duration = finish - start
     if duration > _MAX_HORIZON:
         raise EnergyError("horizon_too_large", "Forecast horizon must not exceed 31 days.")
@@ -122,13 +135,17 @@ def forecast(
     )
     if len(rows) > _MAX_HISTORY_ROWS:
         raise EnergyError("input_too_large", "History exceeds the 100,000 row limit.")
-    if rows[-1][1] > start:
-        raise EnergyError(
-            "history_after_forecast_start", "Every historical interval must end by forecast start."
-        )
     if rows[-1][1] - rows[0][0] < _MIN_HISTORY:
         raise EnergyError(
             "insufficient_history", "At least 70 days of contiguous metered history are required."
+        )
+    if rows[-1][1] > history_end:
+        raise EnergyError(
+            "history_after_cutoff", "Every historical interval must end by history_end."
+        )
+    if rows[-1][1] < history_end:
+        raise EnergyError(
+            "invalid_coverage", "History must cover a contiguous window through history_end."
         )
 
     holdout_rows = int(_HOLDOUT.total_seconds() // seconds)
@@ -136,9 +153,15 @@ def forecast(
     calibration_rows_count = int(_CALIBRATION.total_seconds() // seconds)
     if len(rows) <= holdout_rows:
         raise EnergyError("insufficient_history", "History is too short for chronological holdout.")
-    evaluation_training_rows = rows[:-holdout_rows]
-    selection_rows = rows[-holdout_rows:-calibration_rows_count]
-    calibration_rows = rows[-calibration_rows_count:]
+    selection_start = history_end - _HOLDOUT
+    calibration_start = history_end - _CALIBRATION
+    evaluation_training_rows = [row for row in rows if row[1] <= selection_start]
+    selection_rows = [
+        row for row in rows if row[0] >= selection_start and row[1] <= calibration_start
+    ]
+    calibration_rows = [
+        row for row in rows if row[0] >= calibration_start and row[1] <= history_end
+    ]
     if (
         len(selection_rows) != selection_rows_count
         or len(calibration_rows) != calibration_rows_count
@@ -180,9 +203,10 @@ def forecast(
     if historical_context is not None and future_context is not None:
         _validate_artifact(historical_context, "historical context")
         _validate_artifact(future_context, "future context")
-        if historical_context[1].kind != DataKind.METERED:
+        if historical_context[1].kind not in {DataKind.METERED, DataKind.ESTIMATED}:
             raise EnergyError(
-                "invalid_context", "Historical temperature context must be observed, not forecast."
+                "invalid_context",
+                "Historical temperature context must be observed or estimated analysis, not forecast.",
             )
         if future_context[1].kind != DataKind.FORECAST:
             raise EnergyError(
@@ -226,9 +250,13 @@ def forecast(
             "selection": "evaluated_on_first_chronological_7_day_window",
         }
 
-        evaluation_training_temperatures = historical_temperatures[:-holdout_rows]
-        selection_temperatures = historical_temperatures[-holdout_rows:-calibration_rows_count]
-        calibration_temperatures = historical_temperatures[-calibration_rows_count:]
+        selection_temperature_start = len(evaluation_training_rows)
+        calibration_temperature_start = selection_temperature_start + len(selection_rows)
+        evaluation_training_temperatures = historical_temperatures[:selection_temperature_start]
+        selection_temperatures = historical_temperatures[
+            selection_temperature_start:calibration_temperature_start
+        ]
+        calibration_temperatures = historical_temperatures[calibration_temperature_start:]
         evaluation_beta, evaluation_slot_temperature_means = _fit_temperature_adjustment(
             evaluation_training_rows,
             evaluation_training_values,
@@ -350,6 +378,9 @@ def forecast(
     )
     model: Json = {
         "method": selected_method,
+        "history_end": history_end.isoformat(),
+        "forecast_start": start.isoformat(),
+        "history_to_forecast_gap_seconds": history_to_forecast_gap_seconds,
         "training_start": evaluation_training_rows[0][0].isoformat(),
         "training_end": evaluation_training_rows[-1][1].isoformat(),
         "evaluation_training_rows": len(evaluation_training_rows),
@@ -420,10 +451,39 @@ def forecast(
             "The interval band uses the final 7 days of a frozen evaluation model selected on the preceding 7 days; nominal coverage is not guaranteed.",
             "After selection and calibration, the chosen point model is refit on all history; combined heldout diagnostics are not independent benchmark scores.",
             "Per-interval coverage does not describe the probability that the complete forecast horizon is covered.",
+            *(assumption for _, context in context_inputs for assumption in context.assumptions),
+            *(
+                [
+                    f"History ends {history_to_forecast_gap_seconds} seconds before forecast start; unobserved changes during this gap are not modeled."
+                ]
+                if history_to_forecast_gap_seconds
+                else []
+            ),
         ],
-        warnings=[
-            "This empirical estimate depends on the supplied data quality and representativeness; check source data and provider evidence before operational use."
-        ],
+        warnings=list(
+            dict.fromkeys(
+                [
+                    "This empirical estimate depends on the supplied data quality and representativeness; check source data and provider evidence before operational use.",
+                    *(
+                        [
+                            f"History ends {history_to_forecast_gap_seconds} seconds before forecast start; unobserved changes during this gap are not modeled."
+                        ]
+                        if history_to_forecast_gap_seconds
+                        else []
+                    ),
+                    *source_result.warnings,
+                    *(warning for _, context in context_inputs for warning in context.warnings),
+                    *(
+                        [
+                            "Historical temperature uses estimated analysis; context-conditioned validation does not establish future weather forecast accuracy."
+                        ]
+                        if historical_context is not None
+                        and historical_context[1].kind == DataKind.ESTIMATED
+                        else []
+                    ),
+                ]
+            )
+        ),
         quality="empirical_forecast",
         provenance=provenance,
     )
