@@ -1,0 +1,52 @@
+{
+  "implementation_revision": "1bf4fcf4e035adbbcd8fbecc931dbd73c3a92a33",
+  "qualification_script": "scripts/qualify_large_timeseries.py",
+  "qualification_sha256": "26a29689627aa0e3a0be10dc44e797aac634246d0bcf2a7e7cf14e558c26b1be",
+  "qualification": {
+    "fixture": {
+      "synthetic": true,
+      "physical_meter": false,
+      "rows": 1000000,
+      "cadence": "1 minute"
+    },
+    "import": {
+      "kind": "metered",
+      "dataset_id": "3ddf4a923bc24236819469e3fa2cd457",
+      "site_id": "site",
+      "asset_id": "feeder"
+    },
+    "summary": {
+      "count": 1000000,
+      "missing": 0,
+      "sum": 5999994.0,
+      "mean": 5.999994,
+      "min": 0.0,
+      "max": 12.0,
+      "streamed": true
+    },
+    "independent_expected_kwh": 5999994,
+    "window_rows": 1440,
+    "inline_page_rows": 548,
+    "peak_traced_python_bytes": 2336690,
+    "timings": {
+      "import_seconds": 165.0885478540149,
+      "summary_seconds": 35.82018565002363,
+      "day_window_seconds": 22.606201418006094
+    },
+    "backup_restore": "passed",
+    "foreign_scope": "artifact_not_found",
+    "limits": [
+      "Python allocations are traced; this is not an RSS or native SQLite memory measurement.",
+      "Temporal window selection scans chunks; it is not indexed by timestamp.",
+      "Bulk writes share SQLite's single writer; this is not a concurrent load or sustained soak qualification.",
+      "Meter semantics are synthetic declarations; no physical installation was read."
+    ]
+  },
+  "validation": {
+    "regression": "507 passed in 428.44s",
+    "ruff_check": "passed",
+    "ruff_format": "182 files already formatted",
+    "mypy": "45 source files passed"
+  },
+  "timing_note": "Timings include Python allocation tracing overhead."
+}

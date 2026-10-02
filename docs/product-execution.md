@@ -91,11 +91,23 @@ known-value assertions and preserved carbon species. These changes address
 implementation gaps in the baseline table; they do not clear live-provider,
 independent-review, agent-evaluation or sustained-operation gates.
 
-The next implementation unit is partitioned persistent time-series processing.
-The worker stopped at the account usage limit; primary review completed the
-storage foundation in isolated commit `8c62764`. Its six focused checks pass,
-including one million generated rows below 32 MiB traced Python memory,
-restart persistence, scope isolation and rollback. Gateway import, pagination,
-streaming analysis and integrated quota/operational checks are still pending;
-the large-site requirement is not complete. The TypeScript SDK, Connect Apps application and full
-connection control plane remain in the completion scope.
+Partitioned persistent time-series processing is now integrated in commit
+`1bf4fcf4e035adbbcd8fbecc931dbd73c3a92a33`. Native dataset tools import and read scoped persistent chunks,
+page within gateway response limits, stream energy summaries, and select
+bounded windows for existing forecast workflows. Small artifacts and datasets
+share quota accounting, retention and the same SQLite backup/restore boundary.
+SDK and MCP acceptance cover provider substitution and user/session isolation.
+The full suite passes 507 tests; Ruff and mypy also pass.
+
+The reproducible million-row SDK qualification is recorded in
+[evidence/large-timeseries-gateway-oct02.json](evidence/large-timeseries-gateway-oct02.json).
+It checks an independently calculated total, a 1,440-row day window, inline
+paging, foreign-scope rejection and restored dataset access. Peak traced Python
+allocation is 2,336,690 bytes. This excludes native SQLite memory and is not an
+RSS measurement. Timing includes allocation-tracing overhead.
+
+Temporal selection still scans chunks. High-resolution history resampling,
+timestamp indexing, concurrent-load and sustained-operation qualification remain
+open. The fixture is synthetic and does not establish physical meter access.
+The TypeScript SDK, Connect Apps application and full connection control plane
+remain in the completion scope.
