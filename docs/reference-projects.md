@@ -99,3 +99,19 @@ Run the focused executable check with:
 ```sh
 PYTHONPATH="$PWD/src:$PWD" uv run pytest -q tests/test_reference_projects.py
 ```
+
+## Workflow recipes
+
+The [workflow reference](workflow-reference-project.md) runs six SDK recipes:
+consumption, spike screening, electricity billing, baselines, building comparison
+and tariff comparison. It checks independently calculated values, scoped source
+lineage and one failure per recipe. Both tariff schedules supply their own
+standing charges and tax treatment. Run it from the repository root:
+
+```sh
+PYTHONPATH=src:. python examples/reference_projects/workflows.py
+```
+
+These examples use synthetic CSV inputs. Spike screening still lacks weather
+and equipment-supported explanations. The remaining six recipe references and
+live-provider workflow gates are separate work.

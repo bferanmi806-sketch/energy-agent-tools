@@ -237,3 +237,12 @@ and related native engineering, time-series and workflow checks passed, 41 in
 total. Zero irradiance produces zero AC power; daylight output stays within the
 configured capacity. Empty, nonnumeric and infinite wind values and incompatible
 temperature units are refused. This model result remains estimated.
+
+The first six-recipe SDK reference is integrated. Its direct script and subprocess
+acceptance test verify consumption, anomaly screening, full billing, baselines,
+calendar comparison and two separately billed tariffs, plus six meaningful
+failure paths. Source rows explicitly say `physical_meter=false`. The combined
+reference, battery and solar source acceptance suite passed 15 tests; repository
+Ruff lint/format and source mypy checks passed. The other six recipe references
+are assigned to an isolated worker. This does not close the twelve-workflow or
+real-site gate.
