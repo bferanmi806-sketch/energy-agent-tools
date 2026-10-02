@@ -13,7 +13,7 @@ from __future__ import annotations
 import csv
 import json
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -29,12 +29,8 @@ from energy_agent_tools.models import Asset, AuthConfig, ConnectedAccount, DataK
 from energy_agent_tools.registry import Registry
 from energy_agent_tools.runtime import EnergyAgent
 
+from .environments import BuiltEnvironment, EnvironmentUnavailable, ScenarioContext
 from .scenarios import ScenarioCase, scenario_cases
-
-
-class EnvironmentUnavailable(RuntimeError):
-    """Raised when a scenario has no independently qualified environment."""
-
 
 QUALIFIED_TELEMETRY_CASE_IDS: frozenset[str] = frozenset(
     {
@@ -62,56 +58,6 @@ _EMON_KEY = "telemetry-emoncms-fixture-key"
 SCENARIO_CLOCKS: dict[str, datetime] = {
     case_id: datetime(2026, 9, 30, 12, 0, tzinfo=UTC) for case_id in QUALIFIED_TELEMETRY_CASE_IDS
 }
-
-
-@dataclass(frozen=True, slots=True)
-class TelemetryContext:
-    """Stable scope and clock supplied to one benchmark environment."""
-
-    case_id: str
-    user_id: str
-    site_id: str
-    provider: str
-    timezone: str
-    scenario_date: date
-    scenario_clock: datetime
-    window_start: datetime
-    window_end: datetime
-    root: Path
-    state_dir: Path
-    account_ids: tuple[str, ...] = ()
-
-    @property
-    def start(self) -> datetime:
-        return self.window_start
-
-    @property
-    def end(self) -> datetime:
-        return self.window_end
-
-    def arguments(self) -> dict[str, str]:
-        return {"start": _iso(self.window_start), "end": _iso(self.window_end)}
-
-
-@dataclass(slots=True)
-class BuiltEnvironment:
-    """Production runtime and its deterministic provider client."""
-
-    agent: EnergyAgent
-    context: TelemetryContext
-    _http: httpx.AsyncClient
-    _closed: bool = False
-
-    def __iter__(self):
-        yield self.agent
-        yield self.context
-
-    async def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        await self.agent.close()
-        await self._http.aclose()
 
 
 def _iso(value: datetime) -> str:
@@ -144,13 +90,13 @@ def _local_day(timezone: str, day: date) -> tuple[datetime, datetime]:
     return start, start + timedelta(days=1)
 
 
-def _context(case: ScenarioCase, root: Path, state_dir: Path) -> TelemetryContext:
+def _context(case: ScenarioCase, root: Path, state_dir: Path) -> ScenarioContext:
     local_start, local_end = _local_day(case.timezone, _SCENARIO_DATE)
     if case.id == "dev_counter_reset_quality":
         zone = ZoneInfo(case.timezone)
         local_start = datetime.combine(date(2026, 9, 28), time(23), tzinfo=zone)
         local_end = local_start + timedelta(hours=5)
-    return TelemetryContext(
+    return ScenarioContext(
         case_id=case.id,
         user_id=_USER_ID,
         site_id=f"{case.id}-site",
@@ -165,7 +111,7 @@ def _context(case: ScenarioCase, root: Path, state_dir: Path) -> TelemetryContex
     )
 
 
-def _metadata(context: TelemetryContext) -> dict[str, Any]:
+def _metadata(context: ScenarioContext) -> dict[str, Any]:
     return {
         "case_id": context.case_id,
         "provider": context.provider,
@@ -178,7 +124,7 @@ def _metadata(context: TelemetryContext) -> dict[str, Any]:
     }
 
 
-def _ha_rows(context: TelemetryContext) -> list[dict[str, Any]]:
+def _ha_rows(context: ScenarioContext) -> list[dict[str, Any]]:
     start_local, _ = _local_day(context.timezone, context.scenario_date)
     rows = []
     for index in range(25):
@@ -198,7 +144,7 @@ def _ha_rows(context: TelemetryContext) -> list[dict[str, Any]]:
     return rows
 
 
-def _emon_day_rows(context: TelemetryContext) -> list[list[float]]:
+def _emon_day_rows(context: ScenarioContext) -> list[list[float]]:
     start = context.window_start - timedelta(hours=1)
     rows: list[list[float]] = []
     for index in range(26):
@@ -208,7 +154,7 @@ def _emon_day_rows(context: TelemetryContext) -> list[list[float]]:
     return rows
 
 
-def _emon_reset_rows(context: TelemetryContext) -> list[list[float]]:
+def _emon_reset_rows(context: ScenarioContext) -> list[list[float]]:
     values = [9998.0, 12.0, 13.0, 15.0, 16.0]
     return [
         [(context.window_start + timedelta(hours=index)).timestamp(), value]
@@ -216,7 +162,7 @@ def _emon_reset_rows(context: TelemetryContext) -> list[list[float]]:
     ]
 
 
-def _mock_transport(case_id: str, context: TelemetryContext) -> httpx.MockTransport:
+def _mock_transport(case_id: str, context: ScenarioContext) -> httpx.MockTransport:
     ha_rows = _ha_rows(context)
     emon_rows = (
         _emon_reset_rows(context)
@@ -264,7 +210,7 @@ def _mock_transport(case_id: str, context: TelemetryContext) -> httpx.MockTransp
 
 def _account(
     identifier: str,
-    context: TelemetryContext,
+    context: ScenarioContext,
     toolkit: str,
     settings: dict[str, Any],
     scheme: Literal["bearer", "api-key"],
@@ -281,7 +227,7 @@ def _account(
 
 def _accounts_and_vault(
     case_id: str,
-    context: TelemetryContext,
+    context: ScenarioContext,
     client: httpx.AsyncClient,
     state_dir: Path,
 ) -> tuple[list[ConnectedAccount], AuthStore | None]:
@@ -346,7 +292,7 @@ def _accounts_and_vault(
 
 
 def _sites_and_assets(
-    case_id: str, context: TelemetryContext, accounts: list[ConnectedAccount]
+    case_id: str, context: ScenarioContext, accounts: list[ConnectedAccount]
 ) -> tuple[list[Site], list[Asset]]:
     site = Site(
         id=context.site_id,
@@ -413,7 +359,7 @@ def _sites_and_assets(
 
 
 def _bindings(
-    case_id: str, context: TelemetryContext, accounts: list[ConnectedAccount]
+    case_id: str, context: ScenarioContext, accounts: list[ConnectedAccount]
 ) -> list[CapabilityBinding]:
     if case_id == "dev_consumption_home_assistant":
         return [
@@ -507,7 +453,7 @@ def _bindings(
     ]
 
 
-def _write_case_fixture(case_id: str, context: TelemetryContext) -> None:
+def _write_case_fixture(case_id: str, context: ScenarioContext) -> None:
     rows: Any
     if case_id == "dev_consumption_home_assistant":
         rows = _ha_rows(context)
@@ -611,6 +557,6 @@ __all__ = [
     "EXCLUDED_TELEMETRY_CASES",
     "QUALIFIED_TELEMETRY_CASE_IDS",
     "SCENARIO_CLOCKS",
-    "TelemetryContext",
+    "ScenarioContext",
     "build_telemetry_environment",
 ]

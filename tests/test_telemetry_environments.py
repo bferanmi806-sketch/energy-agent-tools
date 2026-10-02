@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from benchmarks.environments import BuiltEnvironment, ScenarioContext
 from benchmarks.scenarios import scenario_cases
 from benchmarks.telemetry_environments import (
     EXCLUDED_TELEMETRY_CASES,
@@ -68,10 +69,13 @@ async def test_home_assistant_counter_is_reviewed_then_explicitly_differenced(
     )
     try:
         context = built.context
+        assert isinstance(built, BuiltEnvironment)
+        assert isinstance(context, ScenarioContext)
         truth = json.loads((context.root / "provider-truth.json").read_text())
-        assert b"telemetry-home-assistant-fixture-token" not in (
-            context.state_dir / "vault" / "auth.sqlite3"
-        ).read_bytes()
+        assert (
+            b"telemetry-home-assistant-fixture-token"
+            not in (context.state_dir / "vault" / "auth.sqlite3").read_bytes()
+        )
         raw_values = [Decimal(row["state"]) for row in truth["rows"]]
         assert len(raw_values) == 25
         assert sum(raw_values[index] - raw_values[index - 1] for index in range(1, 25)) == Decimal(
@@ -135,9 +139,10 @@ async def test_dublin_local_day_is_not_silently_replaced_by_utc_day(tmp_path: Pa
     try:
         context = built.context
         truth = json.loads((context.root / "provider-truth.json").read_text())
-        assert b"telemetry-emoncms-fixture-key" not in (
-            context.state_dir / "vault" / "auth.sqlite3"
-        ).read_bytes()
+        assert (
+            b"telemetry-emoncms-fixture-key"
+            not in (context.state_dir / "vault" / "auth.sqlite3").read_bytes()
+        )
         source_rows = truth["rows"]
         local_start = context.window_start
         local_end = context.window_end
@@ -298,9 +303,10 @@ async def test_counter_reset_quality_marks_only_monotonic_intervals(tmp_path: Pa
     try:
         context = built.context
         truth = json.loads((context.root / "provider-truth.json").read_text())
-        assert b"telemetry-emoncms-fixture-key" not in (
-            context.state_dir / "vault" / "auth.sqlite3"
-        ).read_bytes()
+        assert (
+            b"telemetry-emoncms-fixture-key"
+            not in (context.state_dir / "vault" / "auth.sqlite3").read_bytes()
+        )
         values = [Decimal(str(row[1])) for row in truth["rows"]]
         assert values == [
             Decimal("9998"),
