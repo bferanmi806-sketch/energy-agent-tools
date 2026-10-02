@@ -273,3 +273,22 @@ semantics. The native battery API exposes an explicit `carbon_species` option,
 with its previous CO2e default retained for direct callers; workflows supply
 the actual source basis. Twenty-three focused source, engineering and model
 reference checks passed after this change.
+
+The twelve-reference integration at `04892df` passed 395 local tests.
+[CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37031066952)
+passed Python 3.11/3.12/3.13, container, Home Assistant and published-release
+upgrade qualification. These implementation results do not change the archived
+agent scores or clear the physical-site gate.
+
+Solar consumption now supports opt-in interval reconciliation with explicit
+`total_load` and no-storage declarations. A GPT-6 Luna/max worker owned the
+pure calculation and its tests; the primary integrated the scoped workbench,
+SDK/MCP workflow, discovery guidance and executable reference. Independent
+acceptance checks verify 1.65 kWh load, 0.95 kWh generation, 0.85 kWh
+self-consumption, 0.80 kWh estimated import and 0.10 kWh estimated export.
+Fifty-five integrated calculation, gateway, time-series and reference checks
+passed, including foreign-user refusal and complete requested-horizon coverage.
+Repository lint/format and source mypy passed. Interval netting does not recover
+within-interval opposing flows or battery behavior. Storage reconciliation,
+supported spike explanations, combined grid analysis, large-site processing
+and the live/evaluation/operation gates remain open.

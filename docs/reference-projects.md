@@ -121,5 +121,7 @@ PYTHONPATH=src:. python examples/reference_projects/model_workflows.py
 ```
 
 Together the two workflow scripts cover all twelve current recipes and twelve
-actual failure paths. Solar import/export reconciliation and combined grid
-analysis remain missing; these examples do not close the live-provider gates.
+actual failure paths. The solar reference declares total load and no storage
+to calculate interval self-consumption and estimated import/export. Storage
+reconciliation and combined grid analysis remain open. These synthetic examples
+do not close the live-provider gates.

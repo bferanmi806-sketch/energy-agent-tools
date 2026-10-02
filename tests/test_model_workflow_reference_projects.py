@@ -117,16 +117,21 @@ def test_six_offline_model_workflows_have_source_evidence_and_real_failures() ->
 
     solar_consumption = _recipe(report, "solar-consumption")
     aligned = _model_result(solar_consumption)
-    aligned_rows = aligned["data"]
-    assert len(aligned_rows) == 3
-    assert [row["value"] for row in aligned_rows] == [0.5, 0.75, 0.4]
-    assert [row["value_right"] for row in aligned_rows] == [0.1, 0.35, 0.5]
-    assert math.isclose(sum(row["value"] for row in aligned_rows), 1.65)
-    assert math.isclose(sum(row["value_right"] for row in aligned_rows), 0.95)
-    assert any(
-        "import/export reconciliation remains missing" in item
-        for item in solar_consumption["limitations"]
-    )
+    balance = aligned["data"]
+    rows = balance["intervals"]
+    assert len(rows) == 3
+    assert [row["load_kwh"] for row in rows] == [0.5, 0.75, 0.4]
+    assert [row["generation_kwh"] for row in rows] == [0.1, 0.35, 0.5]
+    expected = {
+        "load_kwh": 1.65,
+        "generation_kwh": 0.95,
+        "self_consumption_kwh": 0.85,
+        "estimated_import_kwh": 0.8,
+        "estimated_export_kwh": 0.1,
+    }
+    for field, value in expected.items():
+        assert math.isclose(balance["summary"][field], value)
+    assert any("not grid meter readings" in item for item in solar_consumption["limitations"])
 
     solar_forecast = _recipe(report, "solar-forecast")
     pv_result = _model_result(solar_forecast)

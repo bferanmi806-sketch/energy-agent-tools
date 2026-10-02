@@ -447,7 +447,12 @@ async def run_report() -> dict[str, Any]:
             assert not cleanest_failure["ok"], cleanest_failure
 
             solar_consumption = await session.skill(
-                "solar-consumption", {**common, "tools": SOURCE_TOOLS}
+                "solar-consumption",
+                {
+                    **common,
+                    "tools": SOURCE_TOOLS,
+                    "solar_balance": {"consumption_basis": "total_load", "storage_mode": "none"},
+                },
             )
             assert solar_consumption["ok"], solar_consumption
             solar_consumption_failure = await session.skill(
@@ -589,7 +594,7 @@ async def run_report() -> dict[str, Any]:
                     "failure": solar_consumption_failure,
                     "failure_code": _failure_code(solar_consumption_failure),
                     "limitations": [
-                        "This workflow aligns interval values only; import/export reconciliation remains missing.",
+                        "Import/export are interval netting estimates for declared total load with no storage, not grid meter readings.",
                         "Aligned values do not establish the cause of consumption or generation.",
                     ],
                 },

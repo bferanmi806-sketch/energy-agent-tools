@@ -53,17 +53,18 @@ SKILLS: list[Json] = [
     },
     {
         "id": "solar-consumption",
-        "intent": "Estimate tomorrow's solar generation and compare it with consumption",
-        "capabilities": ["get_weather", "estimate_solar_generation", "get_energy_consumption"],
+        "intent": "Compare interval solar generation with site consumption",
+        "capabilities": ["get_generation", "get_energy_consumption"],
         "sequence": [
-            "Fetch irradiance/weather forecast for site.",
-            "Apply PV geometry and model assumptions.",
-            "Compare forecast generation with historical metered consumption in aligned intervals.",
+            "Fetch reviewed generation and consumption sources for the same intervals.",
+            "Preserve source kinds and units in aligned evidence.",
+            "With explicit total_load and no-storage declarations, calculate interval solar balance.",
         ],
-        "supporting_tools": ["WORKBENCH_RESAMPLE", "WORKBENCH_JOIN"],
+        "supporting_tools": ["WORKBENCH_ENERGY_OPERATION"],
         "pitfalls": [
-            "Forecast irradiance is not measured generation.",
-            "Shading, clipping and snow affect output.",
+            "Grid-import readings do not establish total site load.",
+            "Interval netting cannot recover opposing flows within an interval.",
+            "Estimated import/export are not grid meter readings; storage requires a separate model.",
         ],
     },
     {

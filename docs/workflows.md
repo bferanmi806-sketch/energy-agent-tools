@@ -40,6 +40,7 @@ runtime accepts exactly these top-level fields:
 | `window` | integer | Previous-observation count for a baseline, from 1 through 10,000. |
 | `battery` | object | Battery constraints for the battery workflows. |
 | `solar` | object | PV model and weather overrides for `solar-forecast`. |
+| `solar_balance` | object | Explicit `consumption_basis: total_load` and `storage_mode: none` for `solar-consumption` interval reconciliation. |
 | `alternative_tariff` | string | Existing same-session tariff artifact for `tariff-comparison`. |
 | `comparison_artifact` | string | Existing same-session metered interval-energy artifact for `building-comparison`. |
 | `consumption_transform` | object | Explicit `counter` or `integrate_power` operation and parameters for a preloaded measured artifact; see the conversion example below. |
@@ -93,7 +94,7 @@ table is the order used for the workflow's `artifacts` map and evidence.
 | `electricity-cost` | `get_energy_consumption`, `get_tariff` | exact-interval cost | Both inputs must cover the same UTC starts and resolution. |
 | `cheapest-battery` | `get_tariff`, `get_carbon_intensity` | constrained battery schedule | Requires a complete battery object and matching explicit tariff/carbon intervals. Objective is `cost`. |
 | `cleanest-battery` | `get_tariff`, `get_carbon_intensity` | constrained battery schedule | Same inputs as `cheapest-battery`; objective is `carbon`. |
-| `solar-consumption` | `get_energy_consumption`, `get_generation` | exact alignment | `get_generation` must be supplied by a reviewed binding. |
+| `solar-consumption` | `get_energy_consumption`, `get_generation` | alignment or declared solar balance | `get_generation` must be supplied by a reviewed binding. |
 | `solar-forecast` | `get_solar_forecast` when resolved, otherwise `get_weather` | direct interval-energy forecast summary or weather plus PV estimate | Direct forecasts require reviewed forecast/kWh semantics. Otherwise the workflow needs explicit PV model inputs. Equal direct forecast sources require a choice. |
 | `grid-conditions` | `get_grid_generation`, `get_carbon_intensity` | source evidence | Fetches and returns the reviewed grid sources; no additional derived analysis branch currently runs. |
 | `power-flow` | `run_power_flow` | source evidence | Executes the reviewed simulation tool and returns its result as evidence. |
@@ -192,6 +193,34 @@ generation result must come from a uniquely selected reviewed binding with a
 declared kind and unit; `get_generation` and generic `telemetry` labels do not
 authorize a source by themselves. Forecast, estimated, calculated, and metered
 inputs retain their kinds in the evidence and lineage.
+
+To calculate interval self-consumption and estimated grid exchange, supply:
+
+```python
+result = await session.skill(
+    "solar-consumption",
+    {
+        "artifacts": {"get_energy_consumption": load_id, "get_generation": generation_id},
+        "solar_balance": {"consumption_basis": "total_load", "storage_mode": "none"},
+        "start": "2026-09-29T00:00:00Z",
+        "end": "2026-09-29T03:00:00Z",
+    },
+)
+```
+
+This requires declared interval energy with explicit matching starts and ends.
+Both series must cover the complete requested horizon without gaps. Wh and MWh
+are converted to kWh. Negative, missing and nonfinite values are rejected.
+Self-consumption is `min(load, generation)`; estimated import and export are
+`max(load - generation, 0)` and `max(generation - load, 0)` respectively.
+The calculated output contains `intervals` and a `summary`, including both
+energy totals and fractions. Zero denominators produce null fractions.
+
+The load source must represent total site demand. A grid-import reading alone
+does not establish it. The caller must explicitly declare no storage. Interval
+netting cannot recover opposing flows within an interval, so import/export
+remain estimates rather than grid meter readings. Source forecasts retain their
+kind in provenance. Without `solar_balance`, the workflow returns aligned values.
 
 ### `solar-forecast`
 
@@ -302,7 +331,7 @@ For direct use, call `WORKBENCH_ENERGY_OPERATION` with one or two artifact IDs:
 `second_column`, `frequency`, `start`, `end`, `minimum`, `maximum`, `window`,
 `method`, and `unit`. The direct operation names are `filter`, `missing`,
 `counter`, `integrate_power`, `cost`, `carbon`, `baseline`, `compare`,
-`normalize`, and `align`. `frequency` is `15min`, `30min`, `1h`, `1D` for
+`normalize`, `align`, and `solar_balance`. `frequency` is `15min`, `30min`, `1h`, `1D` for
 interval operations and `daily`, `weekly`, or `monthly` for calendar comparison.
 
 The pure workbench applies these rules:
@@ -341,6 +370,10 @@ The pure workbench applies these rules:
   the result timezone by local daily, Monday-based weekly, or calendar monthly
   periods and records missing counts. `normalize` requires an explicit target
   unit in the same physical dimension, currency, and carbon species.
+- `solar_balance` requires two declared interval-energy series and explicit
+  `consumption_basis: total_load` and `storage_mode: none`. It returns kWh
+  intervals and totals for load, generation, self-consumption and estimated
+  import/export, retaining both source kinds and units in lineage.
 - `align` is an exact UTC inner alignment with no fill or interpolation. A
   second column with the same name is emitted as `<column>_right` and the result
   unit is `mixed`. Explicit interval ends are retained after validation against

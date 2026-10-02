@@ -195,6 +195,8 @@ def register(registry: Registry) -> None:
             "second_timestamp": column,
             "second_column": column,
             "second_end": column,
+            "consumption_basis": {"enum": ["total_load"]},
+            "storage_mode": {"enum": ["none"]},
             "frequency": {"enum": ["15min", "30min", "1h", "1D", "daily", "weekly", "monthly"]},
             "start": {"type": "string", "format": "date-time"},
             "end": {"type": "string"},
@@ -227,7 +229,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="WORKBENCH_ENERGY_OPERATION",
             toolkit="workbench",
-            description="Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon and explicit standing-charge/tax bills, align, compare calendar periods or rolling baselines with strict units and lineage.",
+            description="Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon and explicit standing-charge/tax bills, reconcile declared solar load/generation, align, compare calendar periods or rolling baselines with strict units and lineage.",
             input_schema=schema(
                 {
                     "operation": {
@@ -243,6 +245,7 @@ def register(registry: Registry) -> None:
                             "compare",
                             "normalize",
                             "align",
+                            "solar_balance",
                         ]
                     },
                     "artifact_ids": {

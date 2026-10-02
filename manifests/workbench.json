@@ -274,7 +274,7 @@
     {
       "name": "WORKBENCH_ENERGY_OPERATION",
       "toolkit": "workbench",
-      "description": "Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon and explicit standing-charge/tax bills, align, compare calendar periods or rolling baselines with strict units and lineage.",
+      "description": "Filter, check missing intervals, convert counters, integrate power into energy, calculate tariff cost/carbon and explicit standing-charge/tax bills, reconcile declared solar load/generation, align, compare calendar periods or rolling baselines with strict units and lineage.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -290,7 +290,8 @@
               "baseline",
               "compare",
               "normalize",
-              "align"
+              "align",
+              "solar_balance"
             ]
           },
           "artifact_ids": {
@@ -324,6 +325,16 @@
               "second_end": {
                 "type": "string",
                 "minLength": 1
+              },
+              "consumption_basis": {
+                "enum": [
+                  "total_load"
+                ]
+              },
+              "storage_mode": {
+                "enum": [
+                  "none"
+                ]
               },
               "frequency": {
                 "enum": [

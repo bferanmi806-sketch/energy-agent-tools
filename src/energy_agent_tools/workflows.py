@@ -135,6 +135,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             "window",
             "battery",
             "solar",
+            "solar_balance",
             "alternative_tariff",
             "comparison_artifact",
             "consumption_transform",
@@ -149,6 +150,17 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 "invalid_skill_parameters",
                 "Explicit solver input artifacts apply to the power-flow workflow.",
             )
+        if "solar_balance" in parameters:
+            balance = parameters["solar_balance"]
+            if skill_id != "solar-consumption" or not isinstance(balance, dict):
+                raise EnergyError(
+                    "invalid_skill_parameters", "Solar balance applies only to solar-consumption."
+                )
+            if balance != {"consumption_basis": "total_load", "storage_mode": "none"}:
+                raise EnergyError(
+                    "invalid_skill_parameters",
+                    "Solar balance requires explicit total_load consumption and storage_mode none.",
+                )
         recipe = RECIPES[skill_id]
         operation = recipe["operation"]
         if {"billing", "alternative_billing"} & parameters.keys():
@@ -380,6 +392,11 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 inputs.append(other_id)
                 params["second_timestamp"] = _time_column(other.model_dump(mode="json"))
                 operation = "align"
+            if skill_id == "solar-consumption" and "solar_balance" in parameters:
+                operation = "solar_balance"
+                params.update(parameters["solar_balance"])
+                if window:
+                    params.update({"start": window["start"], "finish": window["end"]})
             output = await agent.execute(
                 session,
                 "WORKBENCH_ENERGY_OPERATION",

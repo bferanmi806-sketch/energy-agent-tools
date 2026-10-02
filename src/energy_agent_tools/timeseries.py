@@ -78,6 +78,7 @@ def operate(
         "compare",
         "normalize",
         "align",
+        "solar_balance",
     }:
         raise EnergyError("invalid_operation", "Unsupported time-series operation.")
     if not isinstance(parameters, dict):
@@ -107,6 +108,10 @@ def operate(
         return _baseline(inputs, parameters)
     if operation == "compare":
         return _compare(inputs, parameters)
+    if operation == "solar_balance":
+        from .solar_balance import reconcile
+
+        return reconcile(inputs, parameters)
     if operation == "normalize":
         return _normalize(inputs, parameters)
     return _align(inputs, parameters)

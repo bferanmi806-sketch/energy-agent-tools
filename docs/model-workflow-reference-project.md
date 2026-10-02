@@ -29,7 +29,7 @@ The report contains exactly these recipes:
 | --- | --- | --- |
 | `cheapest-battery` | SciPy schedule charges in the lowest-price hour. | Forecast coverage ends before the requested horizon. |
 | `cleanest-battery` | SciPy schedule charges in the lowest-carbon hour, which differs from the cheapest hour. | Charge power cannot reach the requested final state of charge. |
-| `solar-consumption` | Session artifacts align synthetic interval consumption and generation by timestamp. | A requested value column does not exist. |
+| `solar-consumption` | Declared total load and no storage produce interval self-consumption and estimated import/export. | A requested value column does not exist. |
 | `solar-forecast` | pvlib estimates AC output from long-form irradiance, temperature, and wind forecast rows. | Temperature is supplied in kelvin where the workflow requires Celsius. |
 | `grid-conditions` | The workflow returns the grid generation and carbon source outputs as separate evidence. | The bound grid generation CSV is removed before a second fetch. |
 | `power-flow` | pandapower solves a two-bus feeder with the CSV load snapshot. | A network without a slack reference is rejected. |
@@ -38,8 +38,9 @@ The battery schedule is advisory and cannot control a device. It includes
 explicit charge and discharge limits, efficiencies, initial state, capacity,
 and target state; it does not include degradation, standing charges, or demand
 charges. The solar result is an estimate from forecast weather, not a
-generation meter reading. The `solar-consumption` workflow currently aligns
-values only; import/export reconciliation remains missing. The `grid-conditions`
+generation meter reading. The `solar-consumption` reference declares total load and no storage. Its
+interval netting estimates cannot recover opposing flows within an interval
+and are not grid meter readings. The `grid-conditions`
 workflow is evidence-only and produces no combined grid metric. A balanced
 steady-state power flow does not cover protection, transient behavior, or
 operational switching. Its feeder input is identified in the report by its
@@ -52,6 +53,10 @@ Run the subprocess acceptance check with the same project environment:
 ```sh
 PYTHONPATH=src:. python -m pytest tests/test_model_workflow_reference_projects.py
 ```
+
+Solar balance acceptance independently checks 1.65 kWh load, 0.95 kWh
+generation, 0.85 kWh self-consumption, 0.80 kWh estimated import and 0.10 kWh
+estimated export. These are synthetic interval-netting results.
 
 Acceptance checks also compare feeder voltage drop and resistive loss against
 first-order equations for the declared 11 kV line and 0.8 MW/0.2 Mvar load.

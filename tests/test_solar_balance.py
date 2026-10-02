@@ -82,12 +82,10 @@ def test_reconciles_interval_energy_and_preserves_lineage_and_assumptions():
             "estimated_export_kwh": 0.1,
         },
     ]
-    assert [
-        (row["timestamp"], row["end"]) for row in result.data["intervals"]
-    ] == [(row["timestamp"], row["end"]) for row in expected_intervals]
-    for actual, expected in zip(
-        result.data["intervals"], expected_intervals, strict=True
-    ):
+    assert [(row["timestamp"], row["end"]) for row in result.data["intervals"]] == [
+        (row["timestamp"], row["end"]) for row in expected_intervals
+    ]
+    for actual, expected in zip(result.data["intervals"], expected_intervals, strict=True):
         for field in (
             "load_kwh",
             "generation_kwh",
@@ -118,7 +116,9 @@ def test_reconciles_interval_energy_and_preserves_lineage_and_assumptions():
     assert result.field_units["self_consumption_fraction"] == "1"
     assert any("no battery" in assumption for assumption in result.assumptions)
     assert any("losses are modeled" in assumption for assumption in result.assumptions)
-    assert any("cannot recover opposing import and export flows" in warning for warning in result.warnings)
+    assert any(
+        "cannot recover opposing import and export flows" in warning for warning in result.warnings
+    )
     assert any("not grid-meter readings" in warning for warning in result.warnings)
 
 
