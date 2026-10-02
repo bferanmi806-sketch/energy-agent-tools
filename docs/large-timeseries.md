@@ -78,8 +78,7 @@ identity; they are not automatically shared with a newly created session.
 Chunks are bounded by row count and four MiB encoded bytes. Pages have a smaller
 inline budget in the gateway. Window selection and summaries scan stored chunks;
 there is no timestamp index or distributed query engine. A window over 100,000
-rows must be narrowed. Whole-history high-resolution resampling and concurrent
-bulk-write load qualification remain open. Bulk imports use a worker thread,
+rows must be narrowed. Concurrent bulk-write load qualification remains open. Bulk imports use a worker thread,
 but SQLite still has a single writer and an import commits atomically.
 
 Run the reproducible offline qualification from the repository root:
@@ -102,3 +101,13 @@ A window whose start cuts an earlier interval is refused rather than silently
 omitting that interval. Forecast workflows accept the same column names in
 `forecast.timestamp` and `forecast.end_column` and retain those mappings across
 history retrieval, window selection and model validation.
+
+`WORKBENCH_AGGREGATE_ENERGY` streams a dataset into complete observed interval
+energy bins of 15, 30 or 60 minutes. It requires `metered` input with explicit
+interval ends and `quantity_shape: interval`. It sums Wh/kWh/MWh to kWh,
+retains metered source lineage and refuses gaps, overlap, nonfinite values and
+any interval requiring a split at a target boundary. The output uses canonical
+`timestamp`, `end` and `value` columns, with at most 100,000 output bins. This is
+observed aggregation, not a meter-quality upgrade or estimated gap filling.
+`forecast-bill` and `consumption-forecast` use it for historical input before
+model fitting. Contextual weather time alignment remains separate.

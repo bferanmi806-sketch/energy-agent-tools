@@ -27,6 +27,9 @@ def register(registry: Registry) -> None:
             description="Private time-series artifact analysis",
         )
     )
+    from ..observed_aggregation import register as register_observed_aggregation
+
+    register_observed_aggregation(registry)
     artifact = {"type": "string", "pattern": "^[a-f0-9]{32}$"}
     column = {"type": "string", "minLength": 1}
 

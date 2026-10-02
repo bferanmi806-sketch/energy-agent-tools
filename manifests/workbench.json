@@ -12,6 +12,63 @@
   },
   "tools": [
     {
+      "name": "WORKBENCH_AGGREGATE_ENERGY",
+      "toolkit": "workbench",
+      "description": "Stream complete metered interval energy into aligned larger intervals, retaining observed measurement lineage; refuse gaps and any required splitting.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{32}$"
+          },
+          "start": {
+            "type": "string"
+          },
+          "end": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1
+          },
+          "end_column": {
+            "type": "string",
+            "minLength": 1
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1
+          },
+          "interval_minutes": {
+            "enum": [
+              15,
+              30,
+              60
+            ]
+          }
+        },
+        "required": [
+          "artifact_id",
+          "start",
+          "end"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "analyse_timeseries"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": null,
+      "result_unit": null,
+      "dependencies": []
+    },
+    {
       "name": "WORKBENCH_WINDOW",
       "toolkit": "workbench",
       "description": "Select a half-open time window, preserve source kind and report observed coverage. Never prorates intervals.",

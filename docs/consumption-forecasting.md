@@ -29,8 +29,13 @@ asset. With no explicit future range, it predicts eight local days beginning at
 tomorrow's local midnight. `days` and `history_months` configure those defaults.
 Historical range subtraction uses calendar months, including February and DST.
 History retrieval uses gateway calls covering at most 30 days each and preserves
-all chunk provenance. The full requested history must be present. Explicit starts/ends, finite values
-and declared interval-energy semantics are required; cumulative counters and
+all chunk provenance. Complete observed intervals are streamed into the selected
+forecast cadence of 15, 30 or 60 minutes. This supports high-resolution meter
+history through partitioned datasets without materializing every input row.
+Aggregation sums measured Wh/kWh/MWh amounts, preserves metered lineage and
+refuses gaps or intervals crossing an aggregation boundary. It never fills or
+prorates history. The full requested history must be present. Explicit
+starts/ends, finite values and declared interval-energy semantics are required; cumulative counters and
 power samples are not silently treated as interval kWh.
 
 CSV bindings must supply `quantity_shape: interval` and explicit endpoint
@@ -40,6 +45,12 @@ requires operator-reviewed account settings `quantity_shape: interval`,
 `interval_position: start` and `interval_seconds` matching the requested feed
 interval. A `kWh` unit label alone does not establish interval semantics.
 
+Custom meter columns can be mapped with `forecast.timestamp`,
+`forecast.end_column` and `forecast.column`. These mappings apply to source
+selection and observed aggregation; model input is normalized to UTC interval
+starts/ends and kWh. Native `WORKBENCH_AGGREGATE_ENERGY` exposes the same operation
+for scoped ordinary artifacts and partitioned datasets.
+
 ## Context and uncertainty
 
 The model uses a local weekly calendar baseline. A temperature-conditioned
@@ -47,8 +58,7 @@ candidate is evaluated when both historical observed and future forecast
 context are supplied. Context artifacts use the `historical_context` and
 `future_context` roles in `artifacts`. They must belong to the same known site;
 the weather asset can differ from the electricity meter. Context timestamps
-must align with the selected consumption cadence. Context fetching and temporal
-aggregation are not currently automatic in this recipe. Missing context leaves
+must align with the selected consumption cadence. Context fetching and contextual time alignment are not currently automatic in this recipe. Missing context leaves
 the calendar baseline available rather than inventing a weather effect.
 
 Chronological model selection and error calibration use distinct windows.

@@ -75,7 +75,7 @@ async def run_forecast_skill(
             "future_context",
         }:
             raise EnergyError("invalid_skill_parameters", "Unknown forecast source role.")
-        for column in ("timestamp", "end_column"):
+        for column in ("timestamp", "end_column", "column"):
             if column in request.forecast and (
                 not isinstance(request.forecast[column], str) or not request.forecast[column]
             ):
@@ -109,6 +109,22 @@ async def run_forecast_skill(
                 "invalid_time_range", "Forecast workflows cover at most 31 local days."
             )
 
+        def history_window_arguments(ref: str, original: Json, left: str, right: str) -> Json:
+            source_rows = original
+            data = original.get("data")
+            if isinstance(data, dict) and data.get("storage") == "partitioned-timeseries.v1":
+                page = agent.workbench.partitioned.read_page(session, data["dataset_id"], limit=1)
+                source_rows = {"data": page["rows"]}
+            return {
+                "artifact_id": ref,
+                "start": left,
+                "end": right,
+                "timestamp": _timestamp_column(original, declared_timestamp),
+                "end_column": _end_column(source_rows, declared_end),
+                "column": request.forecast.get("column", "value"),
+                "interval_minutes": request.forecast.get("interval_minutes", 30),
+            }
+
         async def source_single(capability: str, source_start: str, source_end: str) -> str:
             if capability in request.artifacts:
                 ref = request.artifacts[capability]
@@ -119,14 +135,8 @@ async def run_forecast_skill(
                     return ref
                 selected = await agent.execute(
                     session,
-                    "WORKBENCH_WINDOW",
-                    {
-                        "artifact_id": ref,
-                        "start": source_start,
-                        "end": source_end,
-                        "timestamp": _timestamp_column(source_value, declared_timestamp),
-                        **({"end_column": declared_end} if declared_end else {}),
-                    },
+                    "WORKBENCH_AGGREGATE_ENERGY",
+                    history_window_arguments(ref, source_value, source_start, source_end),
                     input_artifacts=[ref],
                     persist=True,
                 )
@@ -173,14 +183,8 @@ async def run_forecast_skill(
                 original = agent.workbench.read(session, ref).model_dump(mode="json")
                 selected = await agent.execute(
                     session,
-                    "WORKBENCH_WINDOW",
-                    {
-                        "artifact_id": ref,
-                        "start": source_start,
-                        "end": source_end,
-                        "timestamp": _timestamp_column(original, declared_timestamp),
-                        **({"end_column": declared_end} if declared_end else {}),
-                    },
+                    "WORKBENCH_AGGREGATE_ENERGY",
+                    history_window_arguments(ref, original, source_start, source_end),
                     input_artifacts=[ref],
                     persist=True,
                 )
@@ -262,8 +266,8 @@ async def run_forecast_skill(
         history_value = history.model_dump(mode="json")
         # Full requested history is evidence, not a silent shorter substitution.
         rows = history.data
-        timestamp = _timestamp_column(history_value, declared_timestamp)
-        end_column = _end_column(history_value, declared_end)
+        timestamp = _timestamp_column(history_value)
+        end_column = _end_column(history_value)
         if any(timestamp not in row or end_column not in row for row in rows):
             raise EnergyError("column_not_found", "Declared history interval columns are missing.")
         starts = [instant(row[timestamp]) for row in rows]
@@ -294,8 +298,8 @@ async def run_forecast_skill(
             history_artifact=history_id,
         )
         forecast_args.setdefault("interval_minutes", 30)
-        forecast_args.setdefault("timestamp", timestamp)
-        forecast_args.setdefault("end_column", end_column)
+        # Input schema mappings are consumed by observed aggregation; model rows are canonical.
+        forecast_args.update(timestamp=timestamp, end_column=end_column, column="value")
         refs = [history_id]
         for role in ("historical_context", "future_context"):
             if role in request.artifacts:
