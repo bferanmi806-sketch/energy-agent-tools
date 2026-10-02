@@ -210,6 +210,9 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
 
         parameters.arguments maps capability IDs to provider arguments only.
         parameters.tools and parameters.account_ids select canonical sources.
+        Preloaded measured counters or power can use consumption_transform with
+        operation counter or integrate_power and explicit operation parameters.
+        Conversion precedes window selection and remains calculated evidence.
         start/end are offset-aware ranges; artifacts maps capabilities to scoped
         artifact IDs. Battery workflows require battery constraints; weather-based
         solar estimation requires solar model inputs. Missing inputs stay explicit.

@@ -764,7 +764,10 @@ def _paired_series(
     if not isinstance(end_column, str) or not end_column:
         raise EnergyError("invalid_parameters", "The interval end column must be a string.")
     left_ends = _optional_ends(left, end_column)
-    right_ends = _optional_ends(right, end_column)
+    right_end_column = parameters.get("second_end", end_column)
+    if not isinstance(right_end_column, str) or not right_end_column:
+        raise EnergyError("invalid_parameters", "The second interval end column must be a string.")
+    right_ends = _optional_ends(right, right_end_column)
     if (left_ends is None) != (right_ends is None):
         raise EnergyError(
             "interval_mismatch",

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from .capabilities import CapabilityRequest
 from .models import DataKind, EnergyError, Json, Session
@@ -54,6 +56,14 @@ RECIPES: dict[str, Json] = {
 }
 
 
+class ConsumptionTransform(BaseModel):
+    """Explicit conversion of preloaded measured telemetry to interval energy."""
+
+    model_config = ConfigDict(extra="forbid")
+    operation: Literal["counter", "integrate_power"]
+    parameters: Json = Field(default_factory=dict)
+
+
 def _time_column(result: Json) -> str:
     rows = result.get("data")
     if not isinstance(rows, list) or not rows:
@@ -62,6 +72,13 @@ def _time_column(result: Json) -> str:
         if column in rows[0]:
             return column
     raise EnergyError("timestamp_required", "Binding must expose an explicit timestamp column.")
+
+
+def _end_column(result: Json) -> str | None:
+    rows = result.get("data")
+    if not isinstance(rows, list) or not rows:
+        return None
+    return next((column for column in ("end", "to", "interval_end") if column in rows[0]), None)
 
 
 async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, parameters: Json) -> Json:
@@ -86,6 +103,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             "solar",
             "alternative_tariff",
             "comparison_artifact",
+            "consumption_transform",
         }
         if set(parameters) - allowed:
             raise EnergyError("invalid_skill_parameters", "Unknown workflow parameters.")
@@ -112,6 +130,52 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             bounds(window["start"], window["end"])
         artifacts: dict[str, str] = dict(parameters.get("artifacts", {}))
         results: dict[str, Json] = {}
+        transformed_consumption = False
+        derived_consumption_column: str | None = None
+        if "consumption_transform" in parameters:
+            transform = ConsumptionTransform.model_validate(parameters["consumption_transform"])
+            ref = artifacts.get("get_energy_consumption")
+            if not ref or "get_energy_consumption" not in recipe["capabilities"]:
+                raise EnergyError(
+                    "invalid_skill_parameters",
+                    "Consumption transformation requires a preloaded consumption artifact and an applicable workflow.",
+                )
+            raw = agent.workbench.read(session, ref)
+            expected_shape = "counter" if transform.operation == "counter" else "instantaneous"
+            expected_units = (
+                {"Wh", "kWh", "MWh"} if transform.operation == "counter" else {"W", "kW", "MW"}
+            )
+            if (
+                raw.kind != DataKind.METERED
+                or raw.quantity_shape != expected_shape
+                or raw.unit not in expected_units
+            ):
+                raise EnergyError(
+                    "incompatible_source",
+                    "Explicit consumption conversion requires measured telemetry with matching declared quantity shape and units.",
+                )
+            converted = await agent.execute(
+                session,
+                "WORKBENCH_ENERGY_OPERATION",
+                {
+                    "operation": transform.operation,
+                    "artifact_ids": [ref],
+                    "parameters": transform.parameters,
+                },
+                input_artifacts=[ref],
+                persist=True,
+            )
+            evidence.append({"capability": "get_energy_consumption", "transform": converted})
+            if not converted.get("ok"):
+                error = converted["error"]
+                raise EnergyError(error["code"], error["message"])
+            artifacts["get_energy_consumption"] = converted["result"]["data"]["artifact_id"]
+            transformed_consumption = True
+            derived_consumption_column = (
+                "energy"
+                if transform.operation == "integrate_power"
+                else transform.parameters.get("column", "value")
+            )
 
         def source_arguments(capability: str) -> Json:
             args = dict(arguments.get(capability, {}))
@@ -167,7 +231,8 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 artifacts[capability] = await window_artifact(capability, artifacts[capability])
                 result = agent.workbench.read(session, artifacts[capability])
                 if capability == "get_energy_consumption" and (
-                    result.kind != DataKind.METERED
+                    result.kind
+                    != (DataKind.CALCULATED if transformed_consumption else DataKind.METERED)
                     or result.unit not in {"Wh", "kWh", "MWh"}
                     or result.quantity_shape in {"counter", "instantaneous"}
                 ):
@@ -227,7 +292,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                     "Consumption requires interval energy; transform counters or power explicitly.",
                 )
             results[capability] = observed.model_dump(mode="json")
-        column = parameters.get("column", "value")
+        column = parameters.get("column", derived_consumption_column or "value")
         source = artifacts.get("get_energy_consumption") or artifacts.get("get_solar_forecast")
         if operation in {"summary", "anomaly"}:
             output = await agent.execute(
@@ -241,6 +306,10 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             params: Json = {"timestamp": _time_column(results[keys[0]]), "column": column}
             if len(keys) > 1:
                 params["second_timestamp"] = _time_column(results[keys[1]])
+                params["end"] = _end_column(results[keys[0]]) or "end"
+                params["second_end"] = _end_column(results[keys[1]]) or "end"
+                if transformed_consumption:
+                    params["second_column"] = "value"
             if "frequency" in parameters:
                 params["frequency"] = parameters["frequency"]
             if "window" in parameters:
@@ -274,6 +343,7 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 alt_inputs = [inputs[0], alternative]
                 alt = agent.workbench.read(session, alternative)
                 params["second_timestamp"] = _time_column(alt.model_dump(mode="json"))
+                params["second_end"] = _end_column(alt.model_dump(mode="json")) or "end"
                 alternative_output = await agent.execute(
                     session,
                     "WORKBENCH_ENERGY_OPERATION",

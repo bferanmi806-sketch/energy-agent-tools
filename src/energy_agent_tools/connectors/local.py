@@ -194,6 +194,7 @@ def register(registry: Registry) -> None:
             "column": column,
             "second_timestamp": column,
             "second_column": column,
+            "second_end": column,
             "frequency": {"enum": ["15min", "30min", "1h", "1D", "daily", "weekly", "monthly"]},
             "start": {"type": "string", "format": "date-time"},
             "end": {"type": "string"},

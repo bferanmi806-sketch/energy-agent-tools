@@ -365,3 +365,42 @@ missing timestamp intervals against a compatible declared resolution. Unknown
 resolution leaves completeness unverified. A boundary cutting an energy interval
 fails instead of prorating it. Alternative tariffs and comparison artifacts use
 the same window. Without a requested window, artifacts retain their full range.
+
+## Explicit telemetry conversion in consumption workflows
+
+A preloaded measured counter or power artifact can supply a consumption
+workflow through an explicit `consumption_transform`. Conversion runs before
+window selection so the final boundary observation remains available.
+
+```python
+result = await session.skill("yesterday-consumption", {
+    "start": "2026-09-29T00:00:00Z",
+    "end": "2026-09-30T00:00:00Z",
+    "artifacts": {"get_energy_consumption": counter_artifact_id},
+    "consumption_transform": {
+        "operation": "counter",
+        "parameters": {"column": "cumulative_kwh", "frequency": "30min"},
+    },
+})
+```
+
+The input must declare `kind: metered`, `quantity_shape: counter` and an
+energy unit. Supply observations spanning both boundaries of the requested
+window. Resets, missing observations and gaps produce null intervals.
+
+For measured power, declare `quantity_shape: instantaneous` and W, kW or MW,
+then use `operation: integrate_power`. Its parameters can specify `column`,
+`frequency`, and `method: left` or `method: trapezoid`. The resulting numeric
+column is `energy`. The workflow uses that column by default.
+
+Both conversions produce calculated interval energy. The workflow records the
+original measured artifact, operation and converted artifact in its evidence.
+It does not relabel calculated energy as measured or accept simulated input.
+Direct use of arbitrary calculated consumption artifacts remains rejected.
+This option requires a preloaded artifact; it does not infer extra provider
+history or silently extend a provider query.
+
+Cost calculations still require matching tariff coverage and explicit interval
+ends when consumption has explicit ends. The workbench's `second_end` parameter
+selects the second input's end column. Workflows recognize `end`, `to`, and
+`interval_end` without altering the supplied timestamps or durations.
