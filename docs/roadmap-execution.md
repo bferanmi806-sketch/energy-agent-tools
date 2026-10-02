@@ -197,3 +197,11 @@ families; independent relevance review of at least 200 intents; a representative
 30-day soak; and an independently authored connector. The three reference
 projects use synthetic inputs and real numerical solvers. They do not clear
 the real-site gate. v0.2.0 remains the published release.
+
+Six telemetry and six engineering environments are now qualified alongside
+the first four, for 16 development environments. The new PyPSA environments
+exercise actual constrained dispatch and bounded subprocess execution.
+A separate explicit GPT-6 Luna/max CLI probe was rejected as unsupported for
+this ChatGPT account and remains inconclusive. Native implementation workers
+continue using that requested configuration; no alternate model run is
+represented as GPT-6 Luna.

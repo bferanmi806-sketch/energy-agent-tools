@@ -69,7 +69,7 @@ uv run python -m benchmarks.harness --repo "$PWD" --output work/telemetry-engine
   --case dev_power_flow_two_bus
 ```
 
-The shared environment dispatcher currently exposes 13 independently checked
+The shared environment dispatcher currently exposes 16 independently checked
 development scenarios. Telemetry scenarios run the shipped HTTP connectors
 against an isolated `httpx.MockTransport` with provider-shaped responses and
 encrypted fixture credentials. Engineering scenarios execute the installed
@@ -86,7 +86,9 @@ runner preserves the inconclusive case, stops, and records
 `interrupted_reason: model_usage_limit` and `unattempted_case_ids`. It does not
 purchase credits, reset usage, or switch models.
 
-To select the cheaper configured worker model explicitly for a new evaluation,
-use `--model gpt-6-luna --reasoning-effort max`. The runner records both
-overrides; older runs with null model metadata retain that limitation. Model
+The runner accepts explicit `--model` and `--reasoning-effort` options and
+records both overrides. A 2 October probe of `gpt-6-luna` with `max` was
+rejected by the separate CLI for this ChatGPT account; it is inconclusive.
+Native implementation workers support that configuration. Older benchmark
+runs with null model metadata retain that limitation. Model
 settings do not change fixture truth, scoring or the release thresholds.

@@ -1,8 +1,8 @@
 # Energy Agent Tools evaluation corpus
 
-This directory adds a reviewed scenario corpus for the next evaluation
+This directory adds a frozen scenario corpus for the next evaluation
 milestone. The frozen corpus stays separate from execution readiness. The runner now
-accepts four additional development cases through independently checked
+accepts sixteen development cases through independently checked
 environments, without rewriting their expected truths or touching held-out cases.
 
 The corpus currently contains 141 distinct scenarios:
@@ -126,13 +126,19 @@ partial result merely because its prompt resembles an executable case.
 
 ## Qualified development environments
 
-`benchmarks/environments.py` builds four production-runtime environments with
+`benchmarks/environments.py` dispatches sixteen qualified environments. Its
+first four production-runtime environments use
 local provider-shaped HTTP responses and encrypted fixture credentials:
 
 * `dev_consumption_daily_csv`: 48 half-hour readings totaling 42.5 kWh.
 * `dev_current_power_snapshot`: a Home Assistant reading of 12.75 kW, 45 seconds old.
 * `dev_consumption_interval_gap`: Octopus consumption with six missing half-hour intervals.
 * `dev_two_account_selection`: two Octopus accounts with distinct home and annex assets.
+
+Six additional telemetry cases and six engineering cases are described in
+[telemetry qualification](telemetry-evaluation-environments.md) and
+[engineering qualification](engineering-evaluation-environments.md). Their
+fixtures keep source kinds and numerical assumptions visible.
 
 The qualification registry is explicit. The original corpus status stays
 pending, so an export cannot silently count environment tests as actual agent

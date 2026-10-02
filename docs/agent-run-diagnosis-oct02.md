@@ -8,6 +8,9 @@ The evaluated source revision was `ad769dcab8050789ec1d519defa47824a32128f3`; th
 
 After the evidence files were completed, the wrapper footer raised an `AttributeError` while accessing `SuiteResult.summary`. This happened after the suite evidence had been written. It is separate from the case outcomes: every saved turn has return code 0, a completion event, no timeout, and no parse errors.
 
+The complete saved run, including every model turn and gateway response, is
+[archived as compressed JSON](evidence/agent-benchmark-orchestrated-qualified-oct02.json.gz).
+
 ## Partial outcomes
 
 | Case and score | Dimensions below 1 | Trace-backed diagnosis |
