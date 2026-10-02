@@ -57,3 +57,31 @@ numeric truth where a case specifies expected values, structured
 provenance/context, correct units and data kinds, bounded calls, and safe
 handling of missing or ambiguous connections. Keyword matches alone do not
 pass.
+
+The default suite contains the original 19 cases. Additional qualified
+scenario environments are selected explicitly, for example:
+
+```sh
+uv run python -m benchmarks.harness --repo "$PWD" --output work/telemetry-engineering \
+  --case dev_consumption_home_assistant \
+  --case dev_units_kw_kwh \
+  --case dev_heat_loss \
+  --case dev_power_flow_two_bus
+```
+
+The shared environment dispatcher currently exposes 13 independently checked
+development scenarios. Telemetry scenarios run the shipped HTTP connectors
+against an isolated `httpx.MockTransport` with provider-shaped responses and
+encrypted fixture credentials. Engineering scenarios execute the installed
+production calculators and optional native engines with visible model inputs.
+These are synthetic development environments. Their acceptance tests do not
+count as actual model successes, physical-site qualification, or held-out
+results. See `docs/telemetry-evaluation-environments.md` and
+`docs/engineering-evaluation-environments.md` for cases and explicit exclusions.
+
+A run records source identity again at completion so changes during execution
+are visible in `source_unchanged`. Keep the benchmark checkout frozen for the
+whole run. If the model CLI reports that its usage limit has been reached, the
+runner preserves the inconclusive case, stops, and records
+`interrupted_reason: model_usage_limit` and `unattempted_case_ids`. It does not
+purchase credits, reset usage, or switch models.
