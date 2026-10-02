@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .capabilities import CapabilityRequest
 from .models import DataKind, EnergyError, Json, Session
 from .time import day_window
+from .timeseries import numeric_value
 from .windows import bounds, instant
 
 if TYPE_CHECKING:
@@ -547,9 +548,11 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             rows = [
                 {
                     "timestamp": r["timestamp"],
-                    "ghi_w_m2": r.get("shortwave_radiation"),
-                    "temp_air_c": r.get("temperature_2m", 20),
-                    "wind_speed_m_s": r.get("wind_speed_10m", 0)
+                    "ghi_w_m2": numeric_value(r.get("shortwave_radiation"), allow_missing=False),
+                    "temp_air_c": numeric_value(r.get("temperature_2m", 20), allow_missing=False),
+                    "wind_speed_m_s": cast(
+                        float, numeric_value(r.get("wind_speed_10m", 0), allow_missing=False)
+                    )
                     / (3.6 if wind_unit == "km/h" else 1),
                 }
                 for r in wide.data

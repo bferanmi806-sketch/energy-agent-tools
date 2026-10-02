@@ -230,3 +230,10 @@ CSV carbon data, for both cheapest and cleanest workflows. All nine battery
 source tests passed, with independent charging-time, final-charge, cost, carbon
 and source-lineage checks. These fixtures do not qualify live public requests
 or a physical installation.
+
+The solar-forecast CSV path now parses weather values through the shared finite
+numeric parser before entering the real pvlib model. Five source-boundary cases
+and related native engineering, time-series and workflow checks passed, 41 in
+total. Zero irradiance produces zero AC power; daylight output stays within the
+configured capacity. Empty, nonnumeric and infinite wind values and incompatible
+temperature units are refused. This model result remains estimated.

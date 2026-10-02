@@ -181,6 +181,11 @@ respectively. The optimizer also supports the schema-level fields
 only `intervals`, `battery`, and its objective (`cost` or `carbon`). Plans are
 simulated advice; they do not control equipment.
 
+CSV forecast weather values are parsed through the same finite-number boundary
+as workbench time series before entering the PV solver. Explicit missing values
+are refused. Wind in km/h is converted to m/s; irradiance and temperature units
+must satisfy the reviewed weather contract.
+
 ### `solar-consumption`
 
 This workflow aligns interval consumption with site generation using exact UTC

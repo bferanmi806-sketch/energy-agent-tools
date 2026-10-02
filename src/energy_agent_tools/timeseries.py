@@ -150,7 +150,7 @@ def _timestamp_text(value: pd.Timestamp, timezone: str) -> str:
     return value.tz_convert(timezone).isoformat()
 
 
-def _number(value: Any, *, allow_missing: bool = True) -> float | None:
+def numeric_value(value: Any, *, allow_missing: bool = True) -> float | None:
     if value is None:
         if allow_missing:
             return None
@@ -193,7 +193,7 @@ def _series(
 
     parsed: list[tuple[pd.Timestamp, dict[str, Any], float | None]] = []
     for row in rows:
-        parsed.append((_parse_timestamp(row[timestamp]), row, _number(row[column])))
+        parsed.append((_parse_timestamp(row[timestamp]), row, numeric_value(row[column])))
     parsed.sort(key=lambda item: item[0])
     times = [item[0] for item in parsed]
     if len(set(times)) != len(times):
@@ -426,8 +426,8 @@ def _filter(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> EnergyR
     start, end = _bounds(parameters)
     minimum = parameters.get("minimum")
     maximum = parameters.get("maximum")
-    minimum_value = None if minimum is None else _number(minimum, allow_missing=False)
-    maximum_value = None if maximum is None else _number(maximum, allow_missing=False)
+    minimum_value = None if minimum is None else numeric_value(minimum, allow_missing=False)
+    maximum_value = None if maximum is None else numeric_value(maximum, allow_missing=False)
     if minimum_value is not None and maximum_value is not None and minimum_value > maximum_value:
         raise EnergyError("invalid_range", "The filter minimum must not be above the maximum.")
     selected = [
