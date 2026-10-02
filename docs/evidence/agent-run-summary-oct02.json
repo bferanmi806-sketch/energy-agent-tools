@@ -1,0 +1,774 @@
+{
+  "schema_version": 1,
+  "run_id": "agent-benchmark-orchestration-qualified-oct02",
+  "artifacts": {
+    "suite": "work/agent-benchmark-orchestration-qualified-oct02/suite.json",
+    "suite_sha256": "183fcdf0675f750b5a89f2668c902443992c4ecdf4776b45ad2bddddedc9693a",
+    "progress": "work/agent-benchmark-orchestration-qualified-oct02/progress.json",
+    "cases": "work/agent-benchmark-orchestration-qualified-oct02/cases.jsonl",
+    "cases_sha256": "e0819966b8437fdd2ab7c7f30883574ab5d8c2e3b6d8ea136e2c2de58e6bbcc7"
+  },
+  "run": {
+    "started_at": "2026-10-02T10:16:41.667438+00:00",
+    "completed_at": "2026-10-02T10:26:48.117266+00:00",
+    "elapsed_seconds": 606.45,
+    "runner_command": "codex exec --ignore-user-config --ephemeral --skip-git-repo-check -s read-only --json",
+    "runner_executable": "codex",
+    "model_override": null,
+    "resolved_model_identity": null,
+    "model_identity_note": "The saved runner/event trace records no resolved model name or ID; it shows Codex CLI with no model override, so the actual model identity cannot be verified from these artifacts.",
+    "fixture": {
+      "id": "energy-agent-tools-qualified-scenarios",
+      "synthetic": true,
+      "disclaimer": "Provider-shaped fixtures, not physical sites or live private accounts.",
+      "scenario_count": 13
+    },
+    "source_revision": "ad769dcab8050789ec1d519defa47824a32128f3",
+    "source_dirty": false,
+    "source_unchanged": true,
+    "source_at_completion": {
+      "source_commit": "ad769dcab8050789ec1d519defa47824a32128f3",
+      "source_dirty": false,
+      "dirty_source_sha256": "a61074309c43c2aa549672d1a18bcf8862d51242ae7840ff3c6b1262c0be2a35"
+    },
+    "calls_total": 81
+  },
+  "summary": {
+    "cases": 13,
+    "mean_score": 0.8408,
+    "labels": {
+      "pass": 5,
+      "partial": 8,
+      "fail": 0,
+      "inconclusive": 0
+    },
+    "progress_status": "completed",
+    "progress_completed_cases": 13,
+    "progress_total_cases": 13,
+    "reconciliation": {
+      "case_ids_match_suite_progress_cases_jsonl": true,
+      "label_counts_match_cases_jsonl": true,
+      "mean_recomputed": 0.8408
+    },
+    "interpretation": "Heuristic evaluator aggregate; not an empirical success probability.",
+    "release_gate_claimed": false
+  },
+  "wrapper_footer_error": {
+    "type": "AttributeError",
+    "target": "SuiteResult.summary",
+    "stage": "wrapper footer after evidence completion/serialization",
+    "case_outcome_effect": "None indicated by the saved traces: all 13 cases have returncode 0, completed turns, no timeout, and zero parse errors."
+  },
+  "nonfatal_stderr_diagnostic": {
+    "signature": "codex_models_manager cache/manager: missing field base_instructions",
+    "case_occurrences": [
+      {
+        "case_id": "dev_consumption_daily_csv",
+        "occurrences": 1
+      },
+      {
+        "case_id": "dev_consumption_home_assistant",
+        "occurrences": 5
+      },
+      {
+        "case_id": "dev_consumption_local_day_dublin",
+        "occurrences": 1
+      },
+      {
+        "case_id": "dev_consumption_interval_gap",
+        "occurrences": 3
+      },
+      {
+        "case_id": "dev_current_power_snapshot",
+        "occurrences": 1
+      },
+      {
+        "case_id": "dev_units_kw_kwh",
+        "occurrences": 5
+      },
+      {
+        "case_id": "dev_counter_reset_quality",
+        "occurrences": 8
+      },
+      {
+        "case_id": "dev_field_units_provenance",
+        "occurrences": 1
+      },
+      {
+        "case_id": "dev_optimization_advisory",
+        "occurrences": 2
+      },
+      {
+        "case_id": "dev_network_asset_scope",
+        "occurrences": 4
+      }
+    ],
+    "total_occurrences": 31,
+    "interpretation": "This diagnostic appears in stderr for some passing and partial turns; it did not coincide with a nonzero return code, timeout, or incomplete turn in the saved run."
+  },
+  "cases": [
+    {
+      "case_id": "dev_consumption_daily_csv",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "pass",
+      "score": 1.0,
+      "call_count": 4,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_MULTI_EXECUTE_TOOL",
+        "ENERGY_MULTI_EXECUTE_TOOL"
+      ],
+      "dimensions_below_1": [],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 1
+      },
+      "returned_error_responses": [],
+      "outcome": null
+    },
+    {
+      "case_id": "dev_consumption_home_assistant",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "pass",
+      "score": 1.0,
+      "call_count": 5,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_EXECUTE_CAPABILITY"
+      ],
+      "dimensions_below_1": [],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 5
+      },
+      "returned_error_responses": [],
+      "outcome": null
+    },
+    {
+      "case_id": "dev_consumption_local_day_dublin",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "pass",
+      "score": 1.0,
+      "call_count": 9,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_LIST_SKILLS",
+        "ENERGY_EXECUTE_CAPABILITY",
+        "ENERGY_EXECUTE_CAPABILITY",
+        "ENERGY_MULTI_EXECUTE_TOOL",
+        "ENERGY_MULTI_EXECUTE_TOOL"
+      ],
+      "dimensions_below_1": [],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 1
+      },
+      "returned_error_responses": [],
+      "outcome": null
+    },
+    {
+      "case_id": "dev_consumption_interval_gap",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "partial",
+      "score": 0.7698,
+      "call_count": 12,
+      "calls": [
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_GET_TOOL",
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_LIST_SKILLS",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_MANAGE_CONNECTIONS",
+        "ENERGY_GET_TOOL",
+        "ENERGY_LIST_TOOLKITS",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_SIMULATION_JOB"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "tool_selection",
+          "score": 0.0,
+          "evidence": "no accepted tool path observed"
+        },
+        {
+          "name": "gateway_use",
+          "score": 0.5,
+          "evidence": "matched 1/2 expected call roles"
+        },
+        {
+          "name": "structured_evidence",
+          "score": 0.5,
+          "evidence": "site/asset"
+        },
+        {
+          "name": "call_budget",
+          "score": 0.8333333333333334,
+          "evidence": "12 calls, budget 10"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 3
+      },
+      "returned_error_responses": [
+        {
+          "call": 12,
+          "tool": "ENERGY_SIMULATION_JOB",
+          "code": "tool_not_found",
+          "message": "Tool does not exist; search the registry first."
+        }
+      ],
+      "outcome": "Reports 42/48 intervals (87.5% coverage) and leaves missing energy unknown; no consumption read or workbench summary was executed.",
+      "root_cause": {
+        "primary": "agent_choice",
+        "contributors": [
+          "discovery_usability"
+        ]
+      },
+      "trace_evidence": [
+        "Calls 3 and 11 resolved the Octopus consumption binding as available.",
+        "No ENERGY_EXECUTE_CAPABILITY or WORKBENCH_SUMMARIZE call appears.",
+        "Call 12 submitted an unsupported ENERGY_SIMULATION_JOB operation and received tool_not_found; total calls were 12 against a budget of 10."
+      ],
+      "hypothesis": "The model found an available read path but kept exploring registry/tool metadata instead of executing it. Surface the capability execution sequence directly after an available resolution and stop before unrelated job discovery."
+    },
+    {
+      "case_id": "dev_current_power_snapshot",
+      "scenario_clock": "2026-09-29T16:00:00Z",
+      "label": "partial",
+      "score": 0.7895,
+      "call_count": 4,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_RESOLVE_CAPABILITY"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "gateway_use",
+          "score": 0.5,
+          "evidence": "matched 1/2 expected call roles"
+        },
+        {
+          "name": "structured_evidence",
+          "score": 0.0,
+          "evidence": "required provenance/site fields missing"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 1
+      },
+      "returned_error_responses": [],
+      "outcome": "Correctly says current power is unavailable and does not invent a sample age.",
+      "root_cause": {
+        "primary": "missing_metadata",
+        "contributors": [
+          "rubric_uncertainty"
+        ]
+      },
+      "trace_evidence": [
+        "Site context identifies the kW sensor asset, but supplies no recent sample timestamp or freshness value.",
+        "Calls 2–4 resolved current_power/power with zero candidates; no result source was available to attach provenance/asset fields to.",
+        "The scorer nevertheless gives structured_evidence=0 and gateway_use=0.5 for the unavailable branch."
+      ],
+      "hypothesis": "The fixture has no freshness-bearing sample/binding metadata. An explicit no-sample result carrying site and asset identity, or a rubric exception for an empty resolution, would make the expected safe refusal measurable."
+    },
+    {
+      "case_id": "dev_two_account_selection",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "partial",
+      "score": 0.7,
+      "call_count": 2,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_MANAGE_CONNECTIONS"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "semantic_terms",
+          "score": 0.75,
+          "evidence": "matched 3/4 required groups"
+        },
+        {
+          "name": "boundary_error",
+          "score": 0.0,
+          "evidence": "no structured boundary error"
+        },
+        {
+          "name": "structured_evidence",
+          "score": 0.0,
+          "evidence": "required provenance/site fields missing"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 0
+      },
+      "returned_error_responses": [],
+      "outcome": "Lists two connected Octopus accounts and asks which one owns the home meter before reading it.",
+      "root_cause": {
+        "primary": "rubric_uncertainty",
+        "contributors": [
+          "missing_metadata"
+        ]
+      },
+      "trace_evidence": [
+        "Call 2 returns two active/enabled connections; no consumption read is made.",
+        "The final question satisfies the user action, but the lexical group requires the literal substring ask or choose.",
+        "The case also requires ambiguous_account and provenance/site-asset evidence although the connection-list response emits no ambiguity error and no reading exists."
+      ],
+      "hypothesis": "Score the two-connection list plus a clarification question as the boundary success for this case; do not require a read-lineage result before the user selects an account."
+    },
+    {
+      "case_id": "dev_units_kw_kwh",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "partial",
+      "score": 0.7,
+      "call_count": 4,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_LIST_SKILLS",
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_RESOLVE_CAPABILITY"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "tool_selection",
+          "score": 0.0,
+          "evidence": "no accepted tool path observed"
+        },
+        {
+          "name": "gateway_use",
+          "score": 0.5,
+          "evidence": "matched 1/2 expected call roles"
+        },
+        {
+          "name": "structured_evidence",
+          "score": 0.0,
+          "evidence": "required provenance/site fields missing"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 5
+      },
+      "returned_error_responses": [],
+      "outcome": "Correctly converts 5 kW for 30 minutes to 2.5 kWh and shows the 0.5-hour duration.",
+      "root_cause": {
+        "primary": "rubric_uncertainty",
+        "contributors": [
+          "discovery_usability"
+        ]
+      },
+      "trace_evidence": [
+        "Site metadata declares instantaneous kW and duration 30min.",
+        "The answer performs the requested dimensional calculation; the trace has discovery and one capability-resolution call but no execution call.",
+        "The scorer requires an accepted execution path, an analysis-role tool, and provenance for a static conversion."
+      ],
+      "hypothesis": "Treat this as a verifiable arithmetic explanation using declared fixture metadata, or change the case to require a specific execution artifact and provide one."
+    },
+    {
+      "case_id": "dev_counter_reset_quality",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "pass",
+      "score": 1.0,
+      "call_count": 10,
+      "calls": [
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_MULTI_EXECUTE_TOOL",
+        "ENERGY_MULTI_EXECUTE_TOOL",
+        "ENERGY_MULTI_EXECUTE_TOOL",
+        "ENERGY_SEARCH_TOOLS",
+        "ENERGY_MULTI_EXECUTE_TOOL",
+        "ENERGY_MULTI_EXECUTE_TOOL",
+        "ENERGY_MULTI_EXECUTE_TOOL"
+      ],
+      "dimensions_below_1": [],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 8
+      },
+      "returned_error_responses": [
+        {
+          "call": 5,
+          "tool": "ENERGY_MULTI_EXECUTE_TOOL",
+          "code": "missing_resolution",
+          "message": "Counter differences require a declared resolution or frequency parameter."
+        }
+      ],
+      "outcome": null
+    },
+    {
+      "case_id": "dev_field_units_provenance",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "pass",
+      "score": 0.9706,
+      "call_count": 4,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_LIST_SKILLS",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_MULTI_EXECUTE_TOOL"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "semantic_terms",
+          "score": 0.75,
+          "evidence": "matched 3/4 required groups"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 1
+      },
+      "returned_error_responses": [],
+      "outcome": "Passes with 0.9706 while the semantic_terms dimension is 0.75.",
+      "root_cause": {
+        "primary": "rubric_uncertainty",
+        "contributors": []
+      },
+      "trace_evidence": [
+        "The final says “Field-unit provenance”; the required term group is the literal phrase “field units”, and normalization only lowercases/collapses whitespace."
+      ],
+      "hypothesis": "Normalize punctuation/hyphen boundaries or use accepted phrasing variants for this required-term check."
+    },
+    {
+      "case_id": "dev_power_flow_two_bus",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "partial",
+      "score": 0.5238,
+      "call_count": 9,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_LIST_SKILLS",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "tool_selection",
+          "score": 0.0,
+          "evidence": "no accepted tool path observed"
+        },
+        {
+          "name": "gateway_use",
+          "score": 0.5,
+          "evidence": "matched 1/2 expected call roles"
+        },
+        {
+          "name": "safety_language",
+          "score": 0.0,
+          "evidence": "forbidden claim: energized"
+        },
+        {
+          "name": "structured_evidence",
+          "score": 0.0,
+          "evidence": "required provenance/site fields missing"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 0
+      },
+      "returned_error_responses": [
+        {
+          "call": 4,
+          "tool": "ENERGY_SIMULATION_JOB",
+          "code": "job_not_ready",
+          "message": "The job is running."
+        },
+        {
+          "call": 5,
+          "tool": "ENERGY_SIMULATION_JOB",
+          "code": "job_not_ready",
+          "message": "The job is running."
+        },
+        {
+          "call": 7,
+          "tool": "ENERGY_SIMULATION_JOB",
+          "code": "job_not_ready",
+          "message": "The job is running."
+        },
+        {
+          "call": 9,
+          "tool": "ENERGY_SIMULATION_JOB",
+          "code": "job_not_ready",
+          "message": "The job is running."
+        }
+      ],
+      "outcome": "The accepted synthetic power-flow job never returns a result; the answer correctly withholds convergence/voltage/loading/residual values.",
+      "root_cause": {
+        "primary": "production_defect",
+        "contributors": [
+          "rubric_uncertainty",
+          "discovery_usability"
+        ]
+      },
+      "trace_evidence": [
+        "Call 3 submits the power_flow job successfully. Calls 4, 5, 7, and 9 return job_not_ready; calls 6 and 8 report running with output_bytes=0.",
+        "The final answer explicitly says no equipment is energized, but safety_language=0 because the scorer searches for the forbidden substring energized without negation handling.",
+        "The scorer also does not count ENERGY_SIMULATION_JOB as an accepted execution path."
+      ],
+      "hypothesis": "Investigate why this small accepted job remains running through the case window. Separately make the safety check negation-aware and include the supported job route in accepted execution aliases."
+    },
+    {
+      "case_id": "dev_heat_loss",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "partial",
+      "score": 0.775,
+      "call_count": 3,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_RESOLVE_CAPABILITY"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "tool_selection",
+          "score": 0.0,
+          "evidence": "no accepted tool path observed"
+        },
+        {
+          "name": "gateway_use",
+          "score": 0.5,
+          "evidence": "matched 1/2 expected call roles"
+        },
+        {
+          "name": "structured_evidence",
+          "score": 0.5,
+          "evidence": "site/asset"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 0
+      },
+      "returned_error_responses": [],
+      "outcome": "The requested London office is absent; the answer discloses that mismatch and reports an explicitly scoped Manchester estimate from the available model metadata.",
+      "root_cause": {
+        "primary": "missing_metadata",
+        "contributors": [
+          "agent_choice",
+          "discovery_usability",
+          "rubric_uncertainty"
+        ]
+      },
+      "trace_evidence": [
+        "Site context returns Manchester Office only, not London Office.",
+        "The heat_loss_inputs lookup is unavailable; the calculate_heat_loss resolution is also unavailable after a request using kind=simulated and unit=kWh, while the model exposes thermal outputs.",
+        "No calculation execution call appears; the scorer consequently lacks executed provenance and an accepted tool path."
+      ],
+      "hypothesis": "Align the requested site with the fixture or score a disclosed unavailable response. If execution is required for the available Manchester model, supply a resolver request matching its declared result kind/thermal units and the complete model arguments."
+    },
+    {
+      "case_id": "dev_optimization_advisory",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "partial",
+      "score": 0.8485,
+      "call_count": 11,
+      "calls": [
+        "ENERGY_LIST_SKILLS",
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB",
+        "ENERGY_SIMULATION_JOB"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "tool_selection",
+          "score": 0.0,
+          "evidence": "no accepted tool path observed"
+        },
+        {
+          "name": "gateway_use",
+          "score": 0.5,
+          "evidence": "matched 1/2 expected call roles"
+        },
+        {
+          "name": "call_budget",
+          "score": 0.9090909090909091,
+          "evidence": "11 calls, budget 10"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 2
+      },
+      "returned_error_responses": [
+        {
+          "call": 5,
+          "tool": "ENERGY_RESOLVE_CAPABILITY",
+          "code": "invalid_request",
+          "message": "Capability request cannot be resolved in this scope."
+        },
+        {
+          "call": 7,
+          "tool": "ENERGY_SIMULATION_JOB",
+          "code": "job_not_ready",
+          "message": "The job is running."
+        },
+        {
+          "call": 9,
+          "tool": "ENERGY_SIMULATION_JOB",
+          "code": "job_not_ready",
+          "message": "The job is running."
+        }
+      ],
+      "outcome": "Returns a synthetic advisory schedule from four available 2026-09-30 intervals and clearly says it does not answer a complete 2026-09-29 window.",
+      "root_cause": {
+        "primary": "discovery_usability",
+        "contributors": [
+          "agent_choice",
+          "rubric_uncertainty",
+          "missing_metadata"
+        ]
+      },
+      "trace_evidence": [
+        "Tariff and carbon capability lookups return no candidates; plan_battery_charging resolution returns invalid_request.",
+        "The generic ENERGY_SIMULATION_JOB route succeeds and returns an optimizer result, but the expected-tool rubric accepts neither that call path nor its analysis role.",
+        "The result uses only four next-day fixture intervals; the run uses 11 calls against a budget of 10, including repeated result/status polling."
+      ],
+      "hypothesis": "Make the supported job path discoverable and score it as an execution path; define the intended schedule horizon in both prompt and fixture, and reduce retry/poll calls."
+    },
+    {
+      "case_id": "dev_network_asset_scope",
+      "scenario_clock": "2026-09-30T12:00:00Z",
+      "label": "partial",
+      "score": 0.8529,
+      "call_count": 4,
+      "calls": [
+        "ENERGY_SITE_CONTEXT",
+        "ENERGY_LIST_SKILLS",
+        "ENERGY_RESOLVE_CAPABILITY",
+        "ENERGY_RESOLVE_CAPABILITY"
+      ],
+      "dimensions_below_1": [
+        {
+          "name": "gateway_use",
+          "score": 0.5,
+          "evidence": "matched 1/2 expected call roles"
+        },
+        {
+          "name": "structured_evidence",
+          "score": 0.5,
+          "evidence": "site/asset"
+        }
+      ],
+      "runtime": {
+        "returncode": 0,
+        "turn_completed": true,
+        "timed_out": false,
+        "parse_error_count": 0,
+        "tool_call_exception_count": 0,
+        "models_cache_warning_occurrences": 4
+      },
+      "returned_error_responses": [],
+      "outcome": "Declines to run a study because the prompt names two models but no requested asset ID.",
+      "root_cause": {
+        "primary": "rubric_uncertainty",
+        "contributors": [
+          "missing_metadata",
+          "agent_choice"
+        ]
+      },
+      "trace_evidence": [
+        "Site context lists east and west model assets.",
+        "Call 3 attempts an explicit east asset despite no user selection; call 4 removes asset_id and returns the tied candidates, after which the final answer declines execution.",
+        "No executed study exists, so the scorer finds site/asset metadata but no execution provenance."
+      ],
+      "hypothesis": "Name the target asset ID in the case prompt, or define asking the user to choose between the two IDs as the expected success. Do not require selected-result lineage when the test prompt supplies no selection."
+    }
+  ],
+  "sanitization": "Contains case IDs, tool names, scores, short returned error codes/messages, and summarized evidence only. Raw prompts/results/arguments, thread IDs, artifact/job IDs, account identifiers, and credentials are omitted.",
+  "post_run_follow_up": {
+    "case_id": "dev_power_flow_two_bus",
+    "status": "independently reproduced after the frozen benchmark; historical suite evidence and score are unchanged",
+    "import_trace": "work/pypsa-worker-import-probe/importtime.log",
+    "cold_import_measurements_seconds": {
+      "pypsa_cumulative_import_in_trace": 40.94,
+      "matplotlib_font_manager_in_trace": 34.1,
+      "wall_clock_cold_import_reported_by_primary": 41.5,
+      "worker_deadline": 30.0
+    },
+    "mitigation_reported_by_primary": {
+      "setting": "MPL_IGNORE_SYSTEM_FONTS",
+      "fresh_job_duration_seconds_approx": 14,
+      "numerical_checks_passed": true,
+      "documented_in_commit": "60bd444f5bbd160ff186e1b50f0e6d7916ff1b60",
+      "documentation_at_that_revision": "docs/simulation-jobs.md"
+    },
+    "interpretation": "This later reproduction explains the saved job_not_ready sequence; it is follow-up evidence and does not rewrite the ad769dc run."
+  }
+}
