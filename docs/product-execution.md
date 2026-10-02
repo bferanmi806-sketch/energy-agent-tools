@@ -106,8 +106,24 @@ paging, foreign-scope rejection and restored dataset access. Peak traced Python
 allocation is 2,336,690 bytes. This excludes native SQLite memory and is not an
 RSS measurement. Timing includes allocation-tracing overhead.
 
-Temporal selection still scans chunks. High-resolution history resampling,
-timestamp indexing, concurrent-load and sustained-operation qualification remain
-open. The fixture is synthetic and does not establish physical meter access.
+Temporal selection still scans chunks. Timestamp indexing, concurrent-load and
+sustained-operation qualification remain open. The fixture is synthetic and does not establish physical meter access.
 The TypeScript SDK, Connect Apps application and full connection control plane
 remain in the completion scope.
+
+## Complete observed aggregation, October 2
+
+Commit `3c84cefb8a39aa02c3a39b2d31b384f2aa32172b` adds streamed observed interval-energy
+aggregation and uses it before forecast model fitting. Complete one-minute meter
+history can now become 15/30/60-minute model input without loading all source rows.
+Measured interval amounts remain metered with explicit aggregation lineage;
+gaps, overlaps and target boundaries requiring a split are refused.
+The SDK/MCP qualification covers both a preloaded 132,480-row dataset and a
+resolved dataset provider. Its independently expected eight-day forecast and
+bill are 576 kWh and 123.36 GBP. These values describe a synthetic fixture.
+
+The full 546-test suite, Ruff and mypy pass. The pinned record is
+[evidence/high-resolution-forecast-oct02.json](evidence/high-resolution-forecast-oct02.json).
+Automatic contextual weather retrieval is the next integration unit. Physical
+meter access, real forecast accuracy, independent agent evaluation, outside
+connector contributions and sustained operation remain qualification gates.

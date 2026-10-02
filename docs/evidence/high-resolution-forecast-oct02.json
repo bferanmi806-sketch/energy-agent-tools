@@ -1,0 +1,41 @@
+{
+  "implementation_revision": "3c84cefb8a39aa02c3a39b2d31b384f2aa32172b",
+  "fixture": {
+    "synthetic": true,
+    "physical_meter": false,
+    "history_start": "2026-07-01T00:00:00Z",
+    "history_end": "2026-10-01T00:00:00Z",
+    "history_rows": 132480,
+    "source_interval_minutes": 1,
+    "source_value_wh": 50,
+    "forecast_days": 8,
+    "forecast_interval_minutes": 30,
+    "expected_forecast_kwh": 576,
+    "expected_bill_gbp": "123.36"
+  },
+  "paths": [
+    "SDK with preloaded scoped dataset",
+    "MCP with preloaded scoped dataset",
+    "SDK with resolved dataset provider",
+    "MCP with resolved dataset provider"
+  ],
+  "semantics": {
+    "history": "metered observed aggregation without filling or splitting",
+    "prediction": "forecast",
+    "bill": "calculated from forecast"
+  },
+  "validation": {
+    "full_suite": "546 passed in 558.74s",
+    "full_log_sha256": "575e4b647cb3353e4f6210942b1717abc1dadeba050a523560c97e12d3e8d0af",
+    "ruff_check": "passed",
+    "ruff_format": "187 files already formatted",
+    "mypy": "47 source files passed",
+    "pure_aggregation": "21 focused checks, including generated input and <32 MiB traced Python allocation assertion"
+  },
+  "limits": [
+    "Synthetic history is not physical site qualification or forecast accuracy evidence.",
+    "Aggregation only supports complete explicitly ended interval energy; gaps and bin-edge splitting are refused.",
+    "Input scanning is not timestamp-index or concurrent-load qualification.",
+    "Automatic weather retrieval is a separate integration still in progress."
+  ]
+}
