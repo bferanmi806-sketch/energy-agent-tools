@@ -314,3 +314,35 @@ def test_calendar_compare_uses_local_periods_and_null_prior_periods():
     assert output.data[1]["previous"] == 1
     assert output.data[2]["period"] == "2026-03-30"
     assert output.data[2]["previous"] == 2
+
+
+@pytest.mark.parametrize(
+    "operation,parameters",
+    [("normalize", {"unit": "Wh"}), ("filter", {}), ("missing", {"frequency": "30min"})],
+)
+def test_value_preserving_transforms_keep_counter_semantics(operation, parameters):
+    counter = _result(_rows([100, 102, 104])).model_copy(update={"quantity_shape": "counter"})
+    transformed = operate(operation, [("counter", counter)], parameters)
+    assert transformed.quantity_shape == "counter"
+    assert transformed.provenance[0]["inputs"][0]["quantity_shape"] == "counter"
+    rate = _result(_rows([0.2, 0.2, 0.2]), "GBP/kWh")
+    with pytest.raises(EnergyError) as failure:
+        operate("cost", [("transformed", transformed), ("rate", rate)], {})
+    assert failure.value.code == "quantity_shape_mismatch"
+
+
+@pytest.mark.parametrize("operation,unit", [("cost", "GBP/kWh"), ("carbon", "gCO2e/kWh")])
+@pytest.mark.parametrize("shape", ["counter", "instantaneous"])
+def test_rates_reject_energy_that_is_not_interval_consumption(operation, unit, shape):
+    energy = _result(_rows([100, 102])).model_copy(update={"quantity_shape": shape})
+    rate = _result(_rows([0.2, 0.2]), unit)
+    with pytest.raises(EnergyError) as failure:
+        operate(operation, [("energy", energy), ("rate", rate)], {})
+    assert failure.value.code == "quantity_shape_mismatch"
+
+
+def test_integrated_power_declares_interval_energy():
+    power = _result(_rows([2, 2, 2]), "kW").model_copy(update={"quantity_shape": "instantaneous"})
+    integrated = operate("integrate_power", [("power", power)], {"method": "left"})
+    assert integrated.quantity_shape == "interval"
+    assert integrated.provenance[0]["inputs"][0]["quantity_shape"] == "instantaneous"

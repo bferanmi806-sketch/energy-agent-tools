@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from .models import DataKind, EnergyError, EnergyResult, Json
+from .models import DataKind, EnergyError, EnergyResult, Json, QuantityShape
 
 MAX_ROWS = 100_000
 MAX_OUTPUT_ROWS = 100_000
@@ -338,6 +338,7 @@ def _lineage(operation: str, inputs: list[tuple[str, EnergyResult]]) -> list[Jso
                     "kind": result.kind.value,
                     "source": result.source,
                     "unit": result.unit,
+                    "quantity_shape": result.quantity_shape,
                     "timezone": result.timezone,
                     "resolution": result.resolution,
                     "provider": result.provider,
@@ -381,6 +382,7 @@ def _derived(
     assumptions: list[str] | None = None,
     warnings: list[str] | None = None,
     field_units: dict[str, str] | None = None,
+    quantity_shape: QuantityShape | None = None,
 ) -> EnergyResult:
     all_warnings = [warning for _, result in inputs for warning in result.warnings]
     all_warnings.extend(warnings or [])
@@ -398,6 +400,7 @@ def _derived(
         source="workbench",
         timezone=inputs[0][1].timezone,
         resolution=resolution,
+        quantity_shape=quantity_shape,
         provider=_consistent_metadata(inputs, "provider"),
         site_id=_consistent_metadata(inputs, "site_id"),
         asset_id=_consistent_metadata(inputs, "asset_id"),
@@ -436,6 +439,7 @@ def _filter(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> EnergyR
         inputs,
         series.result.unit,
         resolution=series.result.resolution,
+        quantity_shape=series.result.quantity_shape,
         assumptions=[
             "Start and end bounds are inclusive after UTC normalization.",
             "Minimum and maximum apply inclusively to the selected numeric column.",
@@ -497,6 +501,7 @@ def _missing(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> Energy
         inputs,
         series.result.unit,
         resolution=frequency,
+        quantity_shape=series.result.quantity_shape,
         assumptions=[
             f"Expected UTC instants at {frequency} intervals between the first and last observed row.",
             "Rows outside the observed coverage window are not inferred.",
@@ -707,6 +712,7 @@ def _integrate_power(inputs: list[tuple[str, EnergyResult]], parameters: Json) -
         "kWh",
         resolution=_resolution_label(_resolution_seconds(series.result, series.times)),
         field_units={"energy": "kWh"},
+        quantity_shape="interval",
         assumptions=[
             f"Power values were converted from {series.result.unit} to kW.",
             f"Integration method: {method}.",
@@ -778,6 +784,11 @@ def _rate_calculation(
     else:
         energy, rate = right, left
         energy_unit, rate_unit = right_unit, left_unit
+    if energy.result.quantity_shape in {"counter", "instantaneous"}:
+        raise EnergyError(
+            "quantity_shape_mismatch",
+            "Cost and carbon calculations require interval energy. Convert counters or integrate power explicitly first.",
+        )
     energy_values = dict(zip(energy.times, energy.values, strict=True))
     rate_values = dict(zip(rate.times, rate.values, strict=True))
     output: list[Json] = []
@@ -983,6 +994,7 @@ def _normalize(inputs: list[tuple[str, EnergyResult]], parameters: Json) -> Ener
         inputs,
         target,
         resolution=series.result.resolution,
+        quantity_shape=series.result.quantity_shape,
         field_units={**series.result.field_units, series.column: target},
         assumptions=[
             f"Values converted from {series.result.unit} to {target}; original unit retained in lineage."
