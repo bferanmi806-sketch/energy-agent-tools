@@ -30,6 +30,7 @@ class CapabilityBinding(StrictModel):
     defaults: Json = Field(default_factory=dict)
     fixed_arguments: Json = Field(default_factory=dict)
     argument_map: dict[str, str] = Field(default_factory=dict)
+    required_arguments_or_settings: list[str] = Field(default_factory=list, max_length=20)
     reviewed: bool = False
     version: str = "1.0.0"
 
@@ -63,6 +64,34 @@ class CapabilityRequest(StrictModel):
 
 def builtins(agent: EnergyAgent) -> list[CapabilityBinding]:
     definitions = [
+        (
+            "estimate_forecast_bill",
+            "analytics.estimate_forecast_bill",
+            DataKind.CALCULATED,
+            None,
+            None,
+        ),
+        (
+            "forecast_energy_consumption",
+            "analytics.forecast_consumption",
+            DataKind.FORECAST,
+            "kWh",
+            None,
+        ),
+        (
+            "explain_consumption_spike",
+            "analytics.explain_consumption_spike",
+            DataKind.CALCULATED,
+            None,
+            None,
+        ),
+        (
+            "analyse_grid_conditions",
+            "analytics.analyse_grid_conditions",
+            DataKind.CALCULATED,
+            "mixed",
+            None,
+        ),
         ("get_carbon_intensity", "carbon_intensity_gb.get_intensity", None, "gCO2/kWh", "30min"),
         (
             "get_energy_consumption",
@@ -101,7 +130,17 @@ def builtins(agent: EnergyAgent) -> list[CapabilityBinding]:
         ("calculate_heat_loss", "engineering.calculate_heat_loss", DataKind.CALCULATED, "W", None),
     ]
     bindings = [
-        CapabilityBinding(capability=c, tool=t, kind=k, unit=u, resolution=r, reviewed=True)
+        CapabilityBinding(
+            capability=c,
+            tool=t,
+            kind=k,
+            unit=u,
+            resolution=r,
+            reviewed=True,
+            required_arguments_or_settings=(
+                ["product_code", "tariff_code"] if t == "octopus_energy.get_tariffs" else []
+            ),
+        )
         for c, t, k, u, r in definitions
         if t in agent.registry.tools
     ]
@@ -331,6 +370,12 @@ class CapabilityResolver:
                         args.setdefault("latitude", site.latitude)
                     if site.longitude is not None:
                         args.setdefault("longitude", site.longitude)
+                for key in binding.required_arguments_or_settings:
+                    required_value = args.get(key) or (
+                        account.settings.get(key) if account else None
+                    )
+                    if required_value is None or required_value == "":
+                        reasons.append("arguments_or_settings_required")
                 try:
                     self.agent._validate(tool, args)
                 except EnergyError:

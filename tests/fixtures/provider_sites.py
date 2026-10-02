@@ -17,8 +17,8 @@ from typing import Any
 import httpx
 
 from energy_agent_tools.capabilities import CapabilityBinding
+from energy_agent_tools.connectors import analytics, local
 from energy_agent_tools.connectors import http as http_connectors
-from energy_agent_tools.connectors import local
 from energy_agent_tools.models import (
     Action,
     AuthConfig,
@@ -47,6 +47,7 @@ def _timestamp_rows(values: tuple[float, ...]) -> list[dict[str, Any]]:
         {
             "timestamp": _iso(WINDOW_START + timedelta(minutes=30 * index)),
             "value": value,
+            "end": _iso(WINDOW_START + timedelta(minutes=30 * (index + 1))),
         }
         for index, value in enumerate(values)
     ]
@@ -189,7 +190,7 @@ class ProviderFixture:
         path = self.data_root / "csv_consumption.csv"
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", newline="", encoding="utf-8") as stream:
-            writer = csv.DictWriter(stream, fieldnames=["timestamp", "value"])
+            writer = csv.DictWriter(stream, fieldnames=["timestamp", "value", "end"])
             writer.writeheader()
             writer.writerows(_timestamp_rows(SCENARIOS["csv"].consumption_values))
 
@@ -274,6 +275,9 @@ class ProviderFixture:
                     "base_url": "https://emon.example/emoncms/",
                     "feed_id": 101,
                     "unit": "kWh",
+                    "quantity_shape": "interval",
+                    "interval_position": "start",
+                    "interval_seconds": 1800,
                 },
             ),
             ConnectedAccount(
@@ -308,6 +312,7 @@ class ProviderFixture:
                 kind=DataKind.METERED,
                 unit="kWh",
                 resolution="1800s",
+                quantity_shape="interval",
                 fixed_arguments={"interval": 1800},
                 reviewed=True,
                 quality="metered",
@@ -316,10 +321,12 @@ class ProviderFixture:
                 capability="get_energy_consumption",
                 tool="CSV_READ_TIMESERIES",
                 account_id="csv-alice",
+                quantity_shape="interval",
                 kind=DataKind.METERED,
                 unit="kWh",
                 defaults={
                     "file": "csv_consumption.csv",
+                    "quantity_shape": "interval",
                     "kind": DataKind.METERED.value,
                     "unit": "kWh",
                     "timezone": "UTC",
@@ -357,6 +364,7 @@ class ProviderFixture:
         registry = Registry()
         http_connectors.register(registry)
         local.register(registry)
+        analytics.register(registry)
         local.register_csv(registry, self.data_root)
         registry.add_toolkit(
             Toolkit(

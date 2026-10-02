@@ -71,3 +71,28 @@ coverage. No external forecasting service is required.
 Completion is unproven until every requirement in the full objective has direct
 current evidence. External access, independent review and sustained observation
 remain open when unavailable; independent work continues.
+
+## Implemented core wave, October 2
+
+Consumption forecasts and forecast billing now have native capabilities and
+composed SDK/MCP workflows. Their offline acceptance retrieves three months
+in bounded calls, preserves metered history, forecasts eight days and checks
+a 192 kWh/42.72 GBP synthetic fixture. The runnable reference also exercises
+an actual missing-tariff-coverage refusal. Model selection and calibration use
+separate chronological weeks, followed by a final all-history fit. Explicit
+past/future temperature artifacts can condition the model; automatic context
+fetching and real-site forecast accuracy remain unqualified.
+
+Building spike analysis now reports supported equipment/weather associations
+and missing evidence. SDK/MCP acceptance covers distinct context assets,
+matching explicit endpoints and foreign-artifact refusal. Grid analysis now
+compares aligned generation power and carbon intensity, with independent
+known-value assertions and preserved carbon species. These changes address
+implementation gaps in the baseline table; they do not clear live-provider,
+independent-review, agent-evaluation or sustained-operation gates.
+
+The next implementation unit is partitioned persistent time-series processing.
+Its worker left an uncommitted isolated draft when the account usage limit was
+reached. That draft has not passed primary acceptance and is not an implemented
+gateway capability. The TypeScript SDK, Connect Apps application and full
+connection control plane remain in the completion scope.

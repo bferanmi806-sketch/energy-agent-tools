@@ -314,8 +314,8 @@ async def run_reference() -> dict[str, Any]:
             spike = await session.skill("building-spike", day_parameters)
             assert spike["ok"], spike
             spike_data = _analysis_data(session, spike)
-            assert spike_data["anomaly_count"] == 1, spike_data
-            assert float(spike_data["preview"][0]["value"]) == 5.0, spike_data
+            assert spike_data["summary"]["spike_count"] == 1, spike_data
+            assert float(spike_data["spikes"][0]["load_kwh"]) == 5.0, spike_data
             spike_meter_source = _verify_source(
                 session,
                 spike,
@@ -558,8 +558,8 @@ async def run_reference() -> dict[str, Any]:
                     "yesterday-consumption": {"ok": True, "sum_kwh": yesterday_data["sum"]},
                     "building-spike": {
                         "ok": True,
-                        "anomaly_count": spike_data["anomaly_count"],
-                        "spike_kwh": float(spike_data["preview"][0]["value"]),
+                        "anomaly_count": spike_data["summary"]["spike_count"],
+                        "spike_kwh": float(spike_data["spikes"][0]["load_kwh"]),
                     },
                     "electricity-cost": {"ok": True, "bill_gbp": bill},
                     "energy-baseline": {

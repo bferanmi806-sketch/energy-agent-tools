@@ -125,3 +125,16 @@ actual failure paths. The solar reference declares total load and no storage
 to calculate interval self-consumption and estimated import/export. Storage
 reconciliation and combined grid analysis remain open. These synthetic examples
 do not close the live-provider gates.
+
+## Three months to an eight-day forecast bill
+
+Run `examples/reference_projects/forecast_workflow.py` through the same SDK.
+It imports 92 days of synthetic half-hourly consumption, retrieves that history
+in four bounded calls, predicts eight days, and calculates a bill using an
+explicit tariff validity period, standing charge and tax. The independent
+fixture expectation is 192 kWh and 42.72 GBP. A second execution shortens tariff
+validity and exercises an actual `missing_rate_coverage` refusal.
+
+The report retains forecast evaluation windows, uncertainty scenarios, source
+kinds and lineage. It claims no physical-meter qualification or real-site
+forecast accuracy. See [the forecasting contract](consumption-forecasting.md).

@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import argparse
 import csv
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from energy_agent_tools.capabilities import CapabilityBinding
-from energy_agent_tools.connectors import engineering, local
+from energy_agent_tools.connectors import analytics, engineering, local
 from energy_agent_tools.models import (
     Action,
     Asset,
@@ -79,7 +79,12 @@ def _synthetic_handler(
     async def handler(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResult:
         rows = _filter_rows(_read_rows(root, filename), args)
         values = [
-            {"timestamp": row["timestamp"], "value": float(row[field]), "asset_id": asset_id}
+            {
+                "timestamp": row["timestamp"],
+                "end": (_parse_timestamp(row["timestamp"]) + timedelta(minutes=30)).isoformat(),
+                "value": float(row[field]),
+                "asset_id": asset_id,
+            }
             for row in rows
         ]
         return EnergyResult(
@@ -92,6 +97,7 @@ def _synthetic_handler(
             asset_id=asset_id,
             timezone="UTC",
             resolution="30min",
+            quantity_shape="instantaneous" if unit in {"MW", "°C"} else "interval",
             quality="fixture",
             assumptions=[description],
             warnings=["Synthetic benchmark data; no real provider or meter was queried."],
@@ -115,6 +121,7 @@ def build_fixture_agent(root: Path, state_dir: Path) -> EnergyAgent:
     # connector is registered in this process, so every external-looking
     # capability is backed by the reviewed synthetic handlers below.
     engineering.register(registry)
+    analytics.register(registry)
     local.register(registry)
     local.register_csv(registry, root)
 

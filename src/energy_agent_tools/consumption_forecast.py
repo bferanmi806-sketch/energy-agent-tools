@@ -143,7 +143,9 @@ def forecast(
         len(selection_rows) != selection_rows_count
         or len(calibration_rows) != calibration_rows_count
     ):
-        raise EnergyError("insufficient_history", "Could not form complete weekly evaluation windows.")
+        raise EnergyError(
+            "insufficient_history", "Could not form complete weekly evaluation windows."
+        )
     if evaluation_training_rows[-1][1] - evaluation_training_rows[0][0] < 8 * _WEEK:
         raise EnergyError(
             "insufficient_history", "At least eight complete weekly cycles are needed for training."
@@ -204,9 +206,13 @@ def forecast(
             label="future temperature",
         )
         if _unit_key(historical_context[1].unit) not in _TEMPERATURE_UNITS:
-            raise EnergyError("invalid_context", "Temperature context units must be degrees Celsius.")
+            raise EnergyError(
+                "invalid_context", "Temperature context units must be degrees Celsius."
+            )
         if _unit_key(future_context[1].unit) not in _TEMPERATURE_UNITS:
-            raise EnergyError("invalid_context", "Temperature context units must be degrees Celsius.")
+            raise EnergyError(
+                "invalid_context", "Temperature context units must be degrees Celsius."
+            )
         context_inputs = [historical_context, future_context]
         model_context = {
             "evaluated": True,
@@ -367,9 +373,7 @@ def forecast(
             "weekly_profile_selection_mae_kwh": baseline_selection_mae,
             "temperature_candidate_selection_mae_kwh": candidate_selection_mae,
             "calibration_mae_kwh": _mae(calibration_values, calibration_predictions),
-            "weekly_profile_calibration_mae_kwh": _mae(
-                calibration_values, baseline_calibration
-            ),
+            "weekly_profile_calibration_mae_kwh": _mae(calibration_values, baseline_calibration),
             "temperature_candidate_calibration_mae_kwh": candidate_calibration_mae,
             "heldout_mae_kwh": _mae(heldout_actuals, heldout_selected),
             "weekly_profile_mae_kwh": _mae(heldout_actuals, heldout_baseline),
@@ -484,11 +488,17 @@ def _energy_intervals(
         if current[0] < previous[1]:
             raise EnergyError("overlapping_intervals", "History must not overlap or duplicate.")
         if current[0] > previous[1]:
-            raise EnergyError("coverage_gap", "History must be contiguous with no missing intervals.")
+            raise EnergyError(
+                "coverage_gap", "History must be contiguous with no missing intervals."
+            )
     if result.time_start is not None and result.time_start.astimezone(UTC) != intervals[0][0]:
-        raise EnergyError("invalid_coverage", "Declared history start does not match its first interval.")
+        raise EnergyError(
+            "invalid_coverage", "Declared history start does not match its first interval."
+        )
     if result.time_end is not None and result.time_end.astimezone(UTC) != intervals[-1][1]:
-        raise EnergyError("invalid_coverage", "Declared history end does not match its final interval.")
+        raise EnergyError(
+            "invalid_coverage", "Declared history end does not match its final interval."
+        )
     return intervals
 
 
@@ -510,7 +520,9 @@ def _context_values(
 ) -> list[float]:
     rows = _table(result.data)
     if len(rows) != len(expected):
-        raise EnergyError("invalid_context", f"{label} must cover every required timestamp exactly once.")
+        raise EnergyError(
+            "invalid_context", f"{label} must cover every required timestamp exactly once."
+        )
     values: dict[datetime, float] = {}
     for row in rows:
         if timestamp_column not in row or value_column not in row:
@@ -522,12 +534,18 @@ def _context_values(
             raise EnergyError("invalid_context", f"{label} contains a duplicate timestamp.")
         values[instant] = value
     if set(values) != set(expected):
-        raise EnergyError("invalid_context", f"{label} timestamps must match the required series exactly.")
+        raise EnergyError(
+            "invalid_context", f"{label} timestamps must match the required series exactly."
+        )
     return [values[instant] for instant in expected]
 
 
 def _matching_site(history: EnergyResult, context: EnergyResult, label: str) -> None:
-    if history.site_id is not None and context.site_id is not None and history.site_id != context.site_id:
+    if (
+        history.site_id is not None
+        and context.site_id is not None
+        and history.site_id != context.site_id
+    ):
         raise EnergyError("invalid_context", f"{label} context belongs to a different site.")
 
 
@@ -560,16 +578,16 @@ def _profile_value(
 ) -> float:
     key = _calendar_key(instant, zone, interval_minutes)
     if key not in profile:
-        raise EnergyError("insufficient_history", "History does not cover a required weekly time slot.")
+        raise EnergyError(
+            "insufficient_history", "History does not cover a required weekly time slot."
+        )
     return profile[key]
 
 
 def _profile_predictions(
     profile: dict[int, float], rows: list[_Interval], zone: ZoneInfo, interval_minutes: int
 ) -> list[float]:
-    return [
-        _profile_value(profile, start, zone, interval_minutes) for start, _, _ in rows
-    ]
+    return [_profile_value(profile, start, zone, interval_minutes) for start, _, _ in rows]
 
 
 def _fit_temperature_adjustment(
@@ -581,7 +599,9 @@ def _fit_temperature_adjustment(
     interval_minutes: int,
 ) -> tuple[float, dict[int, float]]:
     if len(rows) != len(values) or len(rows) != len(temperatures):
-        raise EnergyError("invalid_context", "Temperature rows must align with consumption history.")
+        raise EnergyError(
+            "invalid_context", "Temperature rows must align with consumption history."
+        )
     slot_values: dict[int, list[float]] = defaultdict(list)
     for (instant, _, _), temperature in zip(rows, temperatures, strict=True):
         slot_values[_calendar_key(instant, zone, interval_minutes)].append(temperature)
@@ -628,9 +648,7 @@ def _temperature_predictions(
     interval_minutes: int,
 ) -> list[float]:
     predictions: list[float] = []
-    for row, profile_value, temperature in zip(
-        rows, baseline, temperatures, strict=True
-    ):
+    for row, profile_value, temperature in zip(rows, baseline, temperatures, strict=True):
         key = _calendar_key(row[0], zone, interval_minutes)
         delta = _finite(temperature - slot_means[key], "temperature deviation")
         adjustment = _finite(coefficient * delta, "temperature adjustment")
@@ -639,18 +657,15 @@ def _temperature_predictions(
     return predictions
 
 
-def _future_intervals(
-    start: datetime, count: int, interval: timedelta
-) -> list[_Interval]:
-    return [
-        (begin := start + index * interval, begin + interval, 0.0)
-        for index in range(count)
-    ]
+def _future_intervals(start: datetime, count: int, interval: timedelta) -> list[_Interval]:
+    return [(begin := start + index * interval, begin + interval, 0.0) for index in range(count)]
 
 
 def _mae(actual: list[float], predicted: list[float]) -> float:
     if len(actual) != len(predicted) or not actual:
-        raise EnergyError("insufficient_history", "Chronological validation set is empty or mismatched.")
+        raise EnergyError(
+            "insufficient_history", "Chronological validation set is empty or mismatched."
+        )
     errors = [
         _finite(abs(a - p), "absolute validation error")
         for a, p in zip(actual, predicted, strict=True)
@@ -677,7 +692,9 @@ def _mean(values: list[float], label: str) -> float:
     try:
         result = mean(values)
     except (OverflowError, ValueError) as exc:
-        raise EnergyError("numeric_overflow", f"{label} overflowed or could not be computed.") from exc
+        raise EnergyError(
+            "numeric_overflow", f"{label} overflowed or could not be computed."
+        ) from exc
     return _finite(float(result), label)
 
 
@@ -696,7 +713,9 @@ def _timestamp(value: Any, label: str) -> datetime:
         else:
             raise TypeError
     except (TypeError, ValueError, OverflowError) as exc:
-        raise EnergyError("invalid_timestamp", f"{label} must be an offset-aware ISO-8601 timestamp.") from exc
+        raise EnergyError(
+            "invalid_timestamp", f"{label} must be an offset-aware ISO-8601 timestamp."
+        ) from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise EnergyError("naive_timestamp", f"{label} must include an explicit UTC offset.")
     return parsed.astimezone(UTC)
@@ -707,7 +726,7 @@ def _number(value: Any, *, allow_missing: bool) -> float | None:
         if allow_missing:
             return None
         raise EnergyError("missing_value", "A numeric value is required for every interval.")
-    if isinstance(value, bool) or isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, bool) or isinstance(value, (bytes, bytearray)):
         raise EnergyError("invalid_value", "Series values must be finite numbers.")
     try:
         parsed = float(value)
@@ -727,10 +746,14 @@ def _parameter_name(parameters: Json, key: str, default: str) -> str:
 
 def _coverage(value: Any) -> float:
     if isinstance(value, bool) or not isinstance(value, Real):
-        raise EnergyError("invalid_parameters", "coverage must be a number strictly between 0 and 1.")
+        raise EnergyError(
+            "invalid_parameters", "coverage must be a number strictly between 0 and 1."
+        )
     parsed = float(value)
     if not isfinite(parsed) or parsed <= 0 or parsed >= 1:
-        raise EnergyError("invalid_parameters", "coverage must be a number strictly between 0 and 1.")
+        raise EnergyError(
+            "invalid_parameters", "coverage must be a number strictly between 0 and 1."
+        )
     return parsed
 
 

@@ -220,7 +220,9 @@ def test_custom_tariff_columns_and_unknown_or_missing_values():
     start = datetime(2026, 1, 1, tzinfo=UTC)
     finish = start + timedelta(hours=1)
     forecast = _forecast([_row(start, finish, 2)])
-    custom_tariff = _tariff([{"begin": start.isoformat(), "finish": finish.isoformat(), "price": 0.5}])
+    custom_tariff = _tariff(
+        [{"begin": start.isoformat(), "finish": finish.isoformat(), "price": 0.5}]
+    )
     result = estimate(
         ("f", forecast),
         ("t", custom_tariff),
@@ -285,9 +287,7 @@ def test_rejects_overlapping_tariff_intervals_and_invalid_forecast_bounds():
     middle = start + timedelta(minutes=30)
     finish = start + timedelta(hours=1)
     forecast = _forecast([_row(start, finish, 1)])
-    overlapping = _tariff(
-        [_interval(start, finish, 0.2), _interval(middle, finish, 0.3)]
-    )
+    overlapping = _tariff([_interval(start, finish, 0.2), _interval(middle, finish, 0.3)])
     with pytest.raises(EnergyError, match="must not overlap"):
         estimate(("f", forecast), ("t", overlapping), {})
 
@@ -308,3 +308,15 @@ def test_rejects_overlapping_tariff_intervals_and_invalid_forecast_bounds():
 def test_rejects_wrong_forecast_kind_shape_or_power_unit(result):
     with pytest.raises(EnergyError):
         estimate(("f", result), ("t", _tariff([])), {})
+
+
+def test_decimal_tariff_cells_from_csv_preserve_exact_currency_arithmetic():
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    finish = start + timedelta(minutes=30)
+    forecast = _forecast([_row(start, finish, 0.5)])
+    result = estimate(
+        ("forecast", forecast),
+        ("csv-tariff", _tariff([_interval(start, finish, "20.1234567890123456789")], unit="p/kWh")),
+        {},
+    )
+    assert result.data["estimate"]["energy_cost"] == Decimal("0.1006172839450617283945")

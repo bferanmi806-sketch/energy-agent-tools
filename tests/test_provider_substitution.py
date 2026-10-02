@@ -170,7 +170,7 @@ async def test_single_source_workflows_substitute_three_provider_contracts(
     try:
         session = agent.session(scenario.user_id, scenario.site_id)
         parameters = {"start": WINDOW_START.isoformat(), "end": WINDOW_END.isoformat()}
-        if skill == "energy-baseline":
+        if skill in {"energy-baseline", "building-spike"}:
             parameters["window"] = 2
         response = await run_skill(agent, session, skill, parameters)
         assert response["ok"], response
@@ -186,8 +186,8 @@ async def test_single_source_workflows_substitute_three_provider_contracts(
             assert data["missing"] == 0
             assert data["sum"] == pytest.approx(scenario.expected_consumption_kwh)
         elif skill == "building-spike":
-            assert data["anomaly_count"] == 0
-        elif skill == "energy-baseline":
+            assert data["summary"]["spike_count"] == {"octopus": 0, "emon": 1, "csv": 1}[provider]
+        elif skill in {"energy-baseline", "building-spike"}:
             expected_baseline, expected_residual = {
                 "octopus": (1.5, -1),
                 "emon": (1, 1.25),

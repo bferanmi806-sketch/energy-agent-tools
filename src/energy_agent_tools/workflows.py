@@ -18,8 +18,21 @@ if TYPE_CHECKING:
     from .runtime import EnergyAgent
 
 RECIPES: dict[str, Json] = {
+    "consumption-forecast": {
+        "capabilities": ["get_energy_consumption", "forecast_energy_consumption"],
+        "operation": "forecast",
+    },
+    "forecast-bill": {
+        "capabilities": [
+            "get_energy_consumption",
+            "forecast_energy_consumption",
+            "get_tariff",
+            "estimate_forecast_bill",
+        ],
+        "operation": "forecast_bill",
+    },
     "yesterday-consumption": {"capabilities": ["get_energy_consumption"], "operation": "summary"},
-    "building-spike": {"capabilities": ["get_energy_consumption"], "operation": "anomaly"},
+    "building-spike": {"capabilities": ["get_energy_consumption"], "operation": "explain"},
     "electricity-cost": {
         "capabilities": ["get_energy_consumption", "get_tariff"],
         "operation": "cost",
@@ -44,7 +57,7 @@ RECIPES: dict[str, Json] = {
     },
     "grid-conditions": {
         "capabilities": ["get_grid_generation", "get_carbon_intensity"],
-        "operation": "evidence",
+        "operation": "grid",
     },
     "power-flow": {"capabilities": ["run_power_flow"], "operation": "evidence"},
     "building-comparison": {"capabilities": ["get_energy_consumption"], "operation": "compare"},
@@ -116,6 +129,10 @@ async def _bill_cost(
 
 
 async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, parameters: Json) -> Json:
+    if skill_id in {"consumption-forecast", "forecast-bill"}:
+        from .forecast_workflows import run_forecast_skill
+
+        return await run_forecast_skill(agent, session, skill_id, parameters)
     evidence: list[Json] = []
     output: Json | None = None
     try:
@@ -136,6 +153,8 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             "battery",
             "solar",
             "solar_balance",
+            "spike_context",
+            "grid",
             "alternative_tariff",
             "comparison_artifact",
             "consumption_transform",
@@ -160,6 +179,16 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
                 raise EnergyError(
                     "invalid_skill_parameters",
                     "Solar balance requires explicit total_load consumption and storage_mode none.",
+                )
+        for field, supported_skill in (
+            ("spike_context", "building-spike"),
+            ("grid", "grid-conditions"),
+        ):
+            if field in parameters and (
+                skill_id != supported_skill or not isinstance(parameters[field], dict)
+            ):
+                raise EnergyError(
+                    "invalid_skill_parameters", f"{field} applies only to {supported_skill}."
                 )
         recipe = RECIPES[skill_id]
         operation = recipe["operation"]
@@ -360,7 +389,89 @@ async def run_skill(agent: EnergyAgent, session: Session, skill_id: str, paramet
             results[capability] = observed.model_dump(mode="json")
         column = parameters.get("column", derived_consumption_column or "value")
         source = artifacts.get("get_energy_consumption") or artifacts.get("get_solar_forecast")
-        if operation in {"summary", "anomaly"}:
+        if operation == "explain":
+            context = parameters.get("spike_context", {})
+            if set(context) - {"weather_artifact", "equipment_artifacts", "parameters"}:
+                raise EnergyError("invalid_skill_parameters", "Unknown spike context fields.")
+            consumption = results["get_energy_consumption"]
+            explain_parameters = dict(context.get("parameters", {}))
+            explain_parameters.setdefault("column", column)
+            explain_parameters.setdefault("timestamp", _time_column(consumption))
+            explain_parameters.setdefault("end_column", _end_column(consumption) or "end")
+            if "window" in parameters:
+                explain_parameters.setdefault("window", parameters["window"])
+            explain_args: Json = {"consumption_artifact": source, "parameters": explain_parameters}
+            references: list[str] = [artifacts["get_energy_consumption"]]
+            if "weather_artifact" in context:
+                weather_ref = context["weather_artifact"]
+            else:
+                weather_request = CapabilityRequest(
+                    capability="get_weather",
+                    arguments=source_arguments("get_weather"),
+                    kind=DataKind.METERED,
+                    account_id=parameters.get("account_ids", {}).get("get_weather"),
+                    tool=parameters.get("tools", {}).get("get_weather"),
+                )
+                weather_resolution = agent.resolver.resolve(session, weather_request)
+                weather_ref = None
+                if weather_resolution["selected"]:
+                    observed_weather = await agent.resolver.execute(
+                        session, weather_request, persist=True
+                    )
+                    evidence.append({"context_capability": "get_weather", **observed_weather})
+                    if observed_weather["ok"]:
+                        weather_ref = observed_weather["result"]["data"]["artifact_id"]
+                else:
+                    evidence.append(
+                        {"context_capability": "get_weather", "resolution": weather_resolution}
+                    )
+            if weather_ref:
+                weather_ref = await window_artifact("weather_context", weather_ref)
+                weather_result = agent.workbench.read(session, weather_ref).model_dump(mode="json")
+                explain_args["weather_artifact"] = weather_ref
+                explain_parameters.setdefault("weather_timestamp", _time_column(weather_result))
+                references.append(weather_ref)
+            equipment_refs = [
+                await window_artifact("equipment_context", ref)
+                for ref in context.get("equipment_artifacts", [])
+            ]
+            explain_args["equipment_artifacts"] = equipment_refs
+            references.extend(equipment_refs)
+            output = await agent.resolver.execute(
+                session,
+                CapabilityRequest(
+                    capability="explain_consumption_spike",
+                    arguments=explain_args,
+                    input_artifacts=references,
+                ),
+            )
+        elif operation == "grid":
+            generation, carbon = results["get_grid_generation"], results["get_carbon_intensity"]
+            grid_parameters = dict(parameters.get("grid", {}))
+            grid_parameters.setdefault("timestamp", _time_column(generation))
+            grid_parameters.setdefault("second_timestamp", _time_column(carbon))
+            grid_parameters.setdefault("end_column", _end_column(generation) or "end")
+            grid_parameters.setdefault("second_end", _end_column(carbon) or "end")
+            if (
+                isinstance(generation.get("data"), list)
+                and generation["data"]
+                and "fuelType" in generation["data"][0]
+            ):
+                grid_parameters.setdefault("fuel_column", "fuelType")
+            references = [artifacts["get_grid_generation"], artifacts["get_carbon_intensity"]]
+            output = await agent.resolver.execute(
+                session,
+                CapabilityRequest(
+                    capability="analyse_grid_conditions",
+                    arguments={
+                        "generation_artifact": references[0],
+                        "carbon_artifact": references[1],
+                        "parameters": grid_parameters,
+                    },
+                    input_artifacts=references,
+                ),
+            )
+        elif operation in {"summary", "anomaly"}:
             output = await agent.execute(
                 session,
                 "WORKBENCH_SUMMARIZE" if operation == "summary" else "WORKBENCH_ANOMALY",

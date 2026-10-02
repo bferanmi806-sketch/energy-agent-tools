@@ -212,3 +212,23 @@ def test_weather_uses_exact_instants_across_offset_spellings_and_no_nearest_matc
         item["type"] == "observed_weather_association"
         for item in unmatched.data["spikes"][0]["supported_explanations"]
     )
+
+
+def test_exact_ratio_threshold_survives_decimal_float_rounding():
+    result = explain(("meter", _result(_rows([1.2, 0.8, 1.6, 2.4]))), {"window": 2})
+    assert result.data["summary"]["spike_count"] == 1
+    assert result.data["spikes"][0]["load_to_baseline_ratio"] == pytest.approx(2)
+
+
+def test_equipment_can_declare_an_independent_endpoint_column():
+    load = _result(_rows([1, 1, 1, 1, 5]))
+    for row in load.data:
+        row["to"] = row.pop("end")
+    equipment = _result(_rows([0.2, 0.2, 0.2, 0.2, 4.2]), asset_id="oven")
+    result = explain(
+        ("meter", load),
+        {"end_column": "to", "equipment_end_column": "end"},
+        equipment=[("oven", equipment)],
+    )
+    assert result.data["summary"]["spike_count"] == 1
+    assert result.data["spikes"][0]["supported_explanations"][0]["asset_id"] == "oven"

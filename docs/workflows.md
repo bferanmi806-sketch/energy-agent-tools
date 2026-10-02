@@ -82,21 +82,23 @@ kind, unit, resolution, coverage, quality, and reasons for rejection. Equal
 available candidates remain ambiguous. Credentials are configured on the
 operator side and must never be placed in `arguments`.
 
-## The twelve workflow IDs
+## The fourteen workflow IDs
 
-The registry currently defines these twelve IDs. The capability order in this
+The registry currently defines these fourteen IDs. The capability order in this
 table is the order used for the workflow's `artifacts` map and evidence.
 
 | ID | Capabilities | Operation | Additional input |
 | --- | --- | --- | --- |
+| `consumption-forecast` | `get_energy_consumption`, `forecast_energy_consumption` | future consumption | Requires complete historical interval energy and a site timezone. |
+| `forecast-bill` | `get_energy_consumption`, `forecast_energy_consumption`, `get_tariff`, `estimate_forecast_bill` | cost calculated from forecast | Requires explicit tariff validity covering the future horizon. |
 | `yesterday-consumption` | `get_energy_consumption` | summary | A site is required when `start`/`end` are omitted. |
-| `building-spike` | `get_energy_consumption` | anomaly screening | Uses the workbench anomaly defaults; there is no workflow-level threshold field. |
+| `building-spike` | `get_energy_consumption`, optional observed `get_weather`, `explain_consumption_spike` | supported spike evidence | Accepts explicit equipment/weather artifacts and screening parameters in `spike_context`. |
 | `electricity-cost` | `get_energy_consumption`, `get_tariff` | exact-interval cost | Both inputs must cover the same UTC starts and resolution. |
 | `cheapest-battery` | `get_tariff`, `get_carbon_intensity` | constrained battery schedule | Requires a complete battery object and matching explicit tariff/carbon intervals. Objective is `cost`. |
 | `cleanest-battery` | `get_tariff`, `get_carbon_intensity` | constrained battery schedule | Same inputs as `cheapest-battery`; objective is `carbon`. |
 | `solar-consumption` | `get_energy_consumption`, `get_generation` | alignment or declared solar balance | `get_generation` must be supplied by a reviewed binding. |
 | `solar-forecast` | `get_solar_forecast` when resolved, otherwise `get_weather` | direct interval-energy forecast summary or weather plus PV estimate | Direct forecasts require reviewed forecast/kWh semantics. Otherwise the workflow needs explicit PV model inputs. Equal direct forecast sources require a choice. |
-| `grid-conditions` | `get_grid_generation`, `get_carbon_intensity` | source evidence | Fetches and returns the reviewed grid sources; no additional derived analysis branch currently runs. |
+| `grid-conditions` | `get_grid_generation`, `get_carbon_intensity`, `analyse_grid_conditions` | combined grid comparison | Requires exact UTC starts; explicit endpoints must match when supplied. |
 | `power-flow` | `run_power_flow` | source evidence | Executes the reviewed simulation tool and returns its result as evidence. |
 | `building-comparison` | `get_energy_consumption` | calendar comparison or alignment | Without `comparison_artifact`, runs one-series calendar comparison. With it, requires matching metered units and aligns the two artifacts. |
 | `tariff-comparison` | `get_energy_consumption`, `get_tariff` | cost plus alternative cost | Requires `alternative_tariff`, an existing same-session artifact with exact coverage. |
@@ -104,9 +106,12 @@ table is the order used for the workflow's `artifacts` map and evidence.
 
 The descriptions in `skills.py` are guidance; the table above follows the
 executable `RECIPES` and `run_skill` branches. In particular, `building-spike`
-fetches only consumption, `solar-consumption` uses consumption plus generation,
-and the evidence workflows do not silently substitute a public grid series for
-a site's generation or telemetry.
+fetches consumption and optionally observed weather. `solar-consumption` uses
+consumption plus generation. A public grid series cannot silently substitute
+for a site's generation or telemetry.
+
+See [consumption forecasting](consumption-forecasting.md) for the two forecast
+recipes and their separate request fields.
 
 ## Workflow-specific contracts and pitfalls
 
@@ -126,12 +131,22 @@ complete day.
 
 ### `building-spike`
 
-The workflow persists the consumption source and calls `WORKBENCH_ANOMALY` on
-the selected `column`. Its current executable request has no `threshold`,
-seasonality, weather, occupancy, or equipment-join field. The workbench uses a
-robust median/MAD screen with the tool's default threshold and returns a bounded
-preview. A counter reset, a missing interval, or a timezone error can look like
-a spike; an identified outlier is a screening result, not a causal diagnosis.
+The workflow compares each interval with the preceding available observations,
+using a default window of four, a load/baseline ratio of two and a minimum excess
+of 0.1 kWh. Inputs must declare interval energy and explicit matching endpoints.
+Gaps remain visible; the baseline does not fill missing observations.
+
+`spike_context` accepts `weather_artifact`, `equipment_artifacts` and a
+`parameters` object. Parameters include `window`, `spike_ratio`,
+`min_excess_kwh`, column names and `equipment_end_column`. Weather is resolved
+as observed `get_weather` when available. Future weather is never relabeled as
+observed evidence. Equipment artifacts must be explicitly supplied, belong to
+the scoped user/session, match the site's intervals, and fit within site load.
+
+The result contains `intervals`, `spikes` and `summary`. Supported explanations
+identify coincident equipment increases or sufficiently supported observed
+weather associations. They include source references and causal limits.
+Missing evidence is reported alongside the explanations.
 
 ### `electricity-cost`
 
@@ -250,15 +265,19 @@ that changes any reviewed semantic is rejected instead of being relabeled.
 
 ### `grid-conditions` and `power-flow`
 
-These workflows return source evidence rather than a hidden conclusion. The
-grid workflow requires reviewed `get_grid_generation` and carbon bindings and
-preserves their actual source, units, coverage, and kinds. The built-in grid
-generation binding is backed by the native Elexon FUELHH dataset and returns
-grid MW data; a regional or national grid series is not a site's PV generation.
-Site PV `get_generation` remains a separate operator-reviewed capability,
-normally with kWh semantics. Generic `telemetry` requests and any generation
-request without a reviewed source must stop with `capability_unavailable` or
-`capability_ambiguous`; never fabricate a provider, an asset, or a measurement.
+The grid workflow combines reviewed generation power and carbon intensity at
+exact UTC starts. It reports aligned observations, generation statistics,
+lower-carbon intervals and the generation peak. Explicit fuel classifications
+can produce fuel shares; the workflow never invents a low-carbon taxonomy.
+Source kinds, units and carbon species remain visible. These comparisons do not
+establish grid stability, marginal emissions, or a site's generation/emissions.
+A continuous horizon is claimed only when both sources have matching contiguous
+explicit endpoints. `grid` accepts column mappings and an optional
+`carbon_threshold_g_per_kwh`.
+
+The built-in grid source is Elexon FUELHH in MW. Site PV `get_generation` remains
+a separate reviewed capability. The power-flow workflow executes the reviewed
+solver and returns simulation evidence.
 
 When network arguments are constructed from saved source data, supply
 `input_artifacts` with those artifact IDs. Capability execution checks each

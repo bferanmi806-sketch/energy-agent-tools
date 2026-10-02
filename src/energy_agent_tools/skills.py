@@ -5,6 +5,44 @@ from .workflows import RECIPES
 
 SKILLS: list[Json] = [
     {
+        "id": "consumption-forecast",
+        "intent": "Forecast my electricity consumption for the next eight days from the previous three months",
+        "capabilities": ["get_energy_consumption", "forecast_energy_consumption"],
+        "sequence": [
+            "Resolve the site meter and retrieve the requested complete historical window.",
+            "Validate metered interval energy and available historical/future contextual data.",
+            "Produce future interval forecasts, chronological validation diagnostics and empirical uncertainty.",
+        ],
+        "supporting_tools": ["analytics.forecast_consumption"],
+        "pitfalls": [
+            "Historical measurements remain metered; future consumption is forecast.",
+            "Backtest errors do not guarantee future interval or horizon coverage.",
+            "Missing meter history and future context cannot be silently filled.",
+        ],
+    },
+    {
+        "id": "forecast-bill",
+        "intent": "Forecast my energy use for eight days and estimate my bill from three months of usage",
+        "capabilities": [
+            "get_energy_consumption",
+            "forecast_energy_consumption",
+            "get_tariff",
+            "estimate_forecast_bill",
+        ],
+        "sequence": [
+            "Resolve the historical meter and forecast consumption for the selected future local-day window.",
+            "Resolve future tariff validity and preserve forecast uncertainty and source lineage.",
+            "Calculate energy-cost scenarios and explicitly supplied standing charges and tax treatment.",
+        ],
+        "supporting_tools": ["analytics.forecast_consumption", "analytics.estimate_forecast_bill"],
+        "pitfalls": [
+            "Estimated money is calculated from forecast consumption, not a measured bill.",
+            "Unknown future tariff periods cannot be invented.",
+            "Summed interval uncertainty bands are scenarios, not a guaranteed horizon confidence interval.",
+            "A full bill requires an explicit standing charge and tax treatment.",
+        ],
+    },
+    {
         "id": "yesterday-consumption",
         "intent": "How much electricity did I use yesterday?",
         "capabilities": ["get_energy_consumption", "analyse_timeseries"],
@@ -23,13 +61,13 @@ SKILLS: list[Json] = [
     {
         "id": "building-spike",
         "intent": "Why did my building's consumption spike?",
-        "capabilities": ["get_energy_consumption", "get_weather", "detect_anomaly"],
+        "capabilities": ["get_energy_consumption", "get_weather", "explain_consumption_spike"],
         "sequence": [
             "Retrieve baseline and suspect consumption periods.",
-            "Persist and resample to matching bins.",
-            "Screen anomalies, join weather and inspect occupancy/equipment evidence.",
+            "Require matching explicit interval boundaries for consumption and equipment.",
+            "Compare spikes with observed weather and explicitly supplied equipment artifacts.",
         ],
-        "supporting_tools": ["WORKBENCH_ANOMALY", "WORKBENCH_JOIN"],
+        "supporting_tools": [],
         "pitfalls": [
             "Correlation is not cause.",
             "Counter resets, missing intervals and timezone errors mimic spikes.",
@@ -70,11 +108,11 @@ SKILLS: list[Json] = [
     {
         "id": "grid-conditions",
         "intent": "Analyse grid conditions",
-        "capabilities": ["get_generation", "get_carbon_intensity"],
+        "capabilities": ["get_grid_generation", "get_carbon_intensity", "analyse_grid_conditions"],
         "sequence": [
-            "Fetch grid generation/demand and carbon series.",
-            "Match location and time horizon.",
-            "Report observed/calculated values separately from forecasts.",
+            "Fetch grid generation power and carbon intensity series.",
+            "Match exact UTC timestamps and any explicit interval endpoints.",
+            "Compare generation peaks and lower-carbon intervals, preserving source kinds.",
         ],
         "supporting_tools": ["WORKBENCH_JOIN"],
         "pitfalls": [

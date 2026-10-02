@@ -1,0 +1,431 @@
+{
+  "toolkit": {
+    "id": "energy-analytics",
+    "name": "Energy analytics",
+    "description": "Offline consumption forecasts, evidence-supported spike screening and combined grid conditions.",
+    "runtime": "native",
+    "status": "experimental",
+    "auth_required": false,
+    "docs_url": null,
+    "version": "1.0.0",
+    "categories": [
+      "forecasting",
+      "time-series",
+      "energy"
+    ]
+  },
+  "tools": [
+    {
+      "name": "analytics.forecast_consumption",
+      "toolkit": "energy-analytics",
+      "description": "Forecast future interval electricity consumption from scoped metered history with chronological validation, optional temperature context, uncertainty and provenance.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "history_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "historical_context_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "future_context_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "interval_minutes": {
+            "enum": [
+              15,
+              30,
+              60
+            ]
+          },
+          "column": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "end_column": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "temperature_column": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "context_timestamp": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "coverage": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 0.99
+          }
+        },
+        "required": [
+          "history_artifact",
+          "start",
+          "end",
+          "timezone",
+          "interval_minutes"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "forecast_energy_consumption"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "forecast",
+      "result_unit": "kWh",
+      "dependencies": []
+    },
+    {
+      "name": "analytics.explain_consumption_spike",
+      "toolkit": "energy-analytics",
+      "description": "Screen interval load spikes against available observed weather and equipment evidence, reporting supported associations and missing evidence without claiming causation.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "consumption_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "weather_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "equipment_artifacts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "maxItems": 8,
+            "uniqueItems": true
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "timestamp": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "end_column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "window": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "weather_column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "weather_timestamp": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "equipment_column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "equipment_timestamp": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "equipment_end_column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "spike_ratio": {
+                "type": "number",
+                "exclusiveMinimum": 1
+              },
+              "min_excess_kwh": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "consumption_artifact"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "explain_consumption_spike"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "calculated",
+      "result_unit": null,
+      "dependencies": []
+    },
+    {
+      "name": "analytics.analyse_grid_conditions",
+      "toolkit": "energy-analytics",
+      "description": "Combine timestamp-matched grid power and carbon intensity, compare generation peaks and lower-carbon intervals, and calculate explicit fuel shares without inferring grid stability or site emissions.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "generation_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "carbon_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "second_timestamp": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "second_column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "end_column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "second_end": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "fuel_column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "carbon_threshold_g_per_kwh": {
+                "type": "number",
+                "minimum": 0
+              },
+              "low_carbon_fuels": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "maxItems": 50,
+                "uniqueItems": true
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "generation_artifact",
+          "carbon_artifact"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "analyse_grid_conditions"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "calculated",
+      "result_unit": "mixed",
+      "dependencies": []
+    },
+    {
+      "name": "analytics.estimate_forecast_bill",
+      "toolkit": "energy-analytics",
+      "description": "Calculate forecast electricity cost and explicit standing-charge/tax bill scenarios from future consumption intervals and covering tariff validity periods; retain forecast basis and uncertainty limitations.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "forecast_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "tariff_artifact": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "tariff_timestamp": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "tariff_end": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "tariff_column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "billing": {
+                "type": "object",
+                "properties": {
+                  "standing_charge": {
+                    "type": "object",
+                    "properties": {
+                      "amount_per_day": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "currency": {
+                        "enum": [
+                          "GBP",
+                          "USD",
+                          "EUR"
+                        ]
+                      },
+                      "taxable": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "amount_per_day",
+                      "currency",
+                      "taxable"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "tax": {
+                    "type": "object",
+                    "properties": {
+                      "rate": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "energy_taxable": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "rate",
+                      "energy_taxable"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "standing_charge",
+                  "tax",
+                  "source"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "forecast_artifact",
+          "tariff_artifact"
+        ],
+        "additionalProperties": false
+      },
+      "capabilities": [
+        "estimate_forecast_bill"
+      ],
+      "actions": [
+        "calculation"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "calculated",
+      "result_unit": null,
+      "dependencies": []
+    }
+  ]
+}

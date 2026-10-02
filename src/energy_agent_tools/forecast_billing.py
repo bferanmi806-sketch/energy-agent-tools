@@ -110,7 +110,10 @@ def estimate(
             for interval in forecast_intervals:
                 duration_ns = interval.end.value - interval.start.value
                 cursor = interval.start
-                while tariff_index < len(tariff_intervals) and tariff_intervals[tariff_index].end <= cursor:
+                while (
+                    tariff_index < len(tariff_intervals)
+                    and tariff_intervals[tariff_index].end <= cursor
+                ):
                     tariff_index += 1
 
                 tariff_cursor = tariff_index
@@ -150,7 +153,8 @@ def estimate(
                     segment_count += 1
                     if segment_count > MAX_OUTPUT_ROWS:
                         raise EnergyError(
-                            "output_too_large", "Tariff and forecast splits exceed the output limit."
+                            "output_too_large",
+                            "Tariff and forecast splits exceed the output limit.",
                         )
                     cursor = segment_end
                     if cursor == tariff_interval.end:
@@ -182,7 +186,9 @@ def estimate(
                     }
                 )
     except (ArithmeticError, ValueError) as exc:
-        raise EnergyError("precision_limit", "Forecast billing arithmetic exceeded its limit.") from exc
+        raise EnergyError(
+            "precision_limit", "Forecast billing arithmetic exceeded its limit."
+        ) from exc
 
     if len(interval_output) > MAX_OUTPUT_ROWS:
         raise EnergyError("output_too_large", "Forecast intervals exceed the output limit.")
@@ -214,7 +220,9 @@ def estimate(
         }
         lower_data: Json = {"energy_cost": _sum_rows(lower_rows), "currency": currency}
         upper_data: Json = {"energy_cost": _sum_rows(upper_rows), "currency": currency}
-        warnings.append("Standing charge and tax were not supplied; this is an energy-cost estimate.")
+        warnings.append(
+            "Standing charge and tax were not supplied; this is an energy-cost estimate."
+        )
     else:
         bill_parameters = _billing_parameters(
             billing,
@@ -306,7 +314,9 @@ def _input(value: tuple[str, EnergyResult], name: str) -> tuple[str, EnergyResul
         or not value[0].strip()
         or not isinstance(value[1], EnergyResult)
     ):
-        raise EnergyError("invalid_input", f"The {name} input needs an artifact ID and energy result.")
+        raise EnergyError(
+            "invalid_input", f"The {name} input needs an artifact ID and energy result."
+        )
     return value
 
 
@@ -316,7 +326,9 @@ def _forecast_intervals(
     if not isinstance(result.data, dict) or "intervals" not in result.data:
         raise EnergyError("not_tabular", "Forecast data must contain an intervals array.")
     if "summary" not in result.data or "model" not in result.data:
-        raise EnergyError("invalid_forecast", "Forecast data must include summary and model metadata.")
+        raise EnergyError(
+            "invalid_forecast", "Forecast data must include summary and model metadata."
+        )
     rows = result.data["intervals"]
     if not isinstance(rows, list) or not rows:
         raise EnergyError("not_tabular", "Forecast intervals must be a nonempty array.")
@@ -328,11 +340,15 @@ def _forecast_intervals(
         if not isinstance(row, dict):
             raise EnergyError("not_tabular", "Every forecast interval must be an object.")
         if not required <= row.keys():
-            raise EnergyError("column_not_found", "Forecast intervals need timestamp, end and bounds.")
+            raise EnergyError(
+                "column_not_found", "Forecast intervals need timestamp, end and bounds."
+            )
         start = _timestamp(row["timestamp"], "forecast timestamp")
         end = _timestamp(row["end"], "forecast interval end")
         if end <= start:
-            raise EnergyError("invalid_interval", "Every forecast interval end must follow its start.")
+            raise EnergyError(
+                "invalid_interval", "Every forecast interval end must follow its start."
+            )
         value = _multiply_exact(_decimal(row["value"], "forecast value"), to_kwh)
         lower = _multiply_exact(_decimal(row["lower"], "forecast lower bound"), to_kwh)
         upper = _multiply_exact(_decimal(row["upper"], "forecast upper bound"), to_kwh)
@@ -372,7 +388,9 @@ def _tariff_intervals(
         if not isinstance(row, dict):
             raise EnergyError("not_tabular", "Every tariff interval must be an object.")
         if not required <= row.keys():
-            raise EnergyError("column_not_found", "Tariff rows need explicit start, end and price columns.")
+            raise EnergyError(
+                "column_not_found", "Tariff rows need explicit start, end and price columns."
+            )
         if row[end_name] is None:
             raise EnergyError(
                 "open_ended_tariff", "Every tariff interval needs an explicit end timestamp."
@@ -380,7 +398,9 @@ def _tariff_intervals(
         start = _timestamp(row[timestamp_name], "tariff timestamp")
         end = _timestamp(row[end_name], "tariff interval end")
         if end <= start:
-            raise EnergyError("invalid_interval", "Every tariff interval end must follow its start.")
+            raise EnergyError(
+                "invalid_interval", "Every tariff interval end must follow its start."
+            )
         raw_rate = _decimal(row[column_name], "tariff price")
         parsed.append(_TariffInterval(start, end, raw_rate, _multiply_exact(raw_rate, rate_factor)))
     parsed.sort(key=lambda interval: interval.start)
@@ -411,17 +431,21 @@ def _timestamp(value: Any, description: str) -> pd.Timestamp:
 def _decimal(value: Any, description: str) -> Decimal:
     if value is None:
         raise EnergyError("missing_value", f"{description} is missing.")
-    if isinstance(value, bool) or not isinstance(value, (Real, Decimal)):
+    if isinstance(value, bool) or not isinstance(value, (Real, Decimal, str)):
         raise EnergyError("invalid_value", f"{description} must be a finite numeric value.")
     try:
         parsed = Decimal(str(value))
     except (ArithmeticError, ValueError) as exc:
-        raise EnergyError("invalid_value", f"{description} must be a finite numeric value.") from exc
+        raise EnergyError(
+            "invalid_value", f"{description} must be a finite numeric value."
+        ) from exc
     if not parsed.is_finite():
         raise EnergyError("invalid_value", f"{description} must be finite.")
+    exponent = parsed.as_tuple().exponent
+    assert isinstance(exponent, int)  # Finite Decimal exponents are integers.
     if (
         len(parsed.as_tuple().digits) > _DECIMAL_DIGITS_LIMIT
-        or abs(parsed.as_tuple().exponent) > _DECIMAL_DIGITS_LIMIT
+        or abs(exponent) > _DECIMAL_DIGITS_LIMIT
     ):
         raise EnergyError("invalid_value", f"{description} exceeds the supported decimal range.")
     return parsed
@@ -447,11 +471,15 @@ def _working_precision(values: list[Decimal], count: int) -> int:
     count_digits = len(str(max(count, 1)))
     precision = highest_adjusted - lowest_exponent + count_digits + _EXTRA_PRECISION
     if precision > _PRECISION_LIMIT:
-        raise EnergyError("precision_limit", "Forecast billing exceeds supported decimal precision.")
+        raise EnergyError(
+            "precision_limit", "Forecast billing exceeds supported decimal precision."
+        )
     return max(128, precision)
 
 
-def _scenario_costs(lower: Decimal, upper: Decimal, coefficient: Decimal) -> tuple[Decimal, Decimal]:
+def _scenario_costs(
+    lower: Decimal, upper: Decimal, coefficient: Decimal
+) -> tuple[Decimal, Decimal]:
     if coefficient < 0:
         return upper * coefficient, lower * coefficient
     return lower * coefficient, upper * coefficient

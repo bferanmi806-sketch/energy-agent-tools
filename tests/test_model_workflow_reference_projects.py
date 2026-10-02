@@ -197,16 +197,14 @@ def test_six_offline_model_workflows_have_source_evidence_and_real_failures() ->
     assert coverage["timestamps_match_exactly"] is True
     assert coverage["horizon_claimed"] is False
     lineage = combined["provenance"][0]["inputs"]
-    assert [item["artifact_id"] for item in lineage] == [
-        generation["artifact_id"],
-        carbon["artifact_id"],
-    ]
+    assert len(lineage) == 2
+    assert generation["artifact_id"] in str(lineage[0]["provenance"])
+    assert carbon["artifact_id"] in str(lineage[1]["provenance"])
     assert grid["failure_code"] == "file_forbidden"
     assert any("national averages" in item for item in grid["limitations"])
     assert any("marginal emissions" in item for item in grid["limitations"])
     assert any(
-        "grid stability" in item and "operating limits" in item
-        for item in grid["limitations"]
+        "grid stability" in item and "operating limits" in item for item in grid["limitations"]
     )
 
     power_flow = _recipe(report, "power-flow")

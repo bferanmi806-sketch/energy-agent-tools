@@ -311,7 +311,24 @@ def register_csv(registry: Registry, root: Path) -> None:
                 instant = pd.Timestamp(row[timestamp])
                 if instant.tzinfo is None:
                     raise EnergyError("naive_timestamp", "CSV timestamps require explicit offsets.")
-                if (start is None or instant >= start) and (end is None or instant < end):
+                finish = instant
+                if args.get("window_mode") == "overlap":
+                    endpoint = args.get("end_column", "end")
+                    if not row.get(endpoint):
+                        raise EnergyError(
+                            "interval_end_required",
+                            "Overlap selection requires explicit interval ends.",
+                        )
+                    finish = pd.Timestamp(row[endpoint])
+                    if finish.tzinfo is None or finish <= instant:
+                        raise EnergyError(
+                            "invalid_interval",
+                            "CSV interval ends require offsets and must follow their starts.",
+                        )
+                lower_matches = start is None or (
+                    finish > start if args.get("window_mode") == "overlap" else instant >= start
+                )
+                if lower_matches and (end is None or instant < end):
                     filtered.append(row)
             rows = filtered
         return EnergyResult(
@@ -361,6 +378,8 @@ def register_csv(registry: Registry, root: Path) -> None:
                     "start": {"type": "string", "format": "date-time"},
                     "end": {"type": "string", "format": "date-time"},
                     "timestamp": {"type": "string"},
+                    "window_mode": {"enum": ["starts", "overlap"], "default": "starts"},
+                    "end_column": {"type": "string", "minLength": 1},
                     "kind": {"enum": [k.value for k in DataKind]},
                     "unit": {"type": "string", "minLength": 1},
                     "timezone": {"type": "string"},

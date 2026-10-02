@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .capabilities import CapabilityBinding
-from .connectors import dss, engineering, extended, http, local, networks
+from .connectors import analytics, dss, engineering, extended, http, local, networks
 from .models import Asset, ConnectedAccount, Json, Site
 from .registry import Registry
 from .runtime import EnergyAgent
@@ -36,6 +36,7 @@ def build_agent(
     registry = Registry()
     http.register(registry)
     engineering.register(registry)
+    analytics.register(registry)
     networks.register(registry)
     dss.register(registry)
     extended.register(registry, data_root=data_root)

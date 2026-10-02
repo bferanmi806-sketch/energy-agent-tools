@@ -137,15 +137,18 @@ def test_forecasts_eight_days_from_ninety_days_of_exact_weekly_history() -> None
     assert result.provenance[0]["inputs"][0]["kind"] == "metered"
     assert result.data["model"]["selection_rows"] == 7 * 96
     assert result.data["model"]["calibration_rows"] == 7 * 96
-    assert result.data["model"]["final_training_start"] == result.data["model"][
-        "evaluation_training_start"
-    ]
-    assert result.data["model"]["final_training_end"] > result.data["model"][
-        "evaluation_training_end"
-    ]
-    assert all(row["value"] == pytest.approx(_weekly_value(
-        datetime.fromisoformat(row["timestamp"]).astimezone(UTC)
-    )) for row in intervals)
+    assert (
+        result.data["model"]["final_training_start"]
+        == result.data["model"]["evaluation_training_start"]
+    )
+    assert (
+        result.data["model"]["final_training_end"] > result.data["model"]["evaluation_training_end"]
+    )
+    assert all(
+        row["value"]
+        == pytest.approx(_weekly_value(datetime.fromisoformat(row["timestamp"]).astimezone(UTC)))
+        for row in intervals
+    )
 
 
 def test_accepts_three_calendar_months_that_are_under_ninety_days() -> None:
@@ -239,9 +242,10 @@ def test_temperature_candidate_must_win_holdout_and_future_context_does_not_leak
     assert cold_model["context"]["historical_artifact_id"] == "historical-weather"
     assert cold_result.provenance[0]["inputs"][2]["kind"] == "forecast"
     assert cold_result.data["intervals"][0]["value"] < warm_result.data["intervals"][0]["value"]
-    assert cold_model["metrics"]["temperature_candidate_mae_kwh"] < cold_model["metrics"][
-        "weekly_profile_mae_kwh"
-    ]
+    assert (
+        cold_model["metrics"]["temperature_candidate_mae_kwh"]
+        < cold_model["metrics"]["weekly_profile_mae_kwh"]
+    )
 
 
 def test_calibration_rows_do_not_change_selection_and_final_refit_uses_all_history() -> None:
@@ -336,12 +340,14 @@ def test_forecast_keeps_exact_utc_cadence_across_dst(
     assert len(intervals) == 3 * 96
     assert len(selected) == expected_count
     for previous, current in zip(intervals, intervals[1:], strict=False):
-        assert datetime.fromisoformat(current["timestamp"]).astimezone(UTC) - datetime.fromisoformat(
-            previous["timestamp"]
-        ).astimezone(UTC) == _STEP
-        assert datetime.fromisoformat(current["timestamp"]).astimezone(UTC) == datetime.fromisoformat(
-            previous["end"]
-        ).astimezone(UTC)
+        assert (
+            datetime.fromisoformat(current["timestamp"]).astimezone(UTC)
+            - datetime.fromisoformat(previous["timestamp"]).astimezone(UTC)
+            == _STEP
+        )
+        assert datetime.fromisoformat(current["timestamp"]).astimezone(
+            UTC
+        ) == datetime.fromisoformat(previous["end"]).astimezone(UTC)
 
 
 def test_refuses_short_history_gap_wrong_shape_power_and_negative_energy() -> None:
@@ -351,7 +357,7 @@ def test_refuses_short_history_gap_wrong_shape_power_and_negative_energy() -> No
 
     short = full.model_copy(
         update={
-            "data": rows[:14 * 96],
+            "data": rows[: 14 * 96],
             "time_end": datetime.fromisoformat(rows[14 * 96 - 1]["end"]),
         }
     )

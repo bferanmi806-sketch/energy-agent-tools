@@ -31,7 +31,7 @@ The report contains exactly these recipes:
 | `cleanest-battery` | SciPy schedule charges in the lowest-carbon hour, which differs from the cheapest hour. | Charge power cannot reach the requested final state of charge. |
 | `solar-consumption` | Declared total load and no storage produce interval self-consumption and estimated import/export. | A requested value column does not exist. |
 | `solar-forecast` | pvlib estimates AC output from long-form irradiance, temperature, and wind forecast rows. | Temperature is supplied in kelvin where the workflow requires Celsius. |
-| `grid-conditions` | The workflow returns the grid generation and carbon source outputs as separate evidence. | The bound grid generation CSV is removed before a second fetch. |
+| `grid-conditions` | The workflow combines matched grid generation and carbon values and reports the generation peak and lower-carbon intervals. | The bound grid generation CSV is removed before a second fetch. |
 | `power-flow` | pandapower solves a two-bus feeder with the CSV load snapshot. | A network without a slack reference is rejected. |
 
 The battery schedule is advisory and cannot control a device. It includes
@@ -41,7 +41,7 @@ charges. The solar result is an estimate from forecast weather, not a
 generation meter reading. The `solar-consumption` reference declares total load and no storage. Its
 interval netting estimates cannot recover opposing flows within an interval
 and are not grid meter readings. The `grid-conditions`
-workflow is evidence-only and produces no combined grid metric. A balanced
+workflow compares source power and carbon intensity; it cannot establish local grid stability or marginal emissions. A balanced
 steady-state power flow does not cover protection, transient behavior, or
 operational switching. Its feeder input is identified in the report by its
 session artifact and CSV provenance. The power-flow call supplies that artifact

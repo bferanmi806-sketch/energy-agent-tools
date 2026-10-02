@@ -254,7 +254,7 @@ def _result(
             if not isinstance(row, dict):
                 continue
             start_text = row.get("from") or row.get("timestamp")
-            end_text = row.get("to")
+            end_text = row.get("to") or row.get("end")
             if isinstance(start_text, str):
                 try:
                     start = _parse_time(start_text, "timestamp")
@@ -755,6 +755,7 @@ async def _octopus_consumption(args: dict[str, Any], ctx: ExecutionContext) -> E
         docs_url=OCTOPUS_DOCS,
         endpoint=endpoint,
         resolution="provider interval",
+        quantity_shape="interval",
     )
 
 
@@ -1074,6 +1075,19 @@ async def _emon_feed(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResul
     interval = args.get("interval", 60)
     if isinstance(interval, bool) or not isinstance(interval, int) or not 1 <= interval <= 86_400:
         raise _error("invalid_interval", "interval must be an integer from 1 to 86400 seconds.")
+    settings = _account_settings(ctx, "OpenEnergyMonitor")
+    interval_position = settings.get("interval_position")
+    if interval_position is not None and (
+        interval_position != "start"
+        or settings.get("quantity_shape") != "interval"
+        or isinstance(settings.get("interval_seconds"), bool)
+        or not isinstance(settings.get("interval_seconds"), int)
+        or settings.get("interval_seconds") != interval
+    ):
+        raise _error(
+            "interval_mapping_incompatible",
+            "Interval bounds require an explicit start position and reviewed interval_seconds matching the request.",
+        )
     assert end is not None
     endpoint = "/feed/data.json"
     params = {
@@ -1115,7 +1129,16 @@ async def _emon_feed(args: dict[str, Any], ctx: ExecutionContext) -> EnergyResul
                 "kind": DataKind.METERED.value,
             }
         )
+    if interval_position == "start":
+        for row in values:
+            row["end"] = _iso(
+                _parse_time(row["timestamp"], "interval start") + timedelta(seconds=interval)
+            )
     warnings = ["Emoncms feed units are provider-defined unless configured on the account."]
+    if interval_position == "start":
+        warnings.append(
+            "Interval ends use the operator-reviewed start-stamped interval total mapping and interval_seconds; no interval semantics were inferred from the unit."
+        )
     if null_values:
         warnings.append("Emoncms returned null values for part of the requested feed.")
     return _result(

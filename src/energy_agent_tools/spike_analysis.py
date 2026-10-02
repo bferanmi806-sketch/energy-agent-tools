@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from math import isfinite, sqrt
+from math import isclose, isfinite, sqrt
 from typing import Any
 
 import pandas as pd
@@ -375,7 +375,10 @@ def _load_intervals(
         ratio = raw_ratio if raw_ratio is not None and isfinite(raw_ratio) else None
         is_spike = False
         if residual is not None and residual > 0 and residual >= min_excess_kwh:
-            is_spike = base == 0 or (raw_ratio is not None and raw_ratio >= spike_ratio)
+            is_spike = base == 0 or (
+                raw_ratio is not None
+                and (raw_ratio >= spike_ratio or isclose(raw_ratio, spike_ratio, rel_tol=1e-12))
+            )
         output.append(
             {
                 "timestamp": _timestamp_text(instant, load.result.timezone),
@@ -414,7 +417,7 @@ def _prepare_equipment(
     timestamp = _name(parameters, "equipment_timestamp", "timestamp")
     series = _series(artifact_id, result, {"column": column, "timestamp": timestamp})
     unit = _energy_unit(result, "Equipment")
-    ends = _optional_ends(series, end_column)
+    ends = _optional_ends(series, _name(parameters, "equipment_end_column", end_column))
     if ends is None:
         raise EnergyError(
             "missing_interval_end", "Every equipment interval must provide an explicit end."
