@@ -92,7 +92,10 @@ implementation gaps in the baseline table; they do not clear live-provider,
 independent-review, agent-evaluation or sustained-operation gates.
 
 The next implementation unit is partitioned persistent time-series processing.
-Its worker left an uncommitted isolated draft when the account usage limit was
-reached. That draft has not passed primary acceptance and is not an implemented
-gateway capability. The TypeScript SDK, Connect Apps application and full
+The worker stopped at the account usage limit; primary review completed the
+storage foundation in isolated commit `8c62764`. Its six focused checks pass,
+including one million generated rows below 32 MiB traced Python memory,
+restart persistence, scope isolation and rollback. Gateway import, pagination,
+streaming analysis and integrated quota/operational checks are still pending;
+the large-site requirement is not complete. The TypeScript SDK, Connect Apps application and full
 connection control plane remain in the completion scope.
