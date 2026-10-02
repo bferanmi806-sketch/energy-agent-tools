@@ -44,3 +44,26 @@ jobs:
           name: home-assistant-protocol-qualification
           path: ha-qualification.json
           if-no-files-found: error
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --frozen --no-dev
+      - name: Install published baseline
+        run: |
+          mkdir -p work/upgrade-baseline
+          curl --fail --location --retry 3 https://github.com/bferanmi806-sketch/energy-agent-tools/releases/download/v0.2.0/energy_agent_tools-0.2.0-py3-none-any.whl --output work/upgrade-baseline/energy_agent_tools-0.2.0-py3-none-any.whl
+          echo '9da16b10b7f6a51db8c3c7b8d4e82f47f91a471ed1965d0e260589cd06bd31e1  work/upgrade-baseline/energy_agent_tools-0.2.0-py3-none-any.whl' | sha256sum --check
+          uv venv work/upgrade-baseline/venv --python 3.12
+          uv pip install --python work/upgrade-baseline/venv/bin/python work/upgrade-baseline/energy_agent_tools-0.2.0-py3-none-any.whl
+      - run: uv run --no-dev python scripts/upgrade_smoke.py --baseline-python work/upgrade-baseline/venv/bin/python --baseline-wheel work/upgrade-baseline/energy_agent_tools-0.2.0-py3-none-any.whl > upgrade-qualification.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: published-state-upgrade-qualification
+          path: upgrade-qualification.json
+          if-no-files-found: error
