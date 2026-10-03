@@ -275,3 +275,51 @@ def test_managed_host_rejects_wrong_key_before_starting_server(
         assert reopened.credential("owner", "legacy") == "existing-private-secret"
     finally:
         reopened.close()
+
+
+@pytest.mark.parametrize("invalid", [False, True])
+def test_host_loads_only_valid_deployment_oauth_configurations(
+    tmp_path, monkeypatch, capsys, invalid
+):
+    import uvicorn
+
+    import energy_agent_tools.hosting as hosting
+
+    configuration = {
+        "id": "home",
+        "name": "Home",
+        "base_url": "https://home.example.test",
+        "client_id": "https://energy.example.test",
+        "redirect_uri": "https://energy.example.test/api/workspace/oauth/callback",
+    }
+    if invalid:
+        configuration["base_url"] = "http://unapproved.example.test"
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"hosting": {"managed_oauth_configurations": [configuration]}}))
+    captured = []
+    original = hosting.create_host
+
+    def capture(agent, principals, **options):
+        captured.extend(options.get("managed_oauth_configurations", ()))
+        return original(agent, principals, **options)
+
+    monkeypatch.setattr(hosting, "create_host", capture)
+    monkeypatch.setattr(uvicorn, "run", lambda *_args, **_kwargs: None)
+    arguments = (
+        "host",
+        "--state-dir",
+        str(tmp_path / "state"),
+        "--config",
+        str(config),
+        "--managed-workspaces",
+    )
+    if invalid:
+        with pytest.raises(SystemExit):
+            _invoke(monkeypatch, *arguments)
+        assert captured == []
+        assert json.loads(capsys.readouterr().out) == {"ok": False, "error": "managed_host_failed"}
+    else:
+        _invoke(monkeypatch, *arguments)
+        assert captured[0].provider().protocol == "home_assistant"
+        assert captured[0].redirect_uri == configuration["redirect_uri"]
+        assert capsys.readouterr().out == ""

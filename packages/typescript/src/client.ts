@@ -14,6 +14,9 @@ import {
   WorkspaceSitesResponseSchema, WorkspaceAssetRequestSchema, WorkspaceAssetResponseSchema,
   WorkspaceAssetsResponseSchema, WorkspaceMapRequestSchema, WorkspaceAgentKeyRequestSchema,
   WorkspaceIssuedKeyResponseSchema, WorkspaceKeysResponseSchema, WorkspaceRevokedKeyResponseSchema,
+  WorkspaceOAuthConfigurationsResponseSchema, WorkspaceHomeAssistantAuthorizationRequestSchema,
+  WorkspaceAuthorizationResponseSchema, WorkspaceOAuthCompleteRequestSchema,
+  WorkspaceOAuthCleanupRequestSchema, WorkspaceOAuthCleanupResponseSchema,
 } from "./contracts.js";
 import type {
   ConnectionVerificationResponse, ConnectionDisconnectedResponse,
@@ -23,6 +26,9 @@ import type {
   WorkspaceAssetRequest, WorkspaceAssetResponse, WorkspaceAssetsResponse, WorkspaceMapRequest,
   WorkspaceAgentKeyRequest, WorkspaceIssuedKeyResponse, WorkspaceKeysResponse,
   WorkspaceRevokedKeyResponse,
+  WorkspaceOAuthConfigurationsResponse, WorkspaceHomeAssistantAuthorizationRequest,
+  WorkspaceAuthorizationResponse, WorkspaceOAuthCompleteRequest,
+  WorkspaceOAuthCleanupRequest, WorkspaceOAuthCleanupResponse,
 } from "./contracts.js";
 
 const parseSessionCreate = parser<SessionCreate>(SessionCreateSchema);
@@ -62,6 +68,12 @@ const parseWorkspaceAgentKeyRequest = parser<WorkspaceAgentKeyRequest>(Workspace
 const parseWorkspaceIssuedKey = parser<WorkspaceIssuedKeyResponse>(WorkspaceIssuedKeyResponseSchema);
 const parseWorkspaceKeys = parser<WorkspaceKeysResponse>(WorkspaceKeysResponseSchema);
 const parseWorkspaceRevokedKey = parser<WorkspaceRevokedKeyResponse>(WorkspaceRevokedKeyResponseSchema);
+const parseWorkspaceOAuthConfigurations = parser<WorkspaceOAuthConfigurationsResponse>(WorkspaceOAuthConfigurationsResponseSchema);
+const parseWorkspaceAuthorizationRequest = parser<WorkspaceHomeAssistantAuthorizationRequest>(WorkspaceHomeAssistantAuthorizationRequestSchema);
+const parseWorkspaceAuthorization = parser<WorkspaceAuthorizationResponse>(WorkspaceAuthorizationResponseSchema);
+const parseWorkspaceOAuthCompleteRequest = parser<WorkspaceOAuthCompleteRequest>(WorkspaceOAuthCompleteRequestSchema);
+const parseWorkspaceOAuthCleanupRequest = parser<WorkspaceOAuthCleanupRequest>(WorkspaceOAuthCleanupRequestSchema);
+const parseWorkspaceOAuthCleanup = parser<WorkspaceOAuthCleanupResponse>(WorkspaceOAuthCleanupResponseSchema);
 
 export interface RequestOptions { signal?: AbortSignal }
 
@@ -139,6 +151,26 @@ export class EnergyWorkspace {
   connectionSetups(options: RequestOptions = {}) {
     return this.#transport.request({ path: "workspace/connection-setups", method: "GET",
       parse: parseConnectionSetups, ...options });
+  }
+
+  authConfigurations(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/auth-configurations", method: "GET",
+      parse: parseWorkspaceOAuthConfigurations, ...options });
+  }
+
+  beginAuthorization(input: WorkspaceHomeAssistantAuthorizationRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/authorizations", method: "POST",
+      body: parseWorkspaceAuthorizationRequest(input), parse: parseWorkspaceAuthorization, ...options });
+  }
+
+  completeAuthorization(input: WorkspaceOAuthCompleteRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/authorizations/complete", method: "POST",
+      body: parseWorkspaceOAuthCompleteRequest(input), parse: parseConnectionCreated, ...options });
+  }
+
+  retryAuthorizationCleanup(input: WorkspaceOAuthCleanupRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/authorizations/cleanup", method: "POST",
+      body: parseWorkspaceOAuthCleanupRequest(input), parse: parseWorkspaceOAuthCleanup, ...options });
   }
 
   connections(options: RequestOptions = {}) {

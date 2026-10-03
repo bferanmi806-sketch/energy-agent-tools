@@ -481,6 +481,15 @@ def main() -> None:
         if managed_workspaces:
             host_options["managed_workspaces"] = True
         try:
+            from pydantic import TypeAdapter
+
+            from .managed_oauth import HomeAssistantOAuthConfiguration
+
+            configurations = TypeAdapter(list[HomeAssistantOAuthConfiguration]).validate_python(
+                options.get("managed_oauth_configurations", []), strict=True
+            )
+            if configurations:
+                host_options["managed_oauth_configurations"] = tuple(configurations)
             application = create_host(agent, principals, **host_options)
             uvicorn.run(application, host=args.bind_host, port=args.port, access_log=False)
         except Exception:

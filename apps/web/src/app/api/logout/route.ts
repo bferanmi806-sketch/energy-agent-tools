@@ -1,6 +1,7 @@
 import {
   isAllowedMutationOrigin,
   resolveWebOrigin,
+  serializeClearedOAuthFlowCookie,
   serializeClearedSessionCookie,
 } from "@/lib/security";
 
@@ -16,12 +17,12 @@ function forbidden(): Response {
   });
 }
 
-function redirectHome(cookie?: string): Response {
+function redirectHome(cookies?: string[]): Response {
   const headers = new Headers({
     "Cache-Control": "no-store",
     Location: "/",
   });
-  if (cookie !== undefined) headers.append("Set-Cookie", cookie);
+  for (const cookie of cookies ?? []) headers.append("Set-Cookie", cookie);
   return new Response(null, { status: 303, headers });
 }
 
@@ -56,5 +57,8 @@ export async function POST(request: Request): Promise<Response> {
     });
   }
 
-  return redirectHome(serializeClearedSessionCookie(secureOrigin.secure));
+  return redirectHome([
+    serializeClearedSessionCookie(secureOrigin.secure),
+    serializeClearedOAuthFlowCookie(secureOrigin.secure),
+  ]);
 }

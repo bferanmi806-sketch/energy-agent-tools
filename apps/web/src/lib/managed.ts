@@ -1,8 +1,10 @@
 import "server-only";
 
 import { EnergyAgentTools, EnergyHttpError } from "@energy-agent-tools/sdk";
+import type { IdentityResponse } from "@energy-agent-tools/sdk";
 import { cookies } from "next/headers";
 import {
+  type WebRuntimeConfig,
   isAllowedMutationOrigin,
   openSession,
   readBoundedForm,
@@ -13,7 +15,13 @@ import {
 type WorkspaceClient = ReturnType<EnergyAgentTools["workspace"]>;
 
 export type WorkspaceContext =
-  | { kind: "ready"; workspace: WorkspaceClient }
+  | {
+      kind: "ready";
+      workspace: WorkspaceClient;
+      identity: IdentityResponse;
+      sessionCookie: string;
+      config: WebRuntimeConfig;
+    }
   | { kind: "error"; status: number };
 
 export function workspaceFailure(status: number): Response {
@@ -36,8 +44,23 @@ export async function openWorkspaceMutation(request: Request): Promise<Workspace
   }
 
   const cookieValue = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  return workspaceForSession(cookieValue, config);
+}
+
+export async function openWorkspaceForOAuthCallback(
+  sessionCookie: string | undefined,
+  config: WebRuntimeConfig,
+): Promise<WorkspaceContext> {
+  return workspaceForSession(sessionCookie, config);
+}
+
+async function workspaceForSession(
+  cookieValue: string | undefined,
+  config: WebRuntimeConfig,
+): Promise<WorkspaceContext> {
   const session = openSession(cookieValue, config.sessionKey.toString("hex"));
   if (!session) return { kind: "error", status: 401 };
+  if (!cookieValue) return { kind: "error", status: 401 };
 
   const gateway = new EnergyAgentTools({
     baseUrl: config.gatewayUrl,
@@ -47,10 +70,17 @@ export async function openWorkspaceMutation(request: Request): Promise<Workspace
 
   try {
     const identity = await gateway.identity();
-    if (identity.can_manage_workspace !== true || identity.workspace?.mode !== "managed") {
+    const managerWorkspace = identity.workspace;
+    if (identity.can_manage_workspace !== true || managerWorkspace?.mode !== "managed") {
       return { kind: "error", status: 403 };
     }
-    return { kind: "ready", workspace: gateway.workspace() };
+    return {
+      kind: "ready",
+      workspace: gateway.workspace(),
+      identity,
+      sessionCookie: cookieValue,
+      config,
+    };
   } catch (error) {
     return { kind: "error", status: error instanceof EnergyHttpError && error.status === 401 ? 401 : 502 };
   }

@@ -110,7 +110,7 @@ def test_legacy_rows_migrate_without_promotion_and_reopen(tmp_path: Path) -> Non
     db.close()
 
     store = _open_store(tmp_path, key)
-    assert store._db.execute("PRAGMA user_version").fetchone()[0] == 1
+    assert store._db.execute("PRAGMA user_version").fetchone()[0] == 2
     migrated = store._db.execute(
         "SELECT workspace_id, managed_revision FROM accounts WHERE id = ?", (legacy.id,)
     ).fetchone()

@@ -19,6 +19,7 @@ import type { ManagedDashboardData } from "@/lib/types";
 import { GatewayForm } from "./GatewayForm";
 import { ManagedConnectionActions } from "./ManagedConnectionActions";
 import { ManagedConnectionForm } from "./ManagedConnectionForm";
+import { HomeAssistantConnect } from "./HomeAssistantConnect";
 import { PendingConnection } from "./PendingConnection";
 import { AgentKeyPanel } from "./AgentKeyPanel";
 import { WorkspaceAssetForm, WorkspaceSiteForm } from "./WorkspaceForms";
@@ -66,6 +67,15 @@ const RUNTIME_LABELS: Record<ManagedDashboardData["toolkits"][number]["runtime"]
   "mcp-remote": "Remote MCP",
 };
 
+type AuthorizationResult = "connected" | "cancelled" | "invalid" | "failed";
+
+const AUTHORIZATION_MESSAGES: Record<AuthorizationResult, string> = {
+  connected: "Home Assistant verified the selected sensor. Choose a site below to finish setup.",
+  cancelled: "Home Assistant authorization was cancelled. You can try again when you are ready.",
+  invalid: "This authorization return could not be matched to the current workspace session. Start again from a configured instance.",
+  failed: "The gateway could not complete Home Assistant authorization. Check the instance and try again.",
+};
+
 function statusClass(status: ManagedDashboardData["toolkits"][number]["status"]): string {
   switch (status) {
     case "stable": return "status-good";
@@ -86,6 +96,11 @@ function connectionLabel(state: string): string {
     case "revoked": return "Disconnected";
     default: return state.replaceAll("_", " ");
   }
+}
+
+function connectionDisplayName(connection: ManagedDashboardData["connections"][number]): string {
+  const displayName = connection.display_name?.trim();
+  return displayName || connection.toolkit.replaceAll("-", " ");
 }
 
 function connectionStatusClass(state: string): string {
@@ -110,9 +125,11 @@ function workspaceStep(data: ManagedDashboardData): "connect" | "map" | "agent" 
 export function ManagedConsole({
   data,
   initialView = "apps",
+  authorizationResult,
 }: {
   data: ManagedDashboardData;
   initialView?: ViewId;
+  authorizationResult?: AuthorizationResult;
 }) {
   const [view, setView] = useState<ViewId>(initialView);
   const [query, setQuery] = useState("");
@@ -215,6 +232,12 @@ export function ManagedConsole({
 
           <WorkspaceProgress stage={stage} onNavigate={navigate} />
 
+          {authorizationResult ? (
+            <div className={`notice ${authorizationResult === "connected" ? "notice-neutral" : "notice-error"} managed-oauth-notice`} role={authorizationResult === "connected" ? "status" : "alert"}>
+              <span>{AUTHORIZATION_MESSAGES[authorizationResult]}</span>
+            </div>
+          ) : null}
+
           {view === "apps" ? (
             <AppsView
               categories={categories}
@@ -302,6 +325,7 @@ function AppsView({
   return (
     <section className="apps-workbench managed-apps-workbench" aria-label="Toolkit catalogue">
       <div className="catalogue-column">
+        <HomeAssistantConnect configurations={data.authConfigurations} />
         <div className="catalogue-tools">
           <label className="search-field">
             <Search size={17} aria-hidden="true" />
@@ -424,7 +448,7 @@ function ConnectionsView({ data, onBrowseApps }: { data: ManagedDashboardData; o
                 <article className="managed-connection-row" key={connection.id}>
                   <div className="managed-record-main">
                     <span className="record-icon"><Activity size={16} aria-hidden="true" /></span>
-                    <div><h3>{connection.toolkit.replaceAll("-", " ")}</h3><code>{connection.id}</code></div>
+                    <div><h3>{connectionDisplayName(connection)}</h3><code>{connection.id}</code></div>
                   </div>
                   <span className={`status-badge ${connectionStatusClass(connection.state)}`}>{connectionLabel(connection.state)}</span>
                   <PendingConnection connectionId={connection.id} sites={data.sites} />
@@ -442,7 +466,7 @@ function ConnectionsView({ data, onBrowseApps }: { data: ManagedDashboardData; o
                   <article className="managed-connection-row managed-active-row" key={connection.id}>
                     <div className="managed-record-main">
                       <span className="record-icon"><Activity size={16} aria-hidden="true" /></span>
-                      <div><h3>{connection.toolkit.replaceAll("-", " ")}</h3><code>{connection.id}</code></div>
+                      <div><h3>{connectionDisplayName(connection)}</h3><code>{connection.id}</code></div>
                     </div>
                     <span className="managed-record-site">{site?.name ?? "Site unavailable"}</span>
                     <span className={`status-badge ${connectionStatusClass(connection.state)}`}>{connectionLabel(connection.state)}</span>

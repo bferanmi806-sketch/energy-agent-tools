@@ -7,6 +7,7 @@ import type {
   ArtifactsResponse,
   WorkspaceAssetsResponse,
   WorkspaceKeysResponse,
+  WorkspaceOAuthConfigurationsResponse,
   WorkspaceResponse,
   WorkspaceSitesResponse,
 } from "@energy-agent-tools/sdk";
@@ -28,6 +29,7 @@ export interface OperatorDashboardData extends DashboardBase {
 
 export interface ManagedDashboardData extends DashboardBase {
   kind: "managed";
+  authConfigurations: WorkspaceOAuthConfigurationsResponse["configurations"];
   workspace: WorkspaceResponse["workspace"];
   sites: WorkspaceSitesResponse["sites"];
   assets: WorkspaceAssetsResponse["assets"];

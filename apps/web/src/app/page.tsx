@@ -72,7 +72,7 @@ function Unavailable({ message }: { message: string }) {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ auth_error?: string | string[]; view?: string | string[] }>;
+  searchParams?: Promise<{ auth_error?: string | string[]; oauth?: string | string[]; view?: string | string[] }>;
 }) {
   let state: DashboardState;
   try {
@@ -92,7 +92,10 @@ export default async function HomePage({
         const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "agent"
           ? params.view
           : "apps";
-        return <ManagedConsole data={state.data} initialView={initialView} />;
+        const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed"
+          ? params.oauth
+          : undefined;
+        return <ManagedConsole data={state.data} initialView={initialView} {...(authorizationResult ? { authorizationResult } : {})} />;
       }
       return <Console data={state.data} initialView={params?.view === "connections" ? "connections" : "apps"} />;
     }

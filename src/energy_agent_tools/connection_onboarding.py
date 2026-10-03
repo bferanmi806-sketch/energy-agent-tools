@@ -87,56 +87,7 @@ class OctopusConnectionService:
         stored = self.auth_store.stage_managed(
             pending, credential, expected_version=expected_version
         )
-        return self._managed_outcome(stored, verified_at)
-
-    async def map_managed(
-        self,
-        *,
-        user_id: str,
-        workspace_id: str,
-        connection_id: str,
-        site: Site,
-    ) -> Json:
-        if site.user_id != user_id:
-            raise EnergyError(
-                "connection_site_forbidden", "Connection site is outside this user scope."
-            )
-        account, version = self.auth_store.managed_snapshot(user_id, workspace_id, connection_id)
-        if account.state == "active":
-            if account.site_id != site.id:
-                raise EnergyError(
-                    "connection_conflict", "Connection is already mapped to another site."
-                )
-            return self._managed_outcome(account, account.last_verified_at or datetime.now(UTC))
-        credential = self.auth_store.pending_credential(user_id, workspace_id, connection_id)
-        try:
-            await probe_provider(self.http, account, credential)
-        except Exception:
-            raise EnergyError(
-                "provider_verification_failed", "Provider verification failed."
-            ) from None
-        verified_at = datetime.now(UTC)
-        stored = self.auth_store.activate_managed(
-            user_id,
-            workspace_id,
-            connection_id,
-            site=site,
-            expected_version=version,
-            verified_at=verified_at,
-        )
-        return self._managed_outcome(stored, verified_at)
-
-    @staticmethod
-    def _managed_outcome(account: ConnectedAccount, verified_at: datetime) -> Json:
-        health = ConnectionHealth(
-            connection_id=account.id,
-            provider="octopus",
-            status="healthy",
-            checked_at=verified_at,
-            probe="provider-read",
-            message="Provider read succeeded.",
-        )
-        return {"ok": True, "account": account.public(), "health": health.public()}
+        return _managed_outcome(stored, verified_at)
 
     async def connect(
         self,
@@ -215,3 +166,57 @@ class OctopusConnectionService:
                 for character in value
             )
         )
+
+
+async def map_managed_connection(
+    auth_store: AuthStore,
+    http: httpx.AsyncClient,
+    *,
+    user_id: str,
+    workspace_id: str,
+    connection_id: str,
+    site: Site,
+) -> Json:
+    if site.user_id != user_id:
+        raise EnergyError(
+            "connection_site_forbidden", "Connection site is outside this user scope."
+        )
+    account, version = auth_store.managed_snapshot(user_id, workspace_id, connection_id)
+    if account.state == "active":
+        if account.site_id != site.id:
+            raise EnergyError(
+                "connection_conflict", "Connection is already mapped to another site."
+            )
+        return _managed_outcome(account, account.last_verified_at or datetime.now(UTC))
+    credential = auth_store.pending_credential(user_id, workspace_id, connection_id)
+    try:
+        await probe_provider(http, account, credential)
+    except Exception:
+        raise EnergyError("provider_verification_failed", "Provider verification failed.") from None
+    verified_at = datetime.now(UTC)
+    stored = auth_store.activate_managed(
+        user_id,
+        workspace_id,
+        connection_id,
+        site=site,
+        expected_version=version,
+        verified_at=verified_at,
+    )
+    return _managed_outcome(stored, verified_at)
+
+
+def _managed_outcome(account: ConnectedAccount, verified_at: datetime) -> Json:
+    provider = {"octopus-energy-account": "octopus", "home-assistant": "home_assistant"}.get(
+        account.toolkit
+    )
+    if provider is None:
+        raise EnergyError("unsupported_provider", "This connection provider is unsupported.")
+    health = ConnectionHealth(
+        connection_id=account.id,
+        provider=provider,
+        status="healthy",
+        checked_at=verified_at,
+        probe="provider-read",
+        message="Provider read succeeded.",
+    )
+    return {"ok": True, "account": account.public(), "health": health.public()}

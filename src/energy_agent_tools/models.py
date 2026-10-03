@@ -87,6 +87,7 @@ class ConnectedAccount(StrictModel):
     id: str
     user_id: str
     toolkit: str
+    display_name: str | None = Field(default=None, min_length=1, max_length=512)
     workspace_id: str | None = Field(default=None, min_length=1, max_length=256)
     site_id: str | None = None
     auth: AuthConfig = Field(default_factory=AuthConfig)
@@ -155,7 +156,7 @@ class ConnectedAccount(StrictModel):
         return value
 
     def public(self) -> Json:
-        return {
+        result: Json = {
             "id": self.id,
             "toolkit": self.toolkit,
             "site_id": self.site_id,
@@ -164,6 +165,9 @@ class ConnectedAccount(StrictModel):
             "state": self.state,
             "verified": self.last_verified_at is not None,
         }
+        if self.display_name is not None:
+            result["display_name"] = self.display_name
+        return result
 
 
 class Site(StrictModel):
@@ -202,6 +206,7 @@ class Session(StrictModel):
         default_factory=lambda: {Action.READ, Action.CALCULATE, Action.SIMULATE, Action.EXTERNAL}
     )
     account_ids: dict[str, str] = Field(default_factory=dict)
+    managed_oauth_configurations: dict[str, str] = Field(default_factory=dict)
 
 
 class Toolkit(StrictModel):
@@ -224,6 +229,7 @@ class Tool(StrictModel):
     )
     description: str
     input_schema: Json
+    account_argument_settings: dict[str, str] = Field(default_factory=dict)
     capabilities: list[str]
     actions: set[Action] = Field(default_factory=lambda: {Action.READ})
     idempotent: bool = True

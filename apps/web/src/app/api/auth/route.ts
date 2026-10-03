@@ -7,6 +7,7 @@ import {
   readWebRuntimeConfig,
   resolveWebOrigin,
   sealSession,
+  serializeClearedOAuthFlowCookie,
   serializeSessionCookie,
 } from "@/lib/security";
 
@@ -14,13 +15,13 @@ export const runtime = "nodejs";
 
 type AuthErrorCode = "configuration" | "invalid_token" | "cookie_too_large";
 
-function redirectHome(code?: AuthErrorCode, cookie?: string): Response {
+function redirectHome(code?: AuthErrorCode, cookies?: string[]): Response {
   const location = code === undefined ? "/" : `/?auth_error=${code}`;
   const headers = new Headers({
     "Cache-Control": "no-store",
     Location: location,
   });
-  if (cookie !== undefined) headers.append("Set-Cookie", cookie);
+  for (const cookie of cookies ?? []) headers.append("Set-Cookie", cookie);
   return new Response(null, { status: 303, headers });
 }
 
@@ -84,7 +85,7 @@ export async function POST(request: Request): Promise<Response> {
       siteId: null,
     }, config.sessionKey.toString("hex"));
     const cookie = serializeSessionCookie(sealed, config.webOrigin.secure);
-    return redirectHome(undefined, cookie);
+    return redirectHome(undefined, [cookie, serializeClearedOAuthFlowCookie(config.webOrigin.secure)]);
   } catch (error) {
     return redirectHome(error instanceof RangeError ? "cookie_too_large" : "configuration");
   }

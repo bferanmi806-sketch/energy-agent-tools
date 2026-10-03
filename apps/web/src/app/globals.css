@@ -415,6 +415,40 @@ code { overflow-wrap: anywhere; }
 .managed-toolkit-row .runtime-cell { color: var(--ink-muted); font-size: 10px; line-height: 1.45; }
 .managed-toolkit-row .toolkit-action { font-size: 10px; }
 .catalogue-categories { margin: 8px 0 0; color: var(--ink-muted); font-size: 10px; }
+.home-assistant-connect { margin-bottom: 27px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.home-assistant-heading-row { display: flex; align-items: flex-start; gap: 10px; }
+.home-assistant-mark { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #d6e7d7; border-radius: 7px; background: var(--surface-green); color: var(--pine-800); }
+.home-assistant-heading-row h2 { margin: 0; color: var(--ink); font-size: 14px; font-weight: 680; }
+.home-assistant-heading-row p { margin: 3px 0 0; color: var(--ink-muted); font-size: 10px; line-height: 1.45; }
+.home-assistant-instance-list { display: grid; max-height: 250px; overflow-y: auto; margin-top: 13px; border-top: 1px solid var(--line); }
+.home-assistant-instance-row { border-bottom: 1px solid var(--line); }
+.home-assistant-instance { width: 100%; min-height: 37px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 8px; border: 0; background: transparent; color: var(--ink-soft); text-align: left; font-size: 11px; cursor: pointer; }
+.home-assistant-instance:hover { background: var(--surface-soft); color: var(--pine-900); }
+.home-assistant-instance span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.home-assistant-instance span:last-child { flex: 0 0 auto; color: var(--ink-muted); font-size: 9px; }
+.home-assistant-instance-selected { background: var(--surface-green); color: var(--pine-900); font-weight: 650; }
+.home-assistant-instance-selected span:last-child { color: var(--status-good-ink); }
+.home-assistant-cleanup { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 0 8px 8px; }
+.home-assistant-cleanup-count { margin: 0; color: var(--ink-muted); font-size: 9px; }
+.home-assistant-cleanup-button { min-height: 29px; padding: 4px 8px; font-size: 9px; }
+.home-assistant-cleanup .mutation-feedback, .home-assistant-cleanup .notice { flex-basis: 100%; margin: 0; font-size: 9px; }
+.home-assistant-form { display: grid; gap: 12px; margin-top: 14px; }
+.home-assistant-form > input[type="hidden"] { display: none; }
+.home-assistant-form .field-stack label { font-size: 10px; }
+.home-assistant-form .field-stack input, .home-assistant-form .field-stack select { min-height: 39px; font-size: 11px; }
+.home-assistant-mapping { min-width: 0; display: grid; gap: 9px; margin: 0; padding: 11px 12px 12px; border: 1px solid var(--line); border-radius: 7px; }
+.home-assistant-mapping legend { padding: 0 4px; color: var(--ink); font-size: 10px; font-weight: 650; }
+.home-assistant-mapping .check-row { align-items: flex-start; color: var(--ink-soft); font-size: 10px; }
+.home-assistant-mapping-fields { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 0; padding: 0; border: 0; }
+.home-assistant-mapping-fields:disabled { opacity: .65; }
+.home-assistant-mapping-fields .field-stack { gap: 5px; }
+.home-assistant-mapping-fields .field-stack label { min-height: 24px; }
+.home-assistant-mapping .field-hint { font-size: 9px; }
+.home-assistant-empty { display: flex; align-items: flex-start; gap: 8px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--ink-muted); }
+.home-assistant-empty svg { flex: 0 0 auto; margin-top: 1px; color: #5d8167; }
+.home-assistant-empty p { margin: 0; font-size: 10px; line-height: 1.5; }
+.home-assistant-submit { width: 100%; min-height: 40px; }
+.managed-oauth-notice { margin: 0 0 18px; }
 .managed-setup-panel { padding: 20px; }
 .managed-setup-panel h2 { font-size: 20px; }
 .managed-provider-setup { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
@@ -546,6 +580,11 @@ code { overflow-wrap: anywhere; }
   .managed-toolkit-row .status-badge { justify-self: start; }
   .managed-toolkit-row .toolkit-action { justify-self: end; grid-column: 2; grid-row: 2; }
   .managed-setup-panel { padding: 16px; }
+  .home-assistant-connect { padding: 14px; }
+  .home-assistant-mapping-fields { grid-template-columns: minmax(0, 1fr); }
+  .home-assistant-mapping-fields .field-stack label { min-height: 0; }
+  .home-assistant-form .field-stack input, .home-assistant-form .field-stack select { min-height: 43px; font-size: 16px; }
+  .managed-oauth-notice { font-size: 11px; }
   .managed-content-section .section-subheading { margin-top: 0; }
   .managed-connection-row, .managed-active-row { grid-template-columns: minmax(0, 1fr); gap: 9px; padding: 13px 3px; }
   .managed-connection-row > .status-badge, .managed-active-row > .status-badge { grid-column: 1; grid-row: auto; justify-self: start; }

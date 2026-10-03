@@ -1,10 +1,14 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
 
 export const SESSION_COOKIE_NAME = "energy_web_session";
+export const OAUTH_FLOW_COOKIE_NAME = "energy_web_oauth_flow";
+export const OAUTH_CALLBACK_PATH = "/api/workspace/oauth/callback";
 export const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+export const OAUTH_FLOW_MAX_TTL_MS = 60 * 60 * 1000;
 export const MAX_LOGIN_TOKEN_CHARS = 4096;
 export const MAX_SESSION_COOKIE_BYTES = 4096;
+export const MAX_OAUTH_FLOW_COOKIE_BYTES = 2048;
 export const MAX_SITE_ID_CHARS = 256;
 export const MAX_FORM_BODY_BYTES = 16 * 1024;
 
@@ -20,6 +24,18 @@ export interface WebSession {
   issuedAt: number;
   expiresAt: number;
   siteId: string | null;
+}
+
+export interface OAuthFlowCookie {
+  version: 1;
+  state: string;
+  configurationId: string;
+  connectionId: string;
+  managerId: string;
+  workspaceId: string;
+  sessionBinding: string;
+  createdAt: number;
+  expiresAt: number;
 }
 
 export interface WebOrigin {
@@ -165,6 +181,94 @@ function sessionKey(keyHex: string): Buffer {
   return resolveSessionKey(keyHex);
 }
 
+function isOAuthFlowPayload(value: unknown): value is OAuthFlowCookie {
+  if (!isRecord(value)) return false;
+  const record = value;
+  return (
+    record.version === 1 &&
+    typeof record.state === "string" && record.state.length > 0 && record.state.length <= 512 && !hasUnsafeWhitespace(record.state) &&
+    typeof record.configurationId === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(record.configurationId) &&
+    typeof record.connectionId === "string" && record.connectionId.length > 0 && record.connectionId.length <= 256 && !/[\u0000-\u001f\u007f]/.test(record.connectionId) &&
+    typeof record.managerId === "string" && record.managerId.length > 0 && record.managerId.length <= 256 && !/[\u0000-\u001f\u007f]/.test(record.managerId) &&
+    typeof record.workspaceId === "string" && record.workspaceId.length > 0 && record.workspaceId.length <= 256 && !/[\u0000-\u001f\u007f]/.test(record.workspaceId) &&
+    typeof record.sessionBinding === "string" && /^[A-Za-z0-9_-]{43}$/.test(record.sessionBinding) &&
+    typeof record.createdAt === "number" && Number.isSafeInteger(record.createdAt) &&
+    typeof record.expiresAt === "number" && Number.isSafeInteger(record.expiresAt) &&
+    record.expiresAt > record.createdAt && record.expiresAt - record.createdAt <= OAUTH_FLOW_MAX_TTL_MS
+  );
+}
+
+export function bindOAuthFlowToSession(sessionCookie: string): string {
+  return createHash("sha256").update(sessionCookie, "utf8").digest("base64url");
+}
+
+export function matchesOAuthSessionBinding(binding: string, sessionCookie: string | undefined): boolean {
+  if (typeof sessionCookie !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(binding)) return false;
+  const expected = Buffer.from(binding, "base64url");
+  const actual = Buffer.from(bindOAuthFlowToSession(sessionCookie), "base64url");
+  return expected.byteLength === actual.byteLength && timingSafeEqual(expected, actual);
+}
+
+export function matchesOAuthState(expected: string, provided: string): boolean {
+  const expectedBytes = Buffer.from(expected, "utf8");
+  const providedBytes = Buffer.from(provided, "utf8");
+  return expectedBytes.byteLength === providedBytes.byteLength && timingSafeEqual(expectedBytes, providedBytes);
+}
+
+export function sealOAuthFlow(flow: OAuthFlowCookie, keyHex: string): string {
+  if (!isOAuthFlowPayload(flow)) throw new TypeError("The encrypted authorization flow is invalid.");
+  const nonce = randomBytes(GCM_NONCE_BYTES);
+  const cipher = createCipheriv("aes-256-gcm", sessionKey(keyHex), nonce);
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(flow), "utf8"), cipher.final()]);
+  const value = Buffer.concat([nonce, cipher.getAuthTag(), ciphertext]).toString("base64url");
+  if (Buffer.byteLength(`${OAUTH_FLOW_COOKIE_NAME}=${value}`, "utf8") > MAX_OAUTH_FLOW_COOKIE_BYTES) {
+    throw new RangeError("The encrypted authorization flow cookie is too large.");
+  }
+  return value;
+}
+
+export function openOAuthFlow(value: string | undefined, keyHex: string, now = Date.now()): OAuthFlowCookie | null {
+  if (
+    typeof value !== "string" || value.length === 0 ||
+    Buffer.byteLength(`${OAUTH_FLOW_COOKIE_NAME}=${value}`, "utf8") > MAX_OAUTH_FLOW_COOKIE_BYTES ||
+    !/^[A-Za-z0-9_-]+$/.test(value)
+  ) return null;
+
+  const packed = Buffer.from(value, "base64url");
+  if (packed.toString("base64url") !== value || packed.byteLength <= GCM_NONCE_BYTES + GCM_TAG_BYTES) return null;
+
+  try {
+    const decipher = createDecipheriv("aes-256-gcm", sessionKey(keyHex), packed.subarray(0, GCM_NONCE_BYTES));
+    decipher.setAuthTag(packed.subarray(GCM_NONCE_BYTES, GCM_NONCE_BYTES + GCM_TAG_BYTES));
+    const plaintext = Buffer.concat([
+      decipher.update(packed.subarray(GCM_NONCE_BYTES + GCM_TAG_BYTES)),
+      decipher.final(),
+    ]).toString("utf8");
+    const decoded: unknown = JSON.parse(plaintext);
+    return isOAuthFlowPayload(decoded) && decoded.createdAt <= now + MAX_FUTURE_ISSUED_AT_MS && decoded.expiresAt > now
+      ? decoded
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function serializeOAuthFlowCookie(value: string, secure: boolean, maxAgeSeconds: number): string {
+  const serialized = `${OAUTH_FLOW_COOKIE_NAME}=${value}; Path=${OAUTH_CALLBACK_PATH}; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secure ? "; Secure" : ""}`;
+  if (
+    !/^[A-Za-z0-9_-]+$/.test(value) ||
+    !Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 1 || maxAgeSeconds > OAUTH_FLOW_MAX_TTL_MS / 1000 ||
+    Buffer.byteLength(serialized, "utf8") > MAX_OAUTH_FLOW_COOKIE_BYTES
+  ) {
+    throw new RangeError("The encrypted authorization flow cookie is invalid.");
+  }
+  return serialized;
+}
+
+export function serializeClearedOAuthFlowCookie(secure: boolean): string {
+  return `${OAUTH_FLOW_COOKIE_NAME}=; Path=${OAUTH_CALLBACK_PATH}; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? "; Secure" : ""}`;
+}
+
 function isSessionPayload(value: unknown): value is WebSession {
   if (!isRecord(value)) return false;
   const record = value;
@@ -241,7 +345,7 @@ export function openSession(value: string | undefined, keyHex: string, now = Dat
 }
 
 export function serializeSessionCookie(value: string, secure: boolean): string {
-  const serialized = `${SESSION_COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_TTL_MS / 1000}${secure ? "; Secure" : ""}`;
+  const serialized = `${SESSION_COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}${secure ? "; Secure" : ""}`;
   if (
     !/^[A-Za-z0-9_-]+$/.test(value) ||
     Buffer.byteLength(serialized, "utf8") > MAX_SESSION_COOKIE_BYTES
@@ -252,7 +356,7 @@ export function serializeSessionCookie(value: string, secure: boolean): string {
 }
 
 export function serializeClearedSessionCookie(secure: boolean): string {
-  return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? "; Secure" : ""}`;
+  return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secure ? "; Secure" : ""}`;
 }
 
 export async function readBoundedForm(request: Request): Promise<URLSearchParams | null> {

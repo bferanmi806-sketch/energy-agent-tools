@@ -19,8 +19,14 @@ from energy_agent_tools.connection_contracts import (
 from energy_agent_tools.control_contracts import (
     WorkspaceAgentKeyRequest,
     WorkspaceAssetRequest,
+    WorkspaceAuthorizationResponse,
     WorkspaceDetails,
+    WorkspaceHomeAssistantAuthorizationRequest,
     WorkspaceMapRequest,
+    WorkspaceOAuthCleanupRequest,
+    WorkspaceOAuthCleanupResponse,
+    WorkspaceOAuthCompleteRequest,
+    WorkspaceOAuthConfigurationsResponse,
     WorkspaceSiteRequest,
 )
 from energy_agent_tools.control_store import IssuedKey, KeyRecord
@@ -107,6 +113,7 @@ def schemas() -> dict[str, dict[str, Any]]:
             "site_id": nullable_text,
             "enabled": boolean,
             "auth_scheme": text,
+            "display_name": text,
             "state": text,
             "verified": boolean,
         },
@@ -137,6 +144,14 @@ def schemas() -> dict[str, dict[str, Any]]:
         "WorkspaceIssuedKeyResponse": expand_model(IssuedKey),
         "WorkspaceKeysResponse": obj({"keys": array(expand_model(KeyRecord))}, ["keys"]),
         "WorkspaceRevokedKeyResponse": obj({"revoked": {"const": True}}, ["revoked"]),
+        "WorkspaceOAuthConfigurationsResponse": expand_model(WorkspaceOAuthConfigurationsResponse),
+        "WorkspaceHomeAssistantAuthorizationRequest": expand_model(
+            WorkspaceHomeAssistantAuthorizationRequest
+        ),
+        "WorkspaceOAuthCompleteRequest": expand_model(WorkspaceOAuthCompleteRequest),
+        "WorkspaceOAuthCleanupRequest": expand_model(WorkspaceOAuthCleanupRequest),
+        "WorkspaceOAuthCleanupResponse": expand_model(WorkspaceOAuthCleanupResponse),
+        "WorkspaceAuthorizationResponse": expand_model(WorkspaceAuthorizationResponse),
         "ConnectionSetupsResponse": expand_model(ConnectionSetupsResponse),
         "OctopusConnectionRequest": expand_model(OctopusConnectionRequest),
         "SessionCreate": expand_model(_SessionCreate),
@@ -177,7 +192,7 @@ def schemas() -> dict[str, dict[str, Any]]:
                 "health": obj(
                     {
                         "connection_id": text,
-                        "provider": {"const": "octopus"},
+                        "provider": {"enum": ["octopus", "home_assistant"]},
                         "status": {"const": "healthy"},
                         "checked_at": text,
                         "probe": {"const": "provider-read"},
@@ -195,7 +210,7 @@ def schemas() -> dict[str, dict[str, Any]]:
                 "health": obj(
                     {
                         "connection_id": text,
-                        "provider": {"const": "octopus"},
+                        "provider": {"enum": ["octopus", "home_assistant"]},
                         "status": {"enum": ["healthy", "unhealthy"]},
                         "checked_at": text,
                         "probe": {"const": "provider-read"},
@@ -207,7 +222,12 @@ def schemas() -> dict[str, dict[str, Any]]:
             ["ok", "account", "health"],
         ),
         "ConnectionDisconnectedResponse": obj(
-            {"ok": {"const": True}, "account": connection}, ["ok", "account"]
+            {
+                "ok": {"const": True},
+                "account": connection,
+                "upstream_revoked": {"anyOf": [boolean, {"type": "null"}]},
+            },
+            ["ok", "account"],
         ),
         "ConnectionsResponse": obj({"connections": array(connection)}, ["connections"]),
         "ArtifactsResponse": obj({"artifacts": array(record)}, ["artifacts"]),

@@ -4,9 +4,15 @@ import test from "node:test";
 import {
   MAX_FORM_BODY_BYTES,
   MAX_LOGIN_TOKEN_CHARS,
+  MAX_OAUTH_FLOW_COOKIE_BYTES,
   MAX_SESSION_COOKIE_BYTES,
+  OAUTH_FLOW_MAX_TTL_MS,
   SESSION_TTL_MS,
+  bindOAuthFlowToSession,
   isAllowedMutationOrigin,
+  matchesOAuthSessionBinding,
+  matchesOAuthState,
+  openOAuthFlow,
   openSession,
   parseLoginToken,
   parseUrlEncodedFormBody,
@@ -15,9 +21,11 @@ import {
   resolveSessionKey,
   resolveWebOrigin,
   sealSession,
+  sealOAuthFlow,
+  serializeOAuthFlowCookie,
   serializeSessionCookie,
 } from "../src/lib/security.js";
-import type { WebSession } from "../src/lib/security.js";
+import type { OAuthFlowCookie, WebSession } from "../src/lib/security.js";
 
 const key = "11".repeat(32);
 const otherKey = "22".repeat(32);
@@ -97,13 +105,13 @@ test("login form tokens and form bodies stay within their limits", () => {
   assert.equal(parseUrlEncodedFormBody(new Uint8Array([0xff])), null);
 });
 
-test("serialized cookies are bounded and use strict browser attributes", () => {
+test("serialized cookies are bounded and use HTTP-only browser attributes", () => {
   const encrypted = sealSession(session, key);
   const cookie = serializeSessionCookie(encrypted, true);
   assert.match(cookie, /^energy_web_session=/);
   assert.match(cookie, /; Path=\//);
   assert.match(cookie, /; HttpOnly/);
-  assert.match(cookie, /; SameSite=Strict/);
+  assert.match(cookie, /; SameSite=Lax/);
   assert.match(cookie, /; Max-Age=28800/);
   assert.match(cookie, /; Secure$/);
   assert.ok(Buffer.byteLength(cookie, "utf8") <= MAX_SESSION_COOKIE_BYTES);
@@ -112,4 +120,36 @@ test("serialized cookies are bounded and use strict browser attributes", () => {
   const tooLargeTokenSession = { ...session, token: "x".repeat(MAX_LOGIN_TOKEN_CHARS) };
   const tooLargeEncrypted = sealSession(tooLargeTokenSession, key);
   assert.throws(() => serializeSessionCookie(tooLargeEncrypted, false), RangeError);
+});
+
+test("encrypted Home Assistant flow cookies expire and bind state to one manager session", () => {
+  const flow: OAuthFlowCookie = {
+    version: 1,
+    state: "oauth-state-value",
+    configurationId: "home-assistant",
+    connectionId: "managed-ha-connection",
+    managerId: "manager-user-id",
+    workspaceId: "managed-workspace-id",
+    sessionBinding: bindOAuthFlowToSession("encrypted-manager-session-cookie"),
+    createdAt: issuedAt,
+    expiresAt: issuedAt + OAUTH_FLOW_MAX_TTL_MS,
+  };
+  const encrypted = sealOAuthFlow(flow, key);
+
+  assert.ok(!encrypted.includes(flow.state));
+  assert.deepEqual(openOAuthFlow(encrypted, key, issuedAt + 1), flow);
+  assert.equal(openOAuthFlow(encrypted, key, flow.expiresAt), null);
+  assert.equal(openOAuthFlow(encrypted, otherKey, issuedAt + 1), null);
+  assert.equal(matchesOAuthSessionBinding(flow.sessionBinding, "encrypted-manager-session-cookie"), true);
+  assert.equal(matchesOAuthSessionBinding(flow.sessionBinding, "different-manager-session-cookie"), false);
+  assert.equal(matchesOAuthState(flow.state, flow.state), true);
+  assert.equal(matchesOAuthState(flow.state, "different-state"), false);
+
+  const cookie = serializeOAuthFlowCookie(encrypted, true, 300);
+  assert.match(cookie, /^energy_web_oauth_flow=/);
+  assert.match(cookie, /; Path=\/api\/workspace\/oauth\/callback/);
+  assert.match(cookie, /; HttpOnly/);
+  assert.match(cookie, /; SameSite=Lax/);
+  assert.match(cookie, /; Secure$/);
+  assert.ok(Buffer.byteLength(cookie, "utf8") <= MAX_OAUTH_FLOW_COOKIE_BYTES);
 });

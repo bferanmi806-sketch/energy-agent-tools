@@ -970,6 +970,269 @@ export const WorkspaceRevokedKeyResponseSchema = {
 } as const;
 export type WorkspaceRevokedKeyResponse = FromSchema<typeof WorkspaceRevokedKeyResponseSchema, { keepDefaultedPropertiesOptional: true }>;
 
+export const WorkspaceOAuthConfigurationsResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "configurations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "toolkit": {
+            "const": "home-assistant",
+            "default": "home-assistant",
+            "title": "Toolkit",
+            "type": "string"
+          },
+          "protocol": {
+            "const": "home_assistant",
+            "default": "home_assistant",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "pending_cleanup": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Pending Cleanup",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "WorkspaceOAuthConfiguration",
+        "type": "object"
+      },
+      "title": "Configurations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "configurations"
+  ],
+  "title": "WorkspaceOAuthConfigurationsResponse",
+  "type": "object"
+} as const;
+export type WorkspaceOAuthConfigurationsResponse = FromSchema<typeof WorkspaceOAuthConfigurationsResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceHomeAssistantAuthorizationRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "configuration_id": {
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "title": "Configuration Id",
+      "type": "string"
+    },
+    "entity_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Entity Id",
+      "type": "string"
+    },
+    "mapping": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "telemetry_role": {
+              "enum": [
+                "consumption_interval",
+                "current_power",
+                "generation",
+                "export",
+                "storage_state"
+              ],
+              "title": "Telemetry Role",
+              "type": "string"
+            },
+            "unit": {
+              "enum": [
+                "kWh",
+                "W",
+                "kW",
+                "MW",
+                "%"
+              ],
+              "title": "Unit",
+              "type": "string"
+            },
+            "quantity_shape": {
+              "enum": [
+                "interval",
+                "instantaneous"
+              ],
+              "title": "Quantity Shape",
+              "type": "string"
+            },
+            "measurement_kind": {
+              "const": "metered",
+              "default": "metered",
+              "title": "Measurement Kind",
+              "type": "string"
+            }
+          },
+          "required": [
+            "telemetry_role",
+            "unit",
+            "quantity_shape"
+          ],
+          "title": "ReviewedHomeAssistantMapping",
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "configuration_id",
+    "entity_id"
+  ],
+  "title": "WorkspaceHomeAssistantAuthorizationRequest",
+  "type": "object"
+} as const;
+export type WorkspaceHomeAssistantAuthorizationRequest = FromSchema<typeof WorkspaceHomeAssistantAuthorizationRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceOAuthCompleteRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "configuration_id": {
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "title": "Configuration Id",
+      "type": "string"
+    },
+    "state": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "State",
+      "type": "string"
+    },
+    "code": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Code",
+      "type": "string"
+    }
+  },
+  "required": [
+    "configuration_id",
+    "state",
+    "code"
+  ],
+  "title": "WorkspaceOAuthCompleteRequest",
+  "type": "object"
+} as const;
+export type WorkspaceOAuthCompleteRequest = FromSchema<typeof WorkspaceOAuthCompleteRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceOAuthCleanupRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "configuration_id": {
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "title": "Configuration Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "configuration_id"
+  ],
+  "title": "WorkspaceOAuthCleanupRequest",
+  "type": "object"
+} as const;
+export type WorkspaceOAuthCleanupRequest = FromSchema<typeof WorkspaceOAuthCleanupRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceOAuthCleanupResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "cleanup": {
+      "additionalProperties": false,
+      "properties": {
+        "attempted": {
+          "minimum": 0,
+          "title": "Attempted",
+          "type": "integer"
+        },
+        "succeeded": {
+          "minimum": 0,
+          "title": "Succeeded",
+          "type": "integer"
+        },
+        "pending": {
+          "minimum": 0,
+          "title": "Pending",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "attempted",
+        "succeeded",
+        "pending"
+      ],
+      "title": "WorkspaceOAuthCleanup",
+      "type": "object"
+    }
+  },
+  "required": [
+    "cleanup"
+  ],
+  "title": "WorkspaceOAuthCleanupResponse",
+  "type": "object"
+} as const;
+export type WorkspaceOAuthCleanupResponse = FromSchema<typeof WorkspaceOAuthCleanupResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceAuthorizationResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "authorization": {
+      "additionalProperties": false,
+      "properties": {
+        "connection_id": {
+          "title": "Connection Id",
+          "type": "string"
+        },
+        "authorization_url": {
+          "title": "Authorization Url",
+          "type": "string"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "connection_id",
+        "authorization_url",
+        "state",
+        "expires_at"
+      ],
+      "title": "WorkspaceAuthorization",
+      "type": "object"
+    }
+  },
+  "required": [
+    "authorization"
+  ],
+  "title": "WorkspaceAuthorizationResponse",
+  "type": "object"
+} as const;
+export type WorkspaceAuthorizationResponse = FromSchema<typeof WorkspaceAuthorizationResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
 export const ConnectionSetupsResponseSchema = {
   "additionalProperties": false,
   "properties": {
@@ -2019,6 +2282,13 @@ export const SearchResponseSchema = {
             "title": "Input Schema",
             "type": "object"
           },
+          "account_argument_settings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Account Argument Settings",
+            "type": "object"
+          },
           "capabilities": {
             "items": {
               "type": "string"
@@ -2441,6 +2711,9 @@ export const ConnectionCreatedResponseSchema = {
         "auth_scheme": {
           "type": "string"
         },
+        "display_name": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -2466,7 +2739,10 @@ export const ConnectionCreatedResponseSchema = {
           "type": "string"
         },
         "provider": {
-          "const": "octopus"
+          "enum": [
+            "octopus",
+            "home_assistant"
+          ]
         },
         "status": {
           "const": "healthy"
@@ -2532,6 +2808,9 @@ export const ConnectionVerificationResponseSchema = {
         "auth_scheme": {
           "type": "string"
         },
+        "display_name": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -2557,7 +2836,10 @@ export const ConnectionVerificationResponseSchema = {
           "type": "string"
         },
         "provider": {
-          "const": "octopus"
+          "enum": [
+            "octopus",
+            "home_assistant"
+          ]
         },
         "status": {
           "enum": [
@@ -2626,6 +2908,9 @@ export const ConnectionDisconnectedResponseSchema = {
         "auth_scheme": {
           "type": "string"
         },
+        "display_name": {
+          "type": "string"
+        },
         "state": {
           "type": "string"
         },
@@ -2643,6 +2928,16 @@ export const ConnectionDisconnectedResponseSchema = {
         "verified"
       ],
       "additionalProperties": true
+    },
+    "upstream_revoked": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "required": [
@@ -2681,6 +2976,9 @@ export const ConnectionsResponseSchema = {
             "type": "boolean"
           },
           "auth_scheme": {
+            "type": "string"
+          },
+          "display_name": {
             "type": "string"
           },
           "state": {

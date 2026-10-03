@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import ConfigDict, Field, StrictFloat, StrictStr, field_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 from .models import StrictModel
 
@@ -119,3 +128,71 @@ class WorkspaceAgentKeyRequest(_ControlModel):
         if not value.strip():
             raise ValueError("A key name is required")
         return value.strip()
+
+
+class ReviewedHomeAssistantMapping(_ControlModel):
+    telemetry_role: Literal[
+        "consumption_interval", "current_power", "generation", "export", "storage_state"
+    ]
+    unit: Literal["kWh", "W", "kW", "MW", "%"]
+    quantity_shape: Literal["interval", "instantaneous"]
+    measurement_kind: Literal["metered"] = "metered"
+
+    @model_validator(mode="after")
+    def supported_mapping(self) -> ReviewedHomeAssistantMapping:
+        from .onboarding import reviewed_provider_bindings
+
+        if not reviewed_provider_bindings(
+            "home_assistant", {"entity_id": "sensor.reviewed", **self.model_dump()}
+        ):
+            raise ValueError("Select a compatible telemetry role, unit and quantity shape")
+        return self
+
+
+class WorkspaceHomeAssistantAuthorizationRequest(_ControlModel):
+    configuration_id: StrictStr = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
+    entity_id: StrictStr = Field(min_length=1, max_length=256, pattern=r"^[A-Za-z0-9_.:-]+$")
+    mapping: ReviewedHomeAssistantMapping | None = None
+
+
+class WorkspaceOAuthCompleteRequest(_ControlModel):
+    configuration_id: StrictStr = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
+    state: StrictStr = Field(min_length=1, max_length=512, repr=False)
+    code: StrictStr = Field(min_length=1, max_length=2048, repr=False)
+
+
+class WorkspaceOAuthConfiguration(_ControlModel):
+    id: StrictStr
+    name: StrictStr
+    toolkit: Literal["home-assistant"] = "home-assistant"
+    protocol: Literal["home_assistant"] = "home_assistant"
+    pending_cleanup: StrictInt = Field(default=0, ge=0)
+
+
+class WorkspaceOAuthConfigurationsResponse(_ControlModel):
+    configurations: list[WorkspaceOAuthConfiguration]
+
+
+class WorkspaceAuthorization(_ControlModel):
+    connection_id: StrictStr
+    authorization_url: StrictStr = Field(repr=False)
+    state: StrictStr = Field(repr=False)
+    expires_at: datetime
+
+
+class WorkspaceAuthorizationResponse(_ControlModel):
+    authorization: WorkspaceAuthorization
+
+
+class WorkspaceOAuthCleanupRequest(_ControlModel):
+    configuration_id: StrictStr = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
+
+
+class WorkspaceOAuthCleanup(_ControlModel):
+    attempted: StrictInt = Field(ge=0)
+    succeeded: StrictInt = Field(ge=0)
+    pending: StrictInt = Field(ge=0)
+
+
+class WorkspaceOAuthCleanupResponse(_ControlModel):
+    cleanup: WorkspaceOAuthCleanup

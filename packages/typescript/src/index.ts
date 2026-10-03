@@ -11,6 +11,9 @@ export type {
   WorkspaceAssetRequest, WorkspaceAssetResponse, WorkspaceAssetsResponse, WorkspaceMapRequest,
   WorkspaceAgentKeyRequest, WorkspaceIssuedKeyResponse, WorkspaceKeysResponse,
   WorkspaceRevokedKeyResponse,
+  WorkspaceOAuthConfigurationsResponse, WorkspaceHomeAssistantAuthorizationRequest,
+  WorkspaceOAuthCompleteRequest, WorkspaceAuthorizationResponse,
+  WorkspaceOAuthCleanupRequest, WorkspaceOAuthCleanupResponse,
 } from "./contracts.js";
 export { EnergyMcpClient, EnergyMcpError } from "./mcp.js";
 export type {

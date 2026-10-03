@@ -32,7 +32,7 @@ _DEFAULT_STATE_TTL = 600
 _DEFAULT_REFRESH_SKEW = 60
 _HTTP_TIMEOUT = 15.0
 _MAX_TOKEN_RESPONSE_BYTES = 64 * 1024
-_AUTH_SCHEMA_VERSION = 1
+_AUTH_SCHEMA_VERSION = 2
 _RESERVED_AUTHORIZATION_PARAMS = {
     "client_id",
     "code_challenge",
@@ -120,11 +120,15 @@ def _model_fields(model: type[Any]) -> Mapping[str, Any]:
     return getattr(model, "model_fields", {})
 
 
-def _provider_url(value: str, *, name: str) -> str:
+def _provider_url(value: str, *, name: str, allow_http: bool = False) -> str:
     parsed = urlparse(value)
     if parsed.scheme not in {"https", "http"} or not parsed.netloc or parsed.username:
         raise ValueError(f"{name} must be an HTTPS URL")
-    if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+    if (
+        parsed.scheme == "http"
+        and not allow_http
+        and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
+    ):
         raise ValueError(f"{name} must use HTTPS")
     if parsed.fragment:
         raise ValueError(f"{name} must not contain a fragment")
@@ -133,7 +137,7 @@ def _provider_url(value: str, *, name: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class OAuthProvider:
-    """Operator-supplied OAuth 2.0 endpoints and client configuration."""
+    """Operator-supplied OAuth endpoints and protocol configuration."""
 
     authorization_endpoint: str
     token_endpoint: str
@@ -148,23 +152,31 @@ class OAuthProvider:
     state_ttl_seconds: int = _DEFAULT_STATE_TTL
     refresh_skew_seconds: int = _DEFAULT_REFRESH_SKEW
     extra_authorization_params: Mapping[str, str] = field(default_factory=dict)
+    protocol: Literal["oauth2_pkce", "home_assistant"] = "oauth2_pkce"
 
     def __post_init__(self) -> None:
+        if self.protocol not in {"oauth2_pkce", "home_assistant"}:
+            raise ValueError("Unsupported OAuth protocol")
         if not isinstance(self.authorization_endpoint, str) or not isinstance(
             self.token_endpoint, str
         ):
             raise ValueError("OAuth endpoints must be strings")
         if self.client_secret is not None and not isinstance(self.client_secret, str):
             raise ValueError("client_secret must be a string")
-        _provider_url(self.authorization_endpoint, name="authorization_endpoint")
-        _provider_url(self.token_endpoint, name="token_endpoint")
+        allow_http = self.protocol == "home_assistant"
+        _provider_url(
+            self.authorization_endpoint, name="authorization_endpoint", allow_http=allow_http
+        )
+        _provider_url(self.token_endpoint, name="token_endpoint", allow_http=allow_http)
         if self.revocation_endpoint:
-            _provider_url(self.revocation_endpoint, name="revocation_endpoint")
+            _provider_url(
+                self.revocation_endpoint, name="revocation_endpoint", allow_http=allow_http
+            )
         if not isinstance(self.client_id, str) or not self.client_id:
             raise ValueError("client_id is required")
         if not isinstance(self.redirect_uri, str) or not self.redirect_uri:
             raise ValueError("redirect_uri is required")
-        _provider_url(self.redirect_uri, name="redirect_uri")
+        _provider_url(self.redirect_uri, name="redirect_uri", allow_http=allow_http)
         if self.state_ttl_seconds < 1 or self.state_ttl_seconds > 3600:
             raise ValueError("state_ttl_seconds must be between 1 and 3600")
         if self.refresh_skew_seconds < 0 or self.refresh_skew_seconds > 3600:
@@ -177,6 +189,64 @@ class OAuthProvider:
             key.lower() in _RESERVED_AUTHORIZATION_PARAMS for key in self.extra_authorization_params
         ):
             raise ValueError("authorization parameters cannot override OAuth protocol fields")
+        if self.protocol == "home_assistant":
+            self._validate_home_assistant()
+
+    @staticmethod
+    def _origin(value: str) -> tuple[str, str, int]:
+        parsed = urlparse(value)
+        if parsed.hostname is None:
+            raise ValueError("Home Assistant URLs must have a host")
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        return parsed.scheme, parsed.hostname.lower(), port
+
+    def _validate_home_assistant(self) -> None:
+        if self.client_secret is not None or self.token_endpoint_auth_method != "none":
+            raise ValueError("Home Assistant does not use client_secret authentication")
+        if self.extra_authorization_params or self.scopes:
+            raise ValueError("Home Assistant does not support extra authorization parameters")
+        try:
+            client_id = urlparse(self.client_id)
+            auth = urlparse(self.authorization_endpoint)
+            token = urlparse(self.token_endpoint)
+            revoke = urlparse(self.revocation_endpoint) if self.revocation_endpoint else None
+            endpoints = (auth, token, *(() if revoke is None else (revoke,)))
+            if any(item.query or item.fragment for item in endpoints):
+                raise ValueError
+            if auth.path.rstrip("/") != "/auth/authorize":
+                raise ValueError
+            if token.path.rstrip("/") != "/auth/token":
+                raise ValueError
+            if revoke is not None and revoke.path.rstrip("/") != "/auth/revoke":
+                raise ValueError
+            if (
+                len(
+                    {
+                        self._origin(self.authorization_endpoint),
+                        self._origin(self.token_endpoint),
+                        *(
+                            ()
+                            if self.revocation_endpoint is None
+                            else (self._origin(self.revocation_endpoint),)
+                        ),
+                    }
+                )
+                != 1
+            ):
+                raise ValueError
+            if (
+                not client_id.scheme
+                or not client_id.netloc
+                or client_id.username
+                or client_id.fragment
+            ):
+                raise ValueError
+            if self._origin(self.client_id) != self._origin(self.redirect_uri):
+                raise ValueError
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "Home Assistant OAuth URLs must use the documented paths and origins"
+            ) from exc
 
     @property
     def authorization_url(self) -> str:
@@ -209,9 +279,15 @@ class _OAuthTransaction:
     connection_id: str
     redirect_uri: str
     expires_at: datetime
-    verifier: str
+    verifier: str | None
     provider: OAuthProvider
-    account_updated_at: str
+    account_updated_at: str | None
+    kind: Literal["operator", "managed"] = "operator"
+    workspace_id: str | None = None
+    account: ConnectedAccount | None = None
+    managed_revision: int | None = None
+    nonce: str | None = None
+    state_hash: str | None = None
 
 
 class AuthStore:
@@ -272,7 +348,7 @@ class AuthStore:
             version = int(db.execute("PRAGMA user_version").fetchone()[0])
             if version > _AUTH_SCHEMA_VERSION:
                 raise RuntimeError("Auth store schema is newer than this version supports.")
-            if version not in (0, _AUTH_SCHEMA_VERSION):
+            if version not in (0, 1, _AUTH_SCHEMA_VERSION):
                 raise RuntimeError("Auth store schema version is unsupported.")
 
             db.execute("PRAGMA foreign_keys = ON")
@@ -368,6 +444,26 @@ class AuthStore:
                 db.execute(
                     "CREATE INDEX IF NOT EXISTS oauth_expiry ON oauth_transactions(expires_at)"
                 )
+
+            if version in (0, 1):
+                db.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS oauth_cleanup (
+                        cleanup_id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        workspace_id TEXT NOT NULL,
+                        connection_id TEXT NOT NULL,
+                        configuration_id TEXT,
+                        created_at TEXT NOT NULL,
+                        claimed_until TEXT,
+                        payload_blob BLOB NOT NULL
+                    )
+                    """
+                )
+                db.execute(
+                    "CREATE INDEX IF NOT EXISTS oauth_cleanup_scope "
+                    "ON oauth_cleanup(user_id, workspace_id, configuration_id, created_at)"
+                )
                 db.execute(f"PRAGMA user_version = {_AUTH_SCHEMA_VERSION}")
 
             cls._validate_schema(db)
@@ -407,6 +503,16 @@ class AuthStore:
             "consumed_at",
             "transaction_blob",
         }
+        required_cleanup_columns = {
+            "cleanup_id",
+            "user_id",
+            "workspace_id",
+            "connection_id",
+            "configuration_id",
+            "created_at",
+            "claimed_until",
+            "payload_blob",
+        }
         if (
             int(db.execute("PRAGMA user_version").fetchone()[0]) != _AUTH_SCHEMA_VERSION
             or {
@@ -415,17 +521,21 @@ class AuthStore:
                     "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
                 )
             }
-            != {"accounts", "oauth_transactions"}
+            != {"accounts", "oauth_transactions", "oauth_cleanup"}
             or required_account_columns != cls._table_columns(db, "accounts")
             or required_oauth_columns != cls._table_columns(db, "oauth_transactions")
+            or required_cleanup_columns != cls._table_columns(db, "oauth_cleanup")
             or not {"accounts_scope", "accounts_workspace_scope"}.issubset(
                 cls._index_names(db, "accounts")
             )
             or "oauth_expiry" not in cls._index_names(db, "oauth_transactions")
+            or "oauth_cleanup_scope" not in cls._index_names(db, "oauth_cleanup")
             or cls._index_columns(db, "accounts_scope") != ["user_id", "site_id", "toolkit"]
             or cls._index_columns(db, "accounts_workspace_scope")
             != ["user_id", "workspace_id", "id"]
             or cls._index_columns(db, "oauth_expiry") != ["expires_at"]
+            or cls._index_columns(db, "oauth_cleanup_scope")
+            != ["user_id", "workspace_id", "configuration_id", "created_at"]
         ):
             raise RuntimeError("Auth store schema is corrupt or unsupported.")
 
@@ -518,6 +628,7 @@ class AuthStore:
             "state_ttl_seconds": provider.state_ttl_seconds,
             "refresh_skew_seconds": provider.refresh_skew_seconds,
             "extra_authorization_params": dict(provider.extra_authorization_params),
+            "protocol": provider.protocol,
         }
 
     @staticmethod
@@ -538,6 +649,7 @@ class AuthStore:
                     str(k): str(v)
                     for k, v in dict(data.get("extra_authorization_params", {})).items()
                 },
+                protocol=data.get("protocol", "oauth2_pkce"),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise _safe_error(
@@ -567,6 +679,7 @@ class AuthStore:
 
         blobs = self._db.execute("SELECT secret_blob FROM accounts").fetchall()
         blobs.extend(self._db.execute("SELECT transaction_blob FROM oauth_transactions").fetchall())
+        blobs.extend(self._db.execute("SELECT payload_blob FROM oauth_cleanup").fetchall())
         for row in blobs:
             try:
                 self._decrypt_json(row[0])
@@ -1204,14 +1317,28 @@ class AuthStore:
         """Return stored secret values for the runtime's final redaction pass."""
 
         values: set[str] = set()
-        rows = (
+        account_rows = (
             self._db.execute(
                 "SELECT secret_blob FROM accounts WHERE user_id = ?", (user_id,)
             ).fetchall()
             if user_id is not None
             else self._db.execute("SELECT secret_blob FROM accounts").fetchall()
         )
-        for row in rows:
+        transaction_rows = (
+            self._db.execute(
+                "SELECT transaction_blob FROM oauth_transactions WHERE user_id = ?", (user_id,)
+            ).fetchall()
+            if user_id is not None
+            else self._db.execute("SELECT transaction_blob FROM oauth_transactions").fetchall()
+        )
+        cleanup_rows = (
+            self._db.execute(
+                "SELECT payload_blob FROM oauth_cleanup WHERE user_id = ?", (user_id,)
+            ).fetchall()
+            if user_id is not None
+            else self._db.execute("SELECT payload_blob FROM oauth_cleanup").fetchall()
+        )
+        for row in account_rows:
             try:
                 payload = self._decrypt_json(row["secret_blob"])
             except EnergyError:
@@ -1220,6 +1347,32 @@ class AuthStore:
                 value = payload.get(key)
                 if isinstance(value, str) and value:
                     values.add(value)
+            provider = payload.get("provider")
+            if isinstance(provider, dict):
+                value = provider.get("client_secret")
+                if isinstance(value, str) and value:
+                    values.add(value)
+        for row in transaction_rows:
+            try:
+                payload = self._decrypt_json(row["transaction_blob"])
+            except EnergyError:
+                continue
+            verifier = payload.get("verifier")
+            if isinstance(verifier, str) and verifier:
+                values.add(verifier)
+            provider = payload.get("provider")
+            if isinstance(provider, dict):
+                value = provider.get("client_secret")
+                if isinstance(value, str) and value:
+                    values.add(value)
+        for row in cleanup_rows:
+            try:
+                payload = self._decrypt_json(row["payload_blob"])
+            except EnergyError:
+                continue
+            refresh_token = payload.get("refresh_token")
+            if isinstance(refresh_token, str) and refresh_token:
+                values.add(refresh_token)
             provider = payload.get("provider")
             if isinstance(provider, dict):
                 value = provider.get("client_secret")
@@ -1300,22 +1453,33 @@ class AuthStore:
         digest = hashlib.sha256(verifier.encode("ascii")).digest()
         return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
-    def _authorization_url(self, provider: OAuthProvider, state: str, verifier: str) -> str:
+    def _authorization_url(self, provider: OAuthProvider, state: str, verifier: str | None) -> str:
         parsed = urlparse(provider.authorization_endpoint)
         params = dict(parse_qsl(parsed.query, keep_blank_values=True))
-        params.update(
-            {
-                "response_type": "code",
-                "client_id": provider.client_id,
-                "redirect_uri": provider.redirect_uri,
-                "state": state,
-                "code_challenge": self._pkce_challenge(verifier),
-                "code_challenge_method": "S256",
-            }
-        )
-        if provider.scopes:
-            params["scope"] = " ".join(provider.scopes)
-        params.update(provider.extra_authorization_params)
+        if provider.protocol == "home_assistant":
+            params.update(
+                {
+                    "client_id": provider.client_id,
+                    "redirect_uri": provider.redirect_uri,
+                    "state": state,
+                }
+            )
+        else:
+            if verifier is None:
+                raise RuntimeError("PKCE provider transaction is missing its verifier")
+            params.update(
+                {
+                    "response_type": "code",
+                    "client_id": provider.client_id,
+                    "redirect_uri": provider.redirect_uri,
+                    "state": state,
+                    "code_challenge": self._pkce_challenge(verifier),
+                    "code_challenge_method": "S256",
+                }
+            )
+            if provider.scopes:
+                params["scope"] = " ".join(provider.scopes)
+            params.update(provider.extra_authorization_params)
         return urlunparse(parsed._replace(query=urlencode(params)))
 
     def begin_oauth(
@@ -1352,7 +1516,7 @@ class AuthStore:
                 "oauth_rate_limited", "Too many pending authorizations; wait for expiry."
             )
         state = secrets.token_urlsafe(32)
-        verifier = secrets.token_urlsafe(64)
+        verifier = secrets.token_urlsafe(64) if provider.protocol == "oauth2_pkce" else None
         expires_at = now + timedelta(seconds=provider.state_ttl_seconds)
         transaction = {
             "verifier": verifier,
@@ -1378,51 +1542,275 @@ class AuthStore:
             expires_at=expires_at,
         )
 
+    def begin_managed_oauth(
+        self,
+        user_id: str,
+        workspace_id: str,
+        account: ConnectedAccount,
+        provider: OAuthProvider,
+    ) -> AuthorizationRequest:
+        """Create an encrypted, one-time enrollment without publishing an account."""
+
+        if not isinstance(account, ConnectedAccount):
+            raise TypeError("connection must be a ConnectedAccount")
+        if not isinstance(provider, OAuthProvider):
+            raise TypeError("provider must be an OAuthProvider")
+        if (
+            not isinstance(user_id, str)
+            or not user_id
+            or not isinstance(workspace_id, str)
+            or not workspace_id.strip()
+            or account.user_id != user_id
+            or account.workspace_id is not None
+            or account.site_id is not None
+            or account.auth.scheme != "oauth"
+            or account.auth.credential_env is not None
+            or not account.id
+            or not account.toolkit
+        ):
+            raise _safe_error("oauth_configuration_invalid", "OAuth enrollment is invalid.")
+        account_data = self._account_dump(account)
+        now = self._now()
+        state = secrets.token_urlsafe(32)
+        verifier = secrets.token_urlsafe(64) if provider.protocol == "oauth2_pkce" else None
+        expires_at = now + timedelta(seconds=provider.state_ttl_seconds)
+        state_hash = _state_hash(state)
+        nonce = secrets.token_urlsafe(32)
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            existing = self._db.execute(
+                "SELECT * FROM accounts WHERE id = ?", (account.id,)
+            ).fetchone()
+            expected_revision: int | None = None
+            if existing is not None:
+                stored = self._view(existing)
+                if existing["user_id"] != user_id or existing["workspace_id"] != workspace_id:
+                    raise _safe_error(
+                        "account_forbidden", "Connection is outside this user/workspace scope."
+                    )
+                expected_revision = self._managed_revision(existing)
+                if stored.toolkit != account.toolkit or stored.auth.scheme != "oauth":
+                    raise _safe_error("connection_conflict", "Connection identity cannot change.")
+                if stored.state == "active":
+                    raise _safe_error(
+                        "connection_conflict",
+                        "Disconnect the active connection before reconnecting.",
+                    )
+                if stored.state not in {"pending_mapping", "revoked"}:
+                    raise _safe_error(
+                        "connection_conflict", "Connection is not eligible for OAuth enrollment."
+                    )
+
+            # Starting again invalidates both unclaimed and in-flight managed callbacks.
+            prior = self._db.execute(
+                "SELECT state_hash, transaction_blob FROM oauth_transactions "
+                "WHERE user_id = ? AND connection_id = ?",
+                (user_id, account.id),
+            ).fetchall()
+            for row in prior:
+                payload = self._decrypt_json(row["transaction_blob"])
+                if (
+                    payload.get("format_version") == 1
+                    and payload.get("kind") == "managed"
+                    and payload.get("workspace_id") == workspace_id
+                ):
+                    self._db.execute(
+                        "DELETE FROM oauth_transactions WHERE state_hash = ?",
+                        (row["state_hash"],),
+                    )
+
+            self._db.execute("DELETE FROM oauth_transactions WHERE expires_at < ?", (_iso(now),))
+            pending_count = self._db.execute(
+                "SELECT COUNT(*) FROM oauth_transactions WHERE user_id=? AND consumed_at IS NULL",
+                (user_id,),
+            ).fetchone()[0]
+            if pending_count >= 100:
+                raise _safe_error(
+                    "oauth_rate_limited", "Too many pending authorizations; wait for expiry."
+                )
+            transaction = {
+                "format_version": 1,
+                "kind": "managed",
+                "nonce": nonce,
+                "workspace_id": workspace_id,
+                "managed_revision": expected_revision,
+                "account": account_data,
+                "verifier": verifier,
+                "provider": self._provider_dump(provider),
+            }
+            self._db.execute(
+                "INSERT INTO oauth_transactions(state_hash, user_id, connection_id, "
+                "redirect_uri, expires_at, transaction_blob) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    state_hash,
+                    user_id,
+                    account.id,
+                    provider.redirect_uri,
+                    _iso(expires_at),
+                    self._encrypt_json(transaction),
+                ),
+            )
+            self._db.commit()
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+            raise
+        return AuthorizationRequest(
+            connection_id=account.id,
+            authorization_url=self._authorization_url(provider, state, verifier),
+            state=state,
+            expires_at=expires_at,
+        )
+
     def _take_oauth_transaction(
-        self, user_id: str, state: str, redirect_uri: str
+        self,
+        user_id: str,
+        state: str,
+        redirect_uri: str,
+        *,
+        workspace_id: str | None = None,
+        expected_provider: OAuthProvider | None = None,
+        expected_configuration_id: str | None = None,
+        expected_kind: Literal["operator", "managed"] = "operator",
     ) -> _OAuthTransaction:
         if not isinstance(state, str) or not state or len(state) > 512:
             raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
-        row = self._db.execute(
-            "SELECT * FROM oauth_transactions WHERE state_hash = ?",
-            (_state_hash(state),),
-        ).fetchone()
-        if row is None or row["user_id"] != user_id:
-            raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
-        expires_at = _parse_datetime(row["expires_at"])
-        if expires_at is None or expires_at <= self._now():
-            raise _safe_error("oauth_state_expired", "OAuth state is invalid or expired.")
-        if redirect_uri != row["redirect_uri"]:
-            raise _safe_error("oauth_redirect_mismatch", "OAuth redirect URI does not match.")
-        consumed = self._db.execute(
-            "UPDATE oauth_transactions SET consumed_at = ? WHERE state_hash = ? AND consumed_at IS NULL",
-            (_iso(self._now()), row["state_hash"]),
-        )
-        if consumed.rowcount != 1:
-            self._db.commit()
-            raise _safe_error("oauth_state_replayed", "OAuth state is invalid or expired.")
-        self._db.commit()
-        payload = self._decrypt_json(row["transaction_blob"])
+        state_hash = _state_hash(state)
+        self._db.execute("BEGIN IMMEDIATE")
         try:
-            verifier = payload["verifier"]
+            row = self._db.execute(
+                "SELECT * FROM oauth_transactions WHERE state_hash = ?", (state_hash,)
+            ).fetchone()
+            if row is None or row["user_id"] != user_id:
+                raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+            transaction = self._decode_oauth_transaction(row, redirect_uri, state_hash)
+            if transaction.kind != expected_kind:
+                raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+            if expected_kind == "managed" and transaction.workspace_id != workspace_id:
+                raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+            if expected_configuration_id is not None and (
+                transaction.account is None
+                or transaction.account.settings.get("managed_oauth_configuration_id")
+                != expected_configuration_id
+            ):
+                raise _safe_error(
+                    "oauth_configuration_changed",
+                    "Approved OAuth configuration changed; start authorization again.",
+                )
+            if expected_provider is not None and transaction.provider != expected_provider:
+                raise _safe_error(
+                    "oauth_configuration_changed",
+                    "Approved OAuth configuration changed; start authorization again.",
+                )
+            expires_at = _parse_datetime(row["expires_at"])
+            if expires_at is None or expires_at <= self._now():
+                raise _safe_error("oauth_state_expired", "OAuth state is invalid or expired.")
+            if redirect_uri != row["redirect_uri"]:
+                raise _safe_error("oauth_redirect_mismatch", "OAuth redirect URI does not match.")
+            if transaction.expires_at != expires_at:
+                raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+            consumed = self._db.execute(
+                "UPDATE oauth_transactions SET consumed_at = ? "
+                "WHERE state_hash = ? AND consumed_at IS NULL",
+                (_iso(self._now()), state_hash),
+            )
+            if consumed.rowcount != 1:
+                raise _safe_error("oauth_state_replayed", "OAuth state is invalid or expired.")
+            self._db.commit()
+            return transaction
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+            raise
+
+    def _decode_oauth_transaction(
+        self, row: sqlite3.Row, redirect_uri: str, state_hash: str
+    ) -> _OAuthTransaction:
+        payload = self._decrypt_json(row["transaction_blob"])
+        version = payload.get("format_version")
+        kind = payload.get("kind")
+        if version is None and kind is None:
+            transaction_kind: Literal["operator", "managed"] = "operator"
+        elif version == 1 and kind == "managed":
+            transaction_kind = "managed"
+        elif version == 1 and kind == "operator":
+            transaction_kind = "operator"
+        else:
+            raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+        try:
             provider_data = payload["provider"]
-            if not isinstance(verifier, str) or not isinstance(provider_data, dict):
+            if not isinstance(provider_data, dict):
                 raise ValueError
             provider = self._provider_load(provider_data)
-            account_updated_at = payload["account_updated_at"]
-            if not isinstance(account_updated_at, str) or not account_updated_at:
+            if provider.redirect_uri != redirect_uri or row["redirect_uri"] != redirect_uri:
+                raise _safe_error("oauth_redirect_mismatch", "OAuth redirect URI does not match.")
+            verifier = payload.get("verifier")
+            if provider.protocol == "oauth2_pkce":
+                if not isinstance(verifier, str) or not verifier:
+                    raise ValueError
+            elif verifier is not None:
                 raise ValueError
+            expires_at = _parse_datetime(row["expires_at"])
+            if expires_at is None:
+                raise ValueError
+            if transaction_kind == "operator":
+                account_updated_at = payload["account_updated_at"]
+                if not isinstance(account_updated_at, str) or not account_updated_at:
+                    raise ValueError
+                return _OAuthTransaction(
+                    user_id=row["user_id"],
+                    connection_id=row["connection_id"],
+                    redirect_uri=redirect_uri,
+                    expires_at=expires_at,
+                    verifier=verifier,
+                    provider=provider,
+                    account_updated_at=account_updated_at,
+                    kind="operator",
+                    state_hash=state_hash,
+                )
+
+            workspace_id = payload["workspace_id"]
+            account_data = payload["account"]
+            revision = payload["managed_revision"]
+            nonce = payload["nonce"]
+            if (
+                not isinstance(workspace_id, str)
+                or not workspace_id
+                or not isinstance(account_data, dict)
+                or (revision is not None and (type(revision) is not int or revision < 1))
+                or not isinstance(nonce, str)
+                or not nonce
+            ):
+                raise ValueError
+            account = ConnectedAccount.model_validate(account_data)
+            if (
+                account.id != row["connection_id"]
+                or account.user_id != row["user_id"]
+                or account.workspace_id is not None
+                or account.site_id is not None
+                or account.auth.scheme != "oauth"
+                or account.auth.credential_env is not None
+            ):
+                raise ValueError
+            return _OAuthTransaction(
+                user_id=row["user_id"],
+                connection_id=row["connection_id"],
+                redirect_uri=redirect_uri,
+                expires_at=expires_at,
+                verifier=verifier,
+                provider=provider,
+                account_updated_at=None,
+                kind="managed",
+                workspace_id=workspace_id,
+                account=account,
+                managed_revision=revision,
+                nonce=nonce,
+                state_hash=state_hash,
+            )
+        except EnergyError:
+            raise
         except (KeyError, TypeError, ValueError) as exc:
             raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.") from exc
-        return _OAuthTransaction(
-            user_id=user_id,
-            connection_id=row["connection_id"],
-            redirect_uri=redirect_uri,
-            expires_at=expires_at,
-            verifier=verifier,
-            provider=provider,
-            account_updated_at=account_updated_at,
-        )
 
     @staticmethod
     async def _read_bounded_response(response: httpx.Response) -> tuple[int, bytes]:
@@ -1538,15 +1926,27 @@ class AuthStore:
         transaction = self._take_oauth_transaction(user_id, state, redirect_uri)
         if not isinstance(code, str) or not code or len(code) > 4096:
             raise _safe_error("oauth_code_invalid", "OAuth authorization code is invalid.")
-        result = await self._token_request(
-            transaction.provider,
-            {
+        if transaction.provider.protocol == "home_assistant":
+            token_request = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": transaction.provider.client_id,
+            }
+        else:
+            if transaction.verifier is None:
+                raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+            token_request = {
                 "grant_type": "authorization_code",
                 "code": code,
                 "redirect_uri": redirect_uri,
                 "client_id": transaction.provider.client_id,
                 "code_verifier": transaction.verifier,
-            },
+            }
+        if transaction.account_updated_at is None:
+            raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+        result = await self._token_request(
+            transaction.provider,
+            token_request,
         )
         expires_at = self._expiry(result, self._now())
         payload = {
@@ -1564,6 +1964,244 @@ class AuthStore:
             expected_state="pending",
             expected_enabled=False,
         )
+
+    async def complete_managed_oauth(
+        self,
+        user_id: str,
+        workspace_id: str,
+        state: str,
+        code: str,
+        redirect_uri: str,
+        *,
+        verify: Callable[[ConnectedAccount, str], Awaitable[None]],
+        expected_provider: OAuthProvider | None = None,
+        expected_configuration_id: str | None = None,
+    ) -> ConnectedAccount:
+        """Exchange and verify a managed OAuth grant before publishing its account."""
+
+        if not isinstance(code, str) or not code or len(code) > 4096:
+            raise _safe_error("oauth_code_invalid", "OAuth authorization code is invalid.")
+        transaction = self._take_oauth_transaction(
+            user_id,
+            state,
+            redirect_uri,
+            workspace_id=workspace_id,
+            expected_provider=expected_provider,
+            expected_configuration_id=expected_configuration_id,
+            expected_kind="managed",
+        )
+        if transaction.account is None:
+            raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+        if transaction.provider.protocol == "home_assistant":
+            token_request = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": transaction.provider.client_id,
+            }
+        else:
+            if transaction.verifier is None:
+                raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+            token_request = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": transaction.provider.client_id,
+                "code_verifier": transaction.verifier,
+            }
+        result = await self._token_request(transaction.provider, token_request)
+        access_token = result["access_token"]
+        try:
+            await verify(transaction.account, access_token)
+        except BaseException as exc:
+            safe_error = _safe_error(
+                "provider_verification_failed", "Provider verification failed."
+            )
+            await self._queue_and_attempt_managed_cleanup(
+                transaction.user_id,
+                transaction.workspace_id or workspace_id,
+                transaction.connection_id,
+                self._managed_configuration_id(transaction.account),
+                transaction.provider,
+                result.get("refresh_token"),
+            )
+            if isinstance(exc, Exception):
+                raise safe_error from exc
+            raise
+        try:
+            return self._publish_managed_oauth(
+                transaction,
+                access_token=access_token,
+                refresh_token=result.get("refresh_token"),
+                token_type=result.get("token_type"),
+                expires_at=self._expiry(result, self._now()),
+            )
+        except BaseException:
+            await self._queue_and_attempt_managed_cleanup(
+                transaction.user_id,
+                transaction.workspace_id or workspace_id,
+                transaction.connection_id,
+                self._managed_configuration_id(transaction.account),
+                transaction.provider,
+                result.get("refresh_token"),
+            )
+            raise
+
+    def _publish_managed_oauth(
+        self,
+        transaction: _OAuthTransaction,
+        *,
+        access_token: str,
+        refresh_token: str | None,
+        token_type: str | None,
+        expires_at: datetime | None,
+    ) -> ConnectedAccount:
+        account = transaction.account
+        workspace_id = transaction.workspace_id
+        if (
+            transaction.kind != "managed"
+            or account is None
+            or workspace_id is None
+            or transaction.state_hash is None
+            or transaction.nonce is None
+        ):
+            raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
+
+        now = self._now()
+        candidate_data = self._account_dump(account)
+        candidate_data["workspace_id"] = workspace_id
+        candidate_data["site_id"] = None
+        candidate_data["state"] = "pending_mapping"
+        candidate_data["enabled"] = False
+        candidate_data["last_verified_at"] = _iso(now)
+        candidate_data["expires_at"] = _iso(expires_at)
+        pending = self._account_with_metadata(
+            candidate_data,
+            state="pending_mapping",
+            enabled=False,
+            last_verified_at=now,
+            expires_at=expires_at,
+        )
+        account_data = self._account_dump(pending)
+        secret_blob = self._encrypt_json(
+            {
+                "credential": access_token,
+                "refresh_token": refresh_token,
+                "provider": self._provider_dump(transaction.provider),
+                "token_type": token_type,
+            }
+        )
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            active_transaction = self._db.execute(
+                "SELECT * FROM oauth_transactions WHERE state_hash = ?",
+                (transaction.state_hash,),
+            ).fetchone()
+            if (
+                active_transaction is None
+                or active_transaction["user_id"] != transaction.user_id
+                or active_transaction["connection_id"] != transaction.connection_id
+                or active_transaction["consumed_at"] is None
+            ):
+                raise _safe_error(
+                    "connection_changed",
+                    "Connection changed while provider authorization was running.",
+                )
+            current = self._decrypt_json(active_transaction["transaction_blob"])
+            if (
+                current.get("format_version") != 1
+                or current.get("kind") != "managed"
+                or current.get("workspace_id") != workspace_id
+                or current.get("nonce") != transaction.nonce
+            ):
+                raise _safe_error(
+                    "connection_changed",
+                    "Connection changed while provider authorization was running.",
+                )
+
+            existing = self._db.execute(
+                "SELECT * FROM accounts WHERE id = ?", (account.id,)
+            ).fetchone()
+            revision = transaction.managed_revision
+            if revision is None:
+                if existing is not None:
+                    raise _safe_error(
+                        "connection_changed",
+                        "Connection changed while provider authorization was running.",
+                    )
+                self._db.execute(
+                    """
+                    INSERT INTO accounts(
+                        id, user_id, toolkit, site_id, account_json, secret_blob, state,
+                        enabled, created_at, updated_at, last_verified_at, expires_at,
+                        last_error, workspace_id, managed_revision
+                    ) VALUES (?, ?, ?, NULL, ?, ?, 'pending_mapping', 0, ?, ?, ?, ?, NULL, ?, 1)
+                    """,
+                    (
+                        account.id,
+                        account.user_id,
+                        account.toolkit,
+                        json.dumps(account_data, separators=(",", ":"), sort_keys=True),
+                        secret_blob,
+                        _iso(now),
+                        _iso(now),
+                        _iso(now),
+                        _iso(expires_at),
+                        workspace_id,
+                    ),
+                )
+            else:
+                if existing is None:
+                    raise _safe_error(
+                        "connection_changed",
+                        "Connection changed while provider authorization was running.",
+                    )
+                current_account = self._view(existing)
+                if (
+                    existing["user_id"] != transaction.user_id
+                    or existing["workspace_id"] != workspace_id
+                    or self._managed_revision(existing) != revision
+                    or current_account.state not in {"pending_mapping", "revoked"}
+                    or current_account.toolkit != account.toolkit
+                    or current_account.auth.scheme != "oauth"
+                ):
+                    raise _safe_error(
+                        "connection_changed",
+                        "Connection changed while provider authorization was running.",
+                    )
+                updated = self._db.execute(
+                    """
+                    UPDATE accounts SET toolkit = ?, site_id = NULL, account_json = ?, secret_blob = ?,
+                        state = 'pending_mapping', enabled = 0, updated_at = ?, last_verified_at = ?,
+                        expires_at = ?, last_error = NULL, managed_revision = managed_revision + 1
+                    WHERE id = ? AND user_id = ? AND workspace_id = ? AND managed_revision = ?
+                    """,
+                    (
+                        account.toolkit,
+                        json.dumps(account_data, separators=(",", ":"), sort_keys=True),
+                        secret_blob,
+                        _iso(now),
+                        _iso(now),
+                        _iso(expires_at),
+                        account.id,
+                        transaction.user_id,
+                        workspace_id,
+                        revision,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise _safe_error(
+                        "connection_changed",
+                        "Connection changed while provider authorization was running.",
+                    )
+            result_row = self._managed_row(transaction.user_id, workspace_id, account.id)
+            result = self._view(result_row)
+            self._managed_revision(result_row)
+            self._db.commit()
+            return result
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+            raise
 
     async def refresh(self, user_id: str, connection_id: str) -> ConnectedAccount:
         async with self._refresh_lock(connection_id):
@@ -1612,3 +2250,554 @@ class AuthStore:
                 expected_state="active",
                 expected_enabled=True,
             )
+
+    async def refresh_managed(
+        self, user_id: str, workspace_id: str, connection_id: str
+    ) -> ConnectedAccount:
+        """Refresh one active managed grant with workspace scope and revision CAS."""
+
+        lock_id = "\0".join((user_id, workspace_id, connection_id))
+        async with self._refresh_lock(lock_id):
+            row = self._managed_row(user_id, workspace_id, connection_id)
+            account = self._view(row)
+            if account.state != "active" or not account.enabled or account.site_id is None:
+                raise _safe_error("connection_disabled", "Connection is disabled or revoked.")
+            payload = self._decrypt_json(row["secret_blob"])
+            provider_data = payload.get("provider")
+            refresh_token = payload.get("refresh_token")
+            if (
+                account.auth.scheme != "oauth"
+                or not isinstance(provider_data, dict)
+                or not isinstance(refresh_token, str)
+                or not refresh_token
+            ):
+                raise _safe_error("refresh_unavailable", "No OAuth refresh token is configured.")
+            provider = self._provider_load(provider_data)
+            expiry = _parse_datetime(row["expires_at"])
+            if expiry and expiry > self._now() + timedelta(seconds=provider.refresh_skew_seconds):
+                return account
+            revision = self._managed_revision(row)
+            result = await self._token_request(
+                provider,
+                {
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                    "client_id": provider.client_id,
+                },
+            )
+            rotated_refresh = result.get("refresh_token") or refresh_token
+            new_expiry = self._expiry(result, self._now())
+            now = self._now()
+            account_data = json.loads(row["account_json"])
+            if not isinstance(account_data, dict):
+                raise _safe_error("connection_corrupt", "Stored connection metadata is invalid.")
+            account_data["expires_at"] = _iso(new_expiry)
+            new_secret = self._encrypt_json(
+                {
+                    "credential": result["access_token"],
+                    "refresh_token": rotated_refresh,
+                    "provider": self._provider_dump(provider),
+                    "token_type": result.get("token_type"),
+                }
+            )
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                current = self._managed_row(user_id, workspace_id, connection_id)
+                current_account = self._view(current)
+                if (
+                    self._managed_revision(current) != revision
+                    or current_account.state != "active"
+                    or not current_account.enabled
+                    or current_account.site_id is None
+                ):
+                    raise _safe_error(
+                        "connection_changed",
+                        "Connection changed while the provider request was running.",
+                    )
+                updated = self._db.execute(
+                    """
+                    UPDATE accounts SET account_json = ?, secret_blob = ?, updated_at = ?,
+                        expires_at = ?, managed_revision = managed_revision + 1
+                    WHERE id = ? AND user_id = ? AND workspace_id = ? AND managed_revision = ?
+                        AND state = 'active' AND enabled = 1 AND site_id IS NOT NULL
+                    """,
+                    (
+                        json.dumps(account_data, separators=(",", ":"), sort_keys=True),
+                        new_secret,
+                        _iso(now),
+                        _iso(new_expiry),
+                        connection_id,
+                        user_id,
+                        workspace_id,
+                        revision,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise _safe_error(
+                        "connection_changed",
+                        "Connection changed while the provider request was running.",
+                    )
+                refreshed_row = self._managed_row(user_id, workspace_id, connection_id)
+                refreshed = self._view(refreshed_row)
+                self._managed_revision(refreshed_row)
+                self._db.commit()
+                return refreshed
+            except BaseException:
+                if self._db.in_transaction:
+                    self._db.rollback()
+                returned_refresh = result.get("refresh_token")
+                if (
+                    isinstance(returned_refresh, str)
+                    and returned_refresh
+                    and returned_refresh != refresh_token
+                ):
+                    await self._queue_and_attempt_managed_cleanup(
+                        user_id,
+                        workspace_id,
+                        connection_id,
+                        self._managed_configuration_id(account),
+                        provider,
+                        returned_refresh,
+                    )
+                raise
+
+    async def revoke_managed(
+        self,
+        user_id: str,
+        workspace_id: str,
+        connection_id: str,
+        *,
+        expected_provider: OAuthProvider | None = None,
+    ) -> tuple[ConnectedAccount, bool | None]:
+        """Revoke locally first and retain a durable remote-cleanup record until success."""
+
+        provider: OAuthProvider | None = None
+        refresh_token: str | None = None
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._managed_row(user_id, workspace_id, connection_id)
+            account = self._view(row)
+            if account.auth.scheme != "oauth":
+                raise _safe_error("oauth_not_configured", "Connection does not use OAuth.")
+            self._cancel_managed_oauth_transactions(user_id, workspace_id, connection_id)
+            if account.state == "revoked" and not account.enabled:
+                cleanup_rows = self._managed_oauth_cleanup_rows(
+                    user_id, workspace_id, connection_id
+                )
+                revoked = account
+                self._db.commit()
+            else:
+                try:
+                    payload = self._decrypt_json(row["secret_blob"])
+                    provider_data = payload.get("provider")
+                    token_value = payload.get("refresh_token")
+                    if isinstance(provider_data, dict):
+                        provider = self._provider_load(provider_data)
+                    if isinstance(token_value, str) and token_value:
+                        refresh_token = token_value
+                except EnergyError:
+                    # Local denial must still succeed when stored ciphertext is damaged.
+                    provider = None
+                    refresh_token = None
+                revision = self._managed_revision(row)
+                now = self._now()
+                account_data = json.loads(row["account_json"])
+                if not isinstance(account_data, dict):
+                    raise _safe_error(
+                        "connection_corrupt", "Stored connection metadata is invalid."
+                    )
+                account_data["enabled"] = False
+                account_data["state"] = "revoked"
+                if provider is not None:
+                    self._insert_managed_oauth_cleanup(
+                        user_id,
+                        workspace_id,
+                        connection_id,
+                        self._managed_configuration_id(account),
+                        provider,
+                        refresh_token,
+                    )
+                updated = self._db.execute(
+                    """
+                    UPDATE accounts SET account_json = ?, secret_blob = ?, state = 'revoked',
+                        enabled = 0, updated_at = ?, last_error = NULL,
+                        managed_revision = managed_revision + 1
+                    WHERE id = ? AND user_id = ? AND workspace_id = ? AND managed_revision = ?
+                    """,
+                    (
+                        json.dumps(account_data, separators=(",", ":"), sort_keys=True),
+                        self._encrypt_json(
+                            {"credential": None, "refresh_token": None, "provider": None}
+                        ),
+                        _iso(now),
+                        connection_id,
+                        user_id,
+                        workspace_id,
+                        revision,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise _safe_error(
+                        "connection_changed", "Connection changed while being revoked."
+                    )
+                revoked_row = self._managed_row(user_id, workspace_id, connection_id)
+                revoked = self._view(revoked_row)
+                self._managed_revision(revoked_row)
+                cleanup_rows = self._managed_oauth_cleanup_rows(
+                    user_id, workspace_id, connection_id
+                )
+                self._db.commit()
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+            raise
+
+        if not cleanup_rows:
+            return revoked, None
+        status: bool | None = None
+        for cleanup_row in cleanup_rows:
+            status = await self._attempt_managed_oauth_cleanup(
+                cleanup_row["cleanup_id"],
+                user_id,
+                workspace_id,
+                connection_id,
+                configuration_id=cleanup_row["configuration_id"],
+                expected_provider=expected_provider or provider,
+            )
+            if status is not None:
+                break
+        pending = self._db.execute(
+            "SELECT COUNT(*) FROM oauth_cleanup WHERE user_id = ? AND workspace_id = ? "
+            "AND connection_id = ?",
+            (user_id, workspace_id, connection_id),
+        ).fetchone()[0]
+        return revoked, status is True and pending == 0
+
+    def _cancel_managed_oauth_transactions(
+        self, user_id: str, workspace_id: str, connection_id: str
+    ) -> None:
+        rows = self._db.execute(
+            "SELECT state_hash, transaction_blob FROM oauth_transactions "
+            "WHERE user_id = ? AND connection_id = ?",
+            (user_id, connection_id),
+        ).fetchall()
+        for row in rows:
+            try:
+                payload = self._decrypt_json(row["transaction_blob"])
+            except EnergyError:
+                continue
+            if (
+                payload.get("format_version") == 1
+                and payload.get("kind") == "managed"
+                and payload.get("workspace_id") == workspace_id
+            ):
+                self._db.execute(
+                    "DELETE FROM oauth_transactions WHERE state_hash = ?",
+                    (row["state_hash"],),
+                )
+
+    @staticmethod
+    def _managed_configuration_id(account: ConnectedAccount) -> str | None:
+        value = account.settings.get("managed_oauth_configuration_id")
+        return value if isinstance(value, str) and value else None
+
+    def _insert_managed_oauth_cleanup(
+        self,
+        user_id: str,
+        workspace_id: str,
+        connection_id: str,
+        configuration_id: str | None,
+        provider: OAuthProvider,
+        refresh_token: str | None,
+    ) -> str | None:
+        if (
+            provider.revocation_endpoint is None
+            or not isinstance(refresh_token, str)
+            or not refresh_token
+        ):
+            return None
+        cleanup_id = secrets.token_urlsafe(24)
+        self._db.execute(
+            "INSERT INTO oauth_cleanup(cleanup_id, user_id, workspace_id, connection_id, "
+            "configuration_id, created_at, claimed_until, payload_blob) "
+            "VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
+            (
+                cleanup_id,
+                user_id,
+                workspace_id,
+                connection_id,
+                configuration_id,
+                _iso(self._now()),
+                self._encrypt_json(
+                    {
+                        "format_version": 1,
+                        "provider": self._provider_dump(provider),
+                        "refresh_token": refresh_token,
+                    }
+                ),
+            ),
+        )
+        return cleanup_id
+
+    async def _queue_and_attempt_managed_cleanup(
+        self,
+        user_id: str,
+        workspace_id: str,
+        connection_id: str,
+        configuration_id: str | None,
+        provider: OAuthProvider,
+        refresh_token: str | None,
+    ) -> bool | None:
+        if provider.revocation_endpoint is None or not refresh_token:
+            return None
+        cleanup_id: str | None = None
+        try:
+            self._db.execute("BEGIN IMMEDIATE")
+            cleanup_id = self._insert_managed_oauth_cleanup(
+                user_id,
+                workspace_id,
+                connection_id,
+                configuration_id,
+                provider,
+                refresh_token,
+            )
+            self._db.commit()
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+
+        if cleanup_id is None:
+            try:
+                return await self._revoke_provider_token(provider, refresh_token)
+            except Exception:
+                return False
+        try:
+            status = await self._attempt_managed_oauth_cleanup(
+                cleanup_id,
+                user_id,
+                workspace_id,
+                connection_id,
+                configuration_id=configuration_id,
+                expected_provider=provider,
+            )
+        except Exception:
+            return False
+        return status if status is not None else False
+
+    def pending_managed_oauth_cleanup(
+        self, user_id: str, workspace_id: str, configuration_id: str
+    ) -> int:
+        """Return only the count of outstanding cleanup grants in exact scope."""
+
+        if not all(
+            isinstance(value, str) and value for value in (user_id, workspace_id, configuration_id)
+        ):
+            raise ValueError("user_id, workspace_id and configuration_id are required")
+        row = self._db.execute(
+            "SELECT COUNT(*) FROM oauth_cleanup WHERE user_id = ? AND workspace_id = ? "
+            "AND configuration_id = ?",
+            (user_id, workspace_id, configuration_id),
+        ).fetchone()
+        return int(row[0])
+
+    async def retry_managed_oauth_cleanup(
+        self,
+        user_id: str,
+        workspace_id: str,
+        *,
+        configuration_id: str,
+        provider: OAuthProvider,
+        limit: int = 16,
+    ) -> dict[str, int]:
+        """Retry exact-scope cleanup records that match the currently approved profile."""
+
+        if not all(
+            isinstance(value, str) and value for value in (user_id, workspace_id, configuration_id)
+        ):
+            raise ValueError("user_id, workspace_id and configuration_id are required")
+        if not isinstance(provider, OAuthProvider):
+            raise TypeError("provider must be an OAuthProvider")
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        rows = self._db.execute(
+            "SELECT cleanup_id FROM oauth_cleanup WHERE user_id = ? AND workspace_id = ? "
+            "AND configuration_id = ? ORDER BY created_at, cleanup_id LIMIT ?",
+            (user_id, workspace_id, configuration_id, limit),
+        ).fetchall()
+        attempted = 0
+        succeeded = 0
+        for row in rows:
+            status = await self._attempt_managed_oauth_cleanup(
+                row["cleanup_id"],
+                user_id,
+                workspace_id,
+                None,
+                configuration_id=configuration_id,
+                expected_provider=provider,
+            )
+            if status is None:
+                continue
+            attempted += 1
+            if status:
+                succeeded += 1
+        return {
+            "attempted": attempted,
+            "succeeded": succeeded,
+            "pending": self.pending_managed_oauth_cleanup(user_id, workspace_id, configuration_id),
+        }
+
+    def _claim_managed_oauth_cleanup(
+        self,
+        cleanup_id: str,
+        user_id: str,
+        workspace_id: str,
+        connection_id: str | None,
+        *,
+        configuration_id: str | None,
+        expected_provider: OAuthProvider | None,
+    ) -> tuple[str, OAuthProvider, str] | None:
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._db.execute(
+                "SELECT * FROM oauth_cleanup WHERE cleanup_id = ?",
+                (cleanup_id,),
+            ).fetchone()
+            if (
+                row is None
+                or row["user_id"] != user_id
+                or row["workspace_id"] != workspace_id
+                or (connection_id is not None and row["connection_id"] != connection_id)
+                or row["configuration_id"] != configuration_id
+            ):
+                self._db.commit()
+                return None
+            claimed_until = _parse_datetime(row["claimed_until"])
+            if claimed_until is not None and claimed_until > self._now():
+                self._db.commit()
+                return None
+            try:
+                payload = self._decrypt_json(row["payload_blob"])
+                if payload.get("format_version") != 1:
+                    raise ValueError
+                provider_data = payload.get("provider")
+                refresh_token = payload.get("refresh_token")
+                if (
+                    not isinstance(provider_data, dict)
+                    or not isinstance(refresh_token, str)
+                    or not refresh_token
+                ):
+                    raise ValueError
+                provider = self._provider_load(provider_data)
+            except (EnergyError, TypeError, ValueError):
+                self._db.commit()
+                return None
+            if provider.revocation_endpoint is None or (
+                expected_provider is not None and provider != expected_provider
+            ):
+                self._db.commit()
+                return None
+            now = self._now()
+            lease = now + timedelta(seconds=2 * _HTTP_TIMEOUT + 5)
+            updated = self._db.execute(
+                "UPDATE oauth_cleanup SET claimed_until = ? WHERE cleanup_id = ? "
+                "AND (claimed_until IS NULL OR claimed_until <= ?)",
+                (_iso(lease), cleanup_id, _iso(now)),
+            )
+            if updated.rowcount != 1:
+                self._db.commit()
+                return None
+            self._db.commit()
+            return row["connection_id"], provider, refresh_token
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+            raise
+
+    def _finish_managed_oauth_cleanup(self, cleanup_id: str, succeeded: bool) -> None:
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            if succeeded:
+                self._db.execute("DELETE FROM oauth_cleanup WHERE cleanup_id = ?", (cleanup_id,))
+            else:
+                self._db.execute(
+                    "UPDATE oauth_cleanup SET claimed_until = NULL WHERE cleanup_id = ?",
+                    (cleanup_id,),
+                )
+            self._db.commit()
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+            raise
+
+    async def _attempt_managed_oauth_cleanup(
+        self,
+        cleanup_id: str,
+        user_id: str,
+        workspace_id: str,
+        connection_id: str | None,
+        *,
+        configuration_id: str | None,
+        expected_provider: OAuthProvider | None,
+    ) -> bool | None:
+        claimed = self._claim_managed_oauth_cleanup(
+            cleanup_id,
+            user_id,
+            workspace_id,
+            connection_id,
+            configuration_id=configuration_id,
+            expected_provider=expected_provider,
+        )
+        if claimed is None:
+            return None
+        _, provider, refresh_token = claimed
+        try:
+            succeeded = await self._revoke_provider_token(provider, refresh_token)
+        except Exception:
+            succeeded = False
+        self._finish_managed_oauth_cleanup(cleanup_id, succeeded)
+        return succeeded
+
+    def _managed_oauth_cleanup_rows(
+        self, user_id: str, workspace_id: str, connection_id: str
+    ) -> list[sqlite3.Row]:
+        return self._db.execute(
+            "SELECT cleanup_id, configuration_id FROM oauth_cleanup WHERE user_id = ? "
+            "AND workspace_id = ? AND connection_id = ? ORDER BY rowid DESC LIMIT 16",
+            (user_id, workspace_id, connection_id),
+        ).fetchall()
+
+    async def _revoke_provider_token(self, provider: OAuthProvider, refresh_token: str) -> bool:
+        endpoint = provider.revocation_endpoint
+        if endpoint is None:
+            return False
+        data = {"token": refresh_token}
+        auth: httpx.BasicAuth | None = None
+        if provider.protocol != "home_assistant":
+            data["token_type_hint"] = "refresh_token"
+            data["client_id"] = provider.client_id
+            if provider.token_endpoint_auth_method == "client_secret_basic":
+                auth = httpx.BasicAuth(provider.client_id, provider.client_secret or "")
+            elif provider.token_endpoint_auth_method == "client_secret_post":
+                data["client_secret"] = provider.client_secret or ""
+
+        async def request(client: httpx.AsyncClient) -> bool:
+            async with client.stream(
+                "POST",
+                endpoint,
+                data=data,
+                auth=auth,
+                timeout=_HTTP_TIMEOUT,
+                follow_redirects=False,
+            ) as response:
+                status_code, _ = await self._read_bounded_response(response)
+                return 200 <= status_code < 300
+
+        try:
+            if self.http is None:
+                async with httpx.AsyncClient(
+                    timeout=_HTTP_TIMEOUT, follow_redirects=False
+                ) as client:
+                    return await request(client)
+            return await request(self.http)
+        except (EnergyError, httpx.HTTPError):
+            return False

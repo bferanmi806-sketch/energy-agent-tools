@@ -1432,6 +1432,7 @@ def register(registry: Registry) -> None:
             name="home_assistant.get_state",
             toolkit="home-assistant",
             resource_scope="account",
+            account_argument_settings={"entity_id": "entity_id"},
             description="Read one Home Assistant entity state and its measurement attributes.",
             input_schema=schema({"entity_id": {"type": "string"}}, required=["entity_id"]),
             capabilities=["get_current_power", "telemetry", "home", "building", "sensor"],
@@ -1444,6 +1445,7 @@ def register(registry: Registry) -> None:
             name="home_assistant.get_history",
             toolkit="home-assistant",
             resource_scope="account",
+            account_argument_settings={"entity_id": "entity_id"},
             description="Read Home Assistant historical state changes for one entity and a bounded UTC range.",
             input_schema=schema(
                 {

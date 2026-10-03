@@ -113,7 +113,21 @@ class EnergyAgent:
             self, bindings, defer_unknown_tools=defer_unknown_bindings
         )
 
-    def credential_available(self, account: ConnectedAccount) -> bool:
+    @staticmethod
+    def oauth_configuration_available(session: Session, account: ConnectedAccount) -> bool:
+        if account.workspace_id is None or account.auth.scheme != "oauth":
+            return True
+        configuration_id = account.settings.get("managed_oauth_configuration_id")
+        digest = account.settings.get("managed_oauth_configuration_digest")
+        return bool(
+            isinstance(configuration_id, str)
+            and isinstance(digest, str)
+            and session.managed_oauth_configurations.get(configuration_id) == digest
+        )
+
+    def credential_available(self, account: ConnectedAccount, session: Session) -> bool:
+        if not self.oauth_configuration_available(session, account):
+            return False
         if account.auth.scheme in {"none", "local"}:
             return True
         if account.auth.secret_id:
@@ -337,7 +351,7 @@ class EnergyAgent:
                 account = self._account(session, tool.toolkit)
                 if account is None and tool.resource_scope == "account":
                     return 0
-                return 1 if account is None or self.credential_available(account) else 0
+                return 1 if account is None or self.credential_available(account, session) else 0
             except EnergyError:
                 return 0
 
@@ -414,6 +428,7 @@ class EnergyAgent:
             and a.workspace_id == session.workspace_id
             and a.enabled
             and a.state == "active"
+            and self.oauth_configuration_available(session, a)
             and (session.site_id is None or a.site_id == session.site_id)
         ]
         if selected:
@@ -526,6 +541,16 @@ class EnergyAgent:
             account = self._account(session, tool.toolkit, account_id)
             if tool.resource_scope == "account" and account is None:
                 raise EnergyError("connection_required", "An owned connection is required.")
+            if account and account.workspace_id is not None:
+                for argument, setting in tool.account_argument_settings.items():
+                    if (
+                        setting not in account.settings
+                        or args.get(argument) != account.settings[setting]
+                    ):
+                        raise EnergyError(
+                            "account_resource_forbidden",
+                            "Requested resource is outside the mapped connection.",
+                        )
             credential = None
             if account and account.auth.secret_id:
                 if not self.auth_store:
@@ -537,7 +562,13 @@ class EnergyAgent:
                     and account.expires_at
                     and account.expires_at <= datetime.now(UTC) + timedelta(seconds=60)
                 ):
-                    account = await self.auth_store.refresh(session.user_id, account.id)
+                    account = (
+                        await self.auth_store.refresh_managed(
+                            session.user_id, session.workspace_id, account.id
+                        )
+                        if session.workspace_id is not None
+                        else await self.auth_store.refresh(session.user_id, account.id)
+                    )
                     self.accounts[account.id] = account
                 credential = self.auth_store.credential(
                     session.user_id, account.id, session.site_id

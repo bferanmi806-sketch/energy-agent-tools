@@ -8,17 +8,25 @@ import tarfile
 from datetime import datetime
 from pathlib import Path
 
+import httpx
 import pytest
 from cryptography.fernet import Fernet
 
-from energy_agent_tools.auth import AuthStore
+from energy_agent_tools.auth import AuthStore, OAuthProvider
 from energy_agent_tools.maintenance import (
     MaintenanceError,
     create_backup,
     inspect_backup,
     restore_backup,
 )
-from energy_agent_tools.models import AuthConfig, ConnectedAccount, DataKind, EnergyResult, Session
+from energy_agent_tools.models import (
+    AuthConfig,
+    ConnectedAccount,
+    DataKind,
+    EnergyError,
+    EnergyResult,
+    Session,
+)
 from energy_agent_tools.workbench import Workbench
 
 
@@ -72,6 +80,88 @@ def test_backup_restore_preserves_artifacts_and_encrypted_connections(tmp_path: 
     restored_store = AuthStore(restored / "vault", key)
     assert restored_store.credential("alice", "meter-home", "home") == "credential-never-in-archive"
     restored_store.close()
+
+
+@pytest.mark.asyncio
+async def test_backup_restores_pending_oauth_cleanup_for_scoped_retry(tmp_path: Path) -> None:
+    state, key, _ = _state(tmp_path)
+    provider = OAuthProvider(
+        authorization_endpoint="https://ha.example/auth/authorize",
+        token_endpoint="https://ha.example/auth/token",
+        revocation_endpoint="https://ha.example/auth/revoke",
+        client_id="https://app.example/",
+        redirect_uri="https://app.example/oauth/callback",
+        protocol="home_assistant",
+    )
+    account = ConnectedAccount(
+        id="ha-home",
+        user_id="alice",
+        toolkit="home-assistant",
+        auth=AuthConfig(scheme="oauth"),
+        settings={"managed_oauth_configuration_id": "home"},
+    )
+
+    def unavailable(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/auth/token":
+            return httpx.Response(
+                200,
+                json={
+                    "access_token": "backup-private-access",
+                    "refresh_token": "backup-private-refresh",
+                },
+            )
+        return httpx.Response(503)
+
+    async def reject(_account: ConnectedAccount, _credential: str) -> None:
+        raise RuntimeError("verification unavailable")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(unavailable)) as client:
+        store = AuthStore(state / "vault", key, http=client)
+        authorization = store.begin_managed_oauth("alice", "workspace-a", account, provider)
+        with pytest.raises(EnergyError, match="verification"):
+            await store.complete_managed_oauth(
+                "alice",
+                "workspace-a",
+                authorization.state,
+                "code",
+                provider.redirect_uri,
+                verify=reject,
+                expected_provider=provider,
+                expected_configuration_id="home",
+            )
+        assert store.pending_managed_oauth_cleanup("alice", "workspace-a", "home") == 1
+        store.close()
+
+    archive = tmp_path / "cleanup.tar.gz"
+    manifest = create_backup(state, archive)
+    assert next(item for item in manifest.files if item.kind == "auth").schema == "auth.v2"
+    with tarfile.open(archive, "r:gz") as bundle:
+        vault = bundle.extractfile("vault/auth.sqlite3")
+        assert vault is not None
+        assert b"backup-private-refresh" not in vault.read()
+    restored = tmp_path / "restored-cleanup"
+    restore_backup(archive, restored)
+    calls: list[httpx.Request] = []
+
+    def available(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(204)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(available)) as client:
+        store = AuthStore(restored / "vault", key, http=client)
+        store.validate_encryption_key()
+        assert store.workspace_accounts("alice", "workspace-a") == []
+        result = await store.retry_managed_oauth_cleanup(
+            "alice",
+            "workspace-a",
+            configuration_id="home",
+            provider=provider,
+        )
+        assert result == {"attempted": 1, "succeeded": 1, "pending": 0}
+        assert len(calls) == 1
+        assert calls[0].url.path == "/auth/revoke"
+        assert b"backup-private-refresh" in calls[0].content
+        store.close()
 
 
 def test_vault_key_is_only_included_when_explicit(tmp_path: Path) -> None:

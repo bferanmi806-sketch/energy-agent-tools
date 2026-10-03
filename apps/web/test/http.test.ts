@@ -62,7 +62,7 @@ test("production web routes authenticate the real gateway and keep keys out of r
     assert.equal(invalid.status,303); assert.match(invalid.headers.get("location") ?? "",/invalid_token/);
     const login=await post("/api/auth",{token}); assert.equal(login.status,303);
     const sealed=login.headers.get("set-cookie"); assert.ok(sealed);
-    assert.match(sealed,/HttpOnly/); assert.match(sealed,/SameSite=Strict/); assert.ok(!sealed.includes(token));
+    assert.match(sealed,/HttpOnly/); assert.match(sealed,/SameSite=Lax/); assert.ok(!sealed.includes(token));
     const cookie=sealed.split(";",1)[0]; assert.ok(cookie);
     const sdk = new EnergyAgentTools({baseUrl:gatewayUrl,token});
     const identity=await sdk.identity();

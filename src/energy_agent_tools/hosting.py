@@ -27,7 +27,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from math import isfinite
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from pydantic import (
     BaseModel,
@@ -54,13 +54,21 @@ from .control_contracts import (
     ManageKeyAccess,
     WorkspaceAgentKeyRequest,
     WorkspaceAssetRequest,
+    WorkspaceAuthorization,
+    WorkspaceAuthorizationResponse,
     WorkspaceDetails,
+    WorkspaceHomeAssistantAuthorizationRequest,
     WorkspaceMapRequest,
     WorkspaceMode,
+    WorkspaceOAuthCleanupRequest,
+    WorkspaceOAuthCleanupResponse,
+    WorkspaceOAuthCompleteRequest,
     WorkspaceSiteRequest,
 )
 from .control_store import ControlStore
-from .models import EnergyError, Json, Session, Site
+from .managed_oauth import HomeAssistantOAuthConfiguration, ManagedHomeAssistantOAuth
+from .models import ConnectedAccount, EnergyError, Json, Session, Site
+from .onboarding import ConnectionHealth, probe_provider
 from .runtime import EnergyAgent
 from .server import create_server
 from .skills import SKILLS, search_skills
@@ -387,6 +395,7 @@ class AuthenticatedHost:
         close_agent_on_shutdown: bool,
         control_store: ControlStore | None = None,
         managed_workspaces: bool = False,
+        managed_oauth_configurations: tuple[HomeAssistantOAuthConfiguration, ...] = (),
     ) -> None:
         if max_requests_per_minute <= 0:
             raise ValueError("max_requests_per_minute must be positive.")
@@ -411,6 +420,14 @@ class AuthenticatedHost:
         if managed_workspaces:
             agent.auth_store.validate_encryption_key()
         self._managed_workspaces = managed_workspaces
+        if managed_oauth_configurations and not managed_workspaces:
+            raise ValueError("Managed OAuth configurations require managed hosting.")
+        self._managed_oauth: ManagedHomeAssistantOAuth | None = None
+        if managed_workspaces:
+            assert isinstance(agent.auth_store, AuthStore)
+            self._managed_oauth = ManagedHomeAssistantOAuth(
+                agent.auth_store, agent.http, managed_oauth_configurations
+            )
         self._operator_site_ids = frozenset(agent.sites)
         self._operator_asset_ids = frozenset(agent.assets)
         self._managed_sites: dict[str, str] = {}
@@ -430,6 +447,22 @@ class AuthenticatedHost:
         self._build_mcp_mounts()
         routes = [
             Route("/workspace", self._workspace, methods=["GET"]),
+            Route(
+                "/workspace/auth-configurations",
+                self._workspace_auth_configurations,
+                methods=["GET"],
+            ),
+            Route("/workspace/authorizations", self._workspace_authorize, methods=["POST"]),
+            Route(
+                "/workspace/authorizations/complete",
+                self._workspace_complete_authorization,
+                methods=["POST"],
+            ),
+            Route(
+                "/workspace/authorizations/cleanup",
+                self._workspace_authorization_cleanup,
+                methods=["POST"],
+            ),
             Route("/workspace/sites", self._workspace_sites, methods=["GET", "POST"]),
             Route("/workspace/assets", self._workspace_assets, methods=["GET", "POST"]),
             Route("/workspace/keys", self._workspace_keys, methods=["GET", "POST"]),
@@ -662,6 +695,7 @@ class AuthenticatedHost:
                 site_id,
                 access_mode="hosted",
                 workspace_id=principal.workspace_id,
+                managed_oauth_configurations=self._oauth_configuration_digests(),
             )
             server = create_server(cast(EnergyAgent, _NonClosingAgent(self.agent)), session)
             server.settings.max_request_body_size = self.max_body_bytes
@@ -835,6 +869,11 @@ class AuthenticatedHost:
             workspace_id=identity.workspace_id,
             key_access=identity.access,
         )
+
+    def _oauth_configuration_digests(self) -> dict[str, str]:
+        if self._managed_oauth is None:
+            return {}
+        return {item.id: item.fingerprint() for item in self._managed_oauth.configurations.values()}
 
     @staticmethod
     def _runtime_workspace(principal: Principal) -> str | None:
@@ -1200,6 +1239,117 @@ class AuthenticatedHost:
             )
         return _json_response(ConnectionSetupsResponse(setups=setups).model_dump(mode="json"))
 
+    async def _workspace_auth_configurations(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert self._managed_oauth is not None and principal.workspace_id is not None
+        store = self.agent.auth_store
+        assert isinstance(store, AuthStore)
+        return _json_response(
+            {
+                "configurations": [
+                    {
+                        **configuration.public(),
+                        "pending_cleanup": store.pending_managed_oauth_cleanup(
+                            principal.user_id, principal.workspace_id, configuration.id
+                        ),
+                    }
+                    for configuration in self._managed_oauth.configurations.values()
+                ]
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _workspace_authorize(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None and self._managed_oauth is not None
+        parsed = await self._parse_json(request, WorkspaceHomeAssistantAuthorizationRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(WorkspaceHomeAssistantAuthorizationRequest, parsed)
+        try:
+            await self._managed_oauth.cleanup(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                configuration_id=data.configuration_id,
+            )
+            authorization = self._managed_oauth.begin(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                configuration_id=data.configuration_id,
+                entity_id=data.entity_id,
+                telemetry=data.mapping.model_dump() if data.mapping else None,
+            )
+            response = WorkspaceAuthorizationResponse(
+                authorization=WorkspaceAuthorization(
+                    connection_id=authorization.connection_id,
+                    authorization_url=authorization.authorization_url,
+                    state=authorization.state,
+                    expires_at=authorization.expires_at,
+                )
+            )
+            return _json_response(
+                response.model_dump(mode="json"),
+                status_code=201,
+                headers={"Cache-Control": "no-store"},
+            )
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_authorization_cleanup(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None and self._managed_oauth is not None
+        parsed = await self._parse_json(request, WorkspaceOAuthCleanupRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(WorkspaceOAuthCleanupRequest, parsed)
+        try:
+            cleanup = await self._managed_oauth.cleanup(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                configuration_id=data.configuration_id,
+            )
+            response = WorkspaceOAuthCleanupResponse.model_validate({"cleanup": cleanup})
+            return _json_response(
+                response.model_dump(mode="json"), headers={"Cache-Control": "no-store"}
+            )
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_complete_authorization(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None and self._managed_oauth is not None
+        parsed = await self._parse_json(request, WorkspaceOAuthCompleteRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(WorkspaceOAuthCompleteRequest, parsed)
+        try:
+            account = await self._managed_oauth.complete(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                configuration_id=data.configuration_id,
+                state=data.state,
+                code=data.code,
+            )
+            self.agent._sync_connections(principal.user_id, principal.workspace_id)
+            from .connection_onboarding import _managed_outcome
+
+            assert account.last_verified_at is not None
+            return _json_response(
+                _managed_outcome(account, account.last_verified_at),
+                status_code=201,
+                headers={"Cache-Control": "no-store"},
+            )
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
     async def _workspace_connections(self, request: Request) -> Response:
         principal = self._workspace_manager(request)
         if isinstance(principal, Response):
@@ -1249,6 +1399,21 @@ class AuthenticatedHost:
         except EnergyError as exc:
             return self._energy_error(exc)
 
+    def _managed_oauth_approved(self, account: ConnectedAccount) -> bool:
+        configuration_id = account.settings.get("managed_oauth_configuration_id")
+        digest = account.settings.get("managed_oauth_configuration_digest")
+        return (
+            isinstance(configuration_id, str)
+            and isinstance(digest, str)
+            and self._oauth_configuration_digests().get(configuration_id) == digest
+        )
+
+    def _require_managed_oauth_approval(self, account: ConnectedAccount) -> None:
+        if account.auth.scheme == "oauth" and not self._managed_oauth_approved(account):
+            raise EnergyError(
+                "oauth_configuration_unavailable", "Connection configuration is unavailable."
+            )
+
     async def _workspace_map(self, request: Request) -> Response:
         principal = self._workspace_manager(request)
         if isinstance(principal, Response):
@@ -1270,10 +1435,16 @@ class AuthenticatedHost:
             return _error("site_forbidden", "Select a site in this workspace.", 403)
         store = self.agent.auth_store
         assert isinstance(store, AuthStore)
-        from .connection_onboarding import OctopusConnectionService
+        from .connection_onboarding import map_managed_connection
 
         try:
-            result = await OctopusConnectionService(store, self.agent.http).map_managed(
+            account, _ = store.managed_snapshot(
+                principal.user_id, principal.workspace_id, request.path_params["connection_id"]
+            )
+            self._require_managed_oauth_approval(account)
+            result = await map_managed_connection(
+                store,
+                self.agent.http,
                 user_id=principal.user_id,
                 workspace_id=principal.workspace_id,
                 connection_id=request.path_params["connection_id"],
@@ -1306,7 +1477,7 @@ class AuthenticatedHost:
             account, _ = store.managed_snapshot(
                 principal.user_id, principal.workspace_id, request.path_params["connection_id"]
             )
-            if account.toolkit != "octopus-energy-account":
+            if account.toolkit not in {"octopus-energy-account", "home-assistant"}:
                 return _error(
                     "unsupported_provider", "This connection provider is unsupported.", 400
                 )
@@ -1317,12 +1488,64 @@ class AuthenticatedHost:
                         "Map the connection before checking its health.",
                         409,
                     )
-                result = await OctopusConnectionLifecycle(store, self.agent.http).verify(
-                    user_id=principal.user_id, site_id=account.site_id, connection_id=account.id
-                )
+                self._require_managed_oauth_approval(account)
+                if account.toolkit == "octopus-energy-account":
+                    result = await OctopusConnectionLifecycle(store, self.agent.http).verify(
+                        user_id=principal.user_id, site_id=account.site_id, connection_id=account.id
+                    )
+                else:
+                    if account.auth.scheme == "oauth":
+                        account = await store.refresh_managed(
+                            principal.user_id, principal.workspace_id, account.id
+                        )
+
+                    async def home_probe(checked: ConnectedAccount, credential: str) -> bool:
+                        self._require_managed_oauth_approval(checked)
+                        return await probe_provider(self.agent.http, checked, credential)
+
+                    status: Literal["healthy", "unhealthy"] = "healthy"
+                    message = "Provider read succeeded."
+                    try:
+                        account = await store.verify_provider(
+                            principal.user_id, account.id, home_probe, account.site_id
+                        )
+                    except EnergyError as exc:
+                        if exc.code != "provider_verification_failed":
+                            raise
+                        account, _ = store.managed_snapshot(
+                            principal.user_id, principal.workspace_id, account.id
+                        )
+                        status = "unhealthy"
+                        message = "Provider verification failed."
+                    health = ConnectionHealth(
+                        connection_id=account.id,
+                        provider="home_assistant",
+                        status=status,
+                        checked_at=datetime.now(UTC),
+                        probe="provider-read",
+                        message=message,
+                    )
+                    result = {"ok": True, "account": account.public(), "health": health.public()}
             else:
-                revoked = store.revoke(principal.user_id, account.id, account.site_id)
-                result = {"ok": True, "account": revoked.public()}
+                upstream_revoked = None
+                if account.auth.scheme == "oauth" and self._managed_oauth_approved(account):
+                    assert self._managed_oauth is not None
+                    configuration = self._managed_oauth.configurations[
+                        account.settings["managed_oauth_configuration_id"]
+                    ]
+                    revoked, upstream_revoked = await store.revoke_managed(
+                        principal.user_id,
+                        principal.workspace_id,
+                        account.id,
+                        expected_provider=configuration.provider(),
+                    )
+                else:
+                    revoked = store.revoke(principal.user_id, account.id, account.site_id)
+                result = {
+                    "ok": True,
+                    "account": revoked.public(),
+                    "upstream_revoked": upstream_revoked,
+                }
             self.agent._sync_connections(principal.user_id, principal.workspace_id)
             return _json_response(result, headers={"Cache-Control": "no-store"})
         except EnergyError as exc:
@@ -1400,6 +1623,7 @@ class AuthenticatedHost:
                 site_id,
                 access_mode="hosted",
                 workspace_id=self._runtime_workspace(principal_value),
+                managed_oauth_configurations=self._oauth_configuration_digests(),
             )
             if data.resume_job_id:
                 resumed = await self.agent.job(session, "resume", job_id=data.resume_job_id)
@@ -1707,6 +1931,7 @@ def create_host(
     close_agent_on_shutdown: bool = False,
     control_store: ControlStore | None = None,
     managed_workspaces: bool = False,
+    managed_oauth_configurations: tuple[HomeAssistantOAuthConfiguration, ...] = (),
 ) -> AuthenticatedHost:
     """Build an authenticated multi-user ASGI host.
 
@@ -1727,6 +1952,7 @@ def create_host(
         close_agent_on_shutdown=close_agent_on_shutdown,
         control_store=control_store,
         managed_workspaces=managed_workspaces,
+        managed_oauth_configurations=managed_oauth_configurations,
     )
 
 

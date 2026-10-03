@@ -9,6 +9,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { EnergyAgentTools } from "@energy-agent-tools/sdk";
+import { bindOAuthFlowToSession, OAUTH_FLOW_MAX_TTL_MS, sealOAuthFlow } from "../src/lib/security.js";
 
 const projectRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const webRoot = join(projectRoot, "apps/web");
@@ -43,6 +44,24 @@ async function stop(child: ChildProcess): Promise<void> {
   const exited = once(child, "exit");
   child.kill("SIGTERM");
   await exited;
+}
+
+function responseCookie(response: Response, name: string): string | null {
+  const header = response.headers.get("set-cookie") ?? "";
+  const value = new RegExp(`(?:^|,\\s*)${name}=([^;,\\s]+)`).exec(header)?.[1];
+  return value ? `${name}=${value}` : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function readOAuthObservations(path: string): Promise<{ authCode: number; stateReads: number }> {
+  const value: unknown = JSON.parse(await readFile(path, "utf8"));
+  if (!isRecord(value) || typeof value.auth_code !== "number" || typeof value.state_reads !== "number") {
+    assert.fail("The managed OAuth fixture did not return valid provider observations.");
+  }
+  return { authCode: value.auth_code, stateReads: value.state_reads };
 }
 
 function managedGatewaySource(): string {
@@ -220,7 +239,7 @@ test("production web onboards a zero-site manager through the real managed gatew
     const setCookie = login.headers.get("set-cookie");
     assert.ok(setCookie);
     assert.match(setCookie, /HttpOnly/);
-    assert.match(setCookie, /SameSite=Strict/);
+    assert.match(setCookie, /SameSite=Lax/);
     assert.ok(!setCookie.includes(managerToken));
     const cookie = setCookie.split(";", 1)[0];
     assert.ok(cookie);
@@ -375,6 +394,216 @@ test("production web onboards a zero-site manager through the real managed gatew
     assert.match(finalPage, /Disconnected/);
     assert.ok(!finalPage.includes(managerToken));
     assert.ok(!finalPage.includes(providerKey));
+  } finally {
+    await Promise.all([stop(web), stop(gateway)]);
+    await rm(stateDir, { recursive: true, force: true });
+  }
+});
+
+test("production web binds Home Assistant callback to the manager session and leaves a pending mapping", { timeout: 180_000 }, async () => {
+  const gatewayPort = await freePort();
+  const webPort = await freePort();
+  const gatewayUrl = `http://127.0.0.1:${gatewayPort}`;
+  const webUrl = `http://127.0.0.1:${webPort}`;
+  const stateDir = await mkdtemp(join(tmpdir(), "energy-managed-oauth-web-"));
+  const managerTokenPath = join(stateDir, "manager.token");
+  const otherManagerTokenPath = join(stateDir, "other-manager.token");
+  const gatewayFixture = join(projectRoot, "packages/typescript/test/managed_host.py");
+  const python = process.env.ENERGY_WEB_TEST_PYTHON ?? join(projectRoot, ".venv/bin/python");
+  const webSessionKey = randomBytes(32).toString("hex");
+  const gateway = spawn(
+    python,
+    [
+      gatewayFixture,
+      "--port", String(gatewayPort),
+      "--state-dir", stateDir,
+      "--token-file", managerTokenPath,
+      "--other-token-file", otherManagerTokenPath,
+      "--web-origin", webUrl,
+    ],
+    {
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        PYTHONPATH: [join(projectRoot, "src"), process.env.PYTHONPATH].filter(Boolean).join(delimiter),
+      },
+      stdio: "ignore",
+    },
+  );
+  const web = spawn(
+    process.execPath,
+    [join(webRoot, "node_modules/next/dist/bin/next"), "start", "--hostname", "127.0.0.1", "--port", String(webPort)],
+    {
+      cwd: webRoot,
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        ENERGY_GATEWAY_URL: gatewayUrl,
+        ENERGY_WEB_ORIGIN: webUrl,
+        ENERGY_PUBLIC_GATEWAY_URL: gatewayUrl,
+        ENERGY_WEB_SESSION_KEY: webSessionKey,
+      },
+      stdio: "ignore",
+    },
+  );
+
+  async function post(
+    path: string,
+    fields: Record<string, string>,
+    cookie?: string,
+    origin: string | null = webUrl,
+  ): Promise<Response> {
+    const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
+    if (origin !== null) headers.origin = origin;
+    if (cookie !== undefined) headers.cookie = cookie;
+    return fetch(webUrl + path, {
+      method: "POST",
+      headers,
+      body: new URLSearchParams(fields),
+      redirect: "manual",
+    });
+  }
+
+  try {
+    await Promise.all([waitUntilReady(`${gatewayUrl}/me`, gateway), waitUntilReady(webUrl, web)]);
+    const managerToken = await readFile(managerTokenPath, "ascii");
+    const otherManagerToken = await readFile(otherManagerTokenPath, "ascii");
+    const managerSdk = new EnergyAgentTools({ baseUrl: gatewayUrl, token: managerToken });
+    const configurations = await managerSdk.workspace().authConfigurations();
+    assert.deepEqual(configurations.configurations.map((item) => item.id), ["home-assistant"]);
+
+    const managerLogin = await post("/api/auth", { token: managerToken });
+    assert.equal(managerLogin.status, 303);
+    const managerCookie = responseCookie(managerLogin, "energy_web_session");
+    assert.ok(managerCookie);
+
+    const requestFields = {
+      configuration_id: "home-assistant",
+      entity_id: "sensor.power",
+      reviewed_mapping: "reviewed",
+      telemetry_role: "current_power",
+      unit: "kW",
+      quantity_shape: "instantaneous",
+    };
+    assert.equal((await post("/api/workspace/authorizations", requestFields, managerCookie, null)).status, 403);
+    assert.equal((await post("/api/workspace/authorizations", requestFields, managerCookie, "https://foreign.invalid")).status, 403);
+    assert.equal((await post("/api/workspace/authorizations", { ...requestFields, base_url: "http://127.0.0.1:18123" }, managerCookie)).status, 400);
+
+    const start = await post("/api/workspace/authorizations", requestFields, managerCookie);
+    assert.equal(start.status, 200);
+    assert.equal(start.headers.get("location"), null);
+    const authorizationResponse = await start.json();
+    assert.equal(authorizationResponse.ok, true);
+    const destinationValue = authorizationResponse.authorization_url;
+    assert.ok(destinationValue);
+    const destination = new URL(destinationValue);
+    assert.equal(destination.protocol, "http:");
+    assert.equal(destination.hostname, "127.0.0.1");
+    assert.equal(destination.pathname, "/auth/authorize");
+    const state = destination.searchParams.get("state");
+    assert.ok(state);
+    assert.equal(destination.searchParams.get("redirect_uri"), `${webUrl}/api/workspace/oauth/callback`);
+    assert.equal(destination.searchParams.get("client_id"), `${webUrl}/`);
+    const flowCookie = responseCookie(start, "energy_web_oauth_flow");
+    assert.ok(flowCookie);
+    const startCookies = start.headers.get("set-cookie") ?? "";
+    assert.match(startCookies, /Path=\/api\/workspace\/oauth\/callback/);
+    assert.match(startCookies, /HttpOnly/);
+    assert.match(startCookies, /SameSite=Lax/);
+    assert.ok(!flowCookie.includes(state));
+    const managerFlowCookie = `${managerCookie}; ${flowCookie}`;
+
+    const observationsPath = join(stateDir, "observations.json");
+    assert.deepEqual(await readOAuthObservations(observationsPath), { authCode: 0, stateReads: 0 });
+
+    const managerIdentity = await managerSdk.identity();
+    const managerWorkspaceId = managerIdentity.workspace?.id;
+    assert.ok(managerWorkspaceId);
+    const expiredAt = Date.now();
+    const expiredFlowValue = sealOAuthFlow({
+      version: 1,
+      state,
+      configurationId: "home-assistant",
+      connectionId: "expired-fixture-connection",
+      managerId: managerIdentity.user_id,
+      workspaceId: managerWorkspaceId,
+      sessionBinding: bindOAuthFlowToSession(managerCookie.split("=", 2)[1] ?? ""),
+      createdAt: expiredAt - OAUTH_FLOW_MAX_TTL_MS,
+      expiresAt: expiredAt - 1,
+    }, webSessionKey);
+    const expiredFlowCookie = `energy_web_oauth_flow=${expiredFlowValue}`;
+    const expired = await callback(
+      new URLSearchParams({ state, code: "fixture-authorization-code-private" }),
+      `${managerCookie}; ${expiredFlowCookie}`,
+    );
+    assert.equal(expired.status, 303, await expired.clone().text());
+    assert.match(expired.headers.get("location") ?? "", /oauth=invalid/);
+    assert.deepEqual(await readOAuthObservations(observationsPath), { authCode: 0, stateReads: 0 });
+
+    async function callback(query: URLSearchParams, cookie: string): Promise<Response> {
+      return fetch(`${webUrl}/api/workspace/oauth/callback?${query.toString()}`, {
+        headers: { cookie },
+        redirect: "manual",
+      });
+    }
+
+    const missingState = await callback(new URLSearchParams({ code: "fixture-authorization-code-private" }), managerFlowCookie);
+    assert.equal(missingState.status, 303);
+    assert.match(missingState.headers.get("location") ?? "", /oauth=invalid/);
+    assert.ok(!(missingState.headers.get("location") ?? "").includes("fixture-authorization-code-private"));
+    assert.deepEqual(await readOAuthObservations(observationsPath), { authCode: 0, stateReads: 0 });
+
+    const otherLogin = await post("/api/auth", { token: otherManagerToken });
+    assert.equal(otherLogin.status, 303);
+    const otherCookie = responseCookie(otherLogin, "energy_web_session");
+    assert.ok(otherCookie);
+    const wrongManager = await callback(
+      new URLSearchParams({ state, code: "fixture-authorization-code-private" }),
+      `${otherCookie}; ${flowCookie}`,
+    );
+    assert.equal(wrongManager.status, 303);
+    assert.match(wrongManager.headers.get("location") ?? "", /oauth=invalid/);
+    assert.deepEqual(await readOAuthObservations(observationsPath), { authCode: 0, stateReads: 0 });
+
+    const wrongStateValue = state === "a" ? "b" : `${state.slice(0, -1)}${state.endsWith("a") ? "b" : "a"}`;
+    const wrongState = await callback(
+      new URLSearchParams({ state: wrongStateValue, code: "fixture-authorization-code-private" }),
+      managerFlowCookie,
+    );
+    assert.equal(wrongState.status, 303);
+    assert.match(wrongState.headers.get("location") ?? "", /oauth=invalid/);
+    assert.deepEqual(await readOAuthObservations(observationsPath), { authCode: 0, stateReads: 0 });
+
+    const completed = await callback(
+      new URLSearchParams({ state, code: "fixture-authorization-code-private" }),
+      managerFlowCookie,
+    );
+    assert.equal(completed.status, 303);
+    assert.equal(completed.headers.get("location"), "/?view=connections&oauth=connected");
+    assert.ok(!(completed.headers.get("location") ?? "").includes(state));
+    assert.ok(!(completed.headers.get("location") ?? "").includes("fixture-authorization-code-private"));
+    assert.match(completed.headers.get("set-cookie") ?? "", /energy_web_oauth_flow=;/);
+    assert.match(completed.headers.get("set-cookie") ?? "", /Max-Age=0/);
+
+    const connections = (await managerSdk.workspace().connections()).connections;
+    assert.equal(connections.length, 1);
+    assert.equal(connections[0]?.toolkit, "home-assistant");
+    assert.equal(connections[0]?.site_id, null);
+    assert.equal(connections[0]?.enabled, false);
+    assert.equal(connections[0]?.state, "pending_mapping");
+    const observations = await readOAuthObservations(observationsPath);
+    assert.deepEqual(observations, { authCode: 1, stateReads: 1 });
+
+    const connectedPage = await fetch(webUrl + completed.headers.get("location"), { headers: { cookie: managerCookie } });
+    assert.equal(connectedPage.status, 200);
+    const connectedHtml = await connectedPage.text();
+    assert.match(connectedHtml, /Ready to map/);
+    assert.match(connectedHtml, /Needs a site/);
+    assert.match(connectedHtml, /Home Assistant verified the selected sensor/);
+    for (const secret of [managerToken, otherManagerToken, state, "fixture-authorization-code-private", "fixture-access-token-private", "fixture-refresh-token-private"]) {
+      assert.ok(!connectedHtml.includes(secret));
+      assert.ok(!(completed.headers.get("location") ?? "").includes(secret));
+    }
   } finally {
     await Promise.all([stop(web), stop(gateway)]);
     await rm(stateDir, { recursive: true, force: true });

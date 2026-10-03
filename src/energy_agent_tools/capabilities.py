@@ -343,7 +343,7 @@ class CapabilityResolver:
                 if account is not None:
                     if not account.enabled or account.state != "active":
                         reasons.append("connection_inactive")
-                    elif not self.agent.credential_available(account):
+                    elif not self.agent.credential_available(account, session):
                         reasons.append("credential_missing")
                 if request.kind is not None and request.kind != binding.kind:
                     reasons.append("measurement_kind_incompatible")

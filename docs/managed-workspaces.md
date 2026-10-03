@@ -61,6 +61,82 @@ the meter to verify and map it again. A failed provider read preserves prior
 state. The API-key onboarding form currently supports Octopus; other toolkit
 catalogue entries do not imply managed forms or live provider qualification.
 
+## Approve a Home Assistant instance
+
+The deployment operator can register native Home Assistant authorization
+configurations in the gateway's hosting configuration. Workspace users choose
+an approved configuration ID; they do not supply provider endpoints. For example:
+
+```json
+{
+  "hosting": {
+    "managed_oauth_configurations": [
+      {
+        "id": "home",
+        "name": "Home Assistant",
+        "base_url": "https://home.example.org",
+        "client_id": "https://energy.example.org/",
+        "redirect_uri": "https://energy.example.org/api/workspace/oauth/callback"
+      }
+    ]
+  }
+}
+```
+
+Start the managed host with `--config gateway.json`. Use an instance origin
+without a path prefix. External URLs require HTTPS; loopback development URLs
+may use HTTP. The client application and callback must share scheme, host and
+port. The web callback must match `ENERGY_WEB_ORIGIN` followed by
+`/api/workspace/oauth/callback`. The web form starts authorization through a
+same-origin request, shows pending/error feedback and navigates to the validated
+provider URL. The callback verifies its session-bound state before exchange and
+returns to a clean connection page without the code or state in its URL.
+
+The SDK methods `workspace.authConfigurations()`,
+`workspace.beginAuthorization(...)` and `workspace.completeAuthorization(...)`
+use the production gateway's workspace scope. Completion exchanges the code
+and reads the selected entity before publishing an encrypted, disabled
+`pending_mapping` connection. Mapping requires an owned site and a second
+provider read. Health checks refresh an expiring active grant before probing.
+Disconnect denies local use before attempting refresh-token revocation and
+reports `upstream_revoked` as true, false or null when not attempted.
+
+If verification or connection publication fails after a grant is exchanged,
+the gateway attempts to revoke that grant. Failed remote revocations remain in
+an encrypted, durable cleanup queue. Disconnect also removes local access and
+queues the remote grant atomically before contacting the provider. A pending
+cleanup never makes a connection usable again.
+
+Disconnect attempts at most one remote revocation, beginning with the newest
+queued grant and checking the current approved provider profile. It reports
+`upstream_revoked: true` only when the attempt succeeds and no cleanup remains
+for that connection. Older pending grants require additional scoped retries.
+
+The configuration catalogue reports `pending_cleanup` for the current
+workspace. The web app offers a retry when this count is nonzero; the SDK exposes
+`workspace.retryAuthorizationCleanup({ configuration_id })`. Each request
+attempts at most one grant and returns attempted, succeeded and pending counts.
+Starting another authorization also attempts one cleanup. Retries require the
+stored provider configuration to match the currently approved configuration;
+changed profiles remain pending and are not contacted automatically. There is
+no background retry worker in this version.
+
+Managed Home Assistant connections permit reads only for their selected entity.
+Direct state and history calls for another entity are denied before token
+refresh or provider requests.
+
+Changing or removing an approved configuration denies existing grant execution,
+health and mapping before provider I/O. Disconnect still removes local access.
+Restarting does not implicitly approve a stored endpoint. Home Assistant's
+native authorization protocol does not provide the generic PKCE guarantee;
+this path is distinct from generic configured OAuth and MCP authorization
+discovery.
+
+Synthetic gateway/SDK tests cover the lifecycle. The installed Home Assistant
+authorization qualifier has not completed: startup timed out. Initial Docker
+cleanup failed; follow-up checks confirmed the exact run-owned resources absent. This is not evidence of browser consent,
+physical telemetry or a private installation.
+
 ## Connect an agent
 
 Use a scoped agent key rather than the management key. Agent keys can execute
@@ -89,6 +165,11 @@ Backups exclude the vault key unless explicitly requested. Preserve the key
 separately when it is excluded. Managed hosting refuses an encryption key that
 cannot decrypt the restored vault.
 
-Shared workspace membership, connection ACLs, managed OAuth configuration and
-site deletion remain under development. Current managed workspaces are private
+AuthStore schema 2 preserves encrypted pending revocations across restart and
+backup/restore. Existing schema 1 vaults migrate when opened. Backup manifests
+record the vault's actual schema version. Restoring pending cleanup requires
+the original vault key and the matching approved provider configuration.
+
+Shared workspace membership, connection ACLs, generic custom OAuth, automatic
+MCP authorization discovery and site deletion remain under development. Current managed workspaces are private
 to one owner.

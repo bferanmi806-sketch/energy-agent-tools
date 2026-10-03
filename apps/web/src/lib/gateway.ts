@@ -55,6 +55,7 @@ export async function loadDashboard(): Promise<DashboardState> {
         workspace.connectionSetups(),
         workspace.connections(),
         workspace.keys(),
+        workspace.authConfigurations(),
       ]);
 
       return {
@@ -69,6 +70,7 @@ export async function loadDashboard(): Promise<DashboardState> {
           connectionSetups: settledValue(results[4]).setups,
           connections: settledValue(results[5]).connections,
           keys: settledValue(results[6]).keys,
+          authConfigurations: settledValue(results[7]).configurations,
           publicGatewayUrl: config.publicGatewayUrl,
         },
       };
