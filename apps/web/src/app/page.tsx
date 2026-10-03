@@ -2,6 +2,7 @@ import Link from "next/link";
 import { KeyRound, RefreshCw, ShieldCheck, Waves } from "lucide-react";
 import { SignInForm } from "@/components/SignInForm";
 import { Console } from "@/components/Console";
+import { ManagedConsole } from "@/components/ManagedConsole";
 import { loadDashboard } from "@/lib/gateway";
 import type { DashboardState } from "@/lib/types";
 
@@ -87,6 +88,12 @@ export default async function HomePage({
     }
     case "ready": {
       const params = searchParams ? await searchParams : undefined;
+      if (state.data.kind === "managed") {
+        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "agent"
+          ? params.view
+          : "apps";
+        return <ManagedConsole data={state.data} initialView={initialView} />;
+      }
       return <Console data={state.data} initialView={params?.view === "connections" ? "connections" : "apps"} />;
     }
     case "unavailable":

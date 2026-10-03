@@ -327,3 +327,30 @@ Published onboarding CI at revision `00f1de3` passes 662 tests on each Python
 will be recorded separately after the run completes. This still does not
 qualify a real private provider or finish the wider product/control-plane goal.
 See [lifecycle evidence](evidence/connection-lifecycle-oct03.json).
+
+
+## Managed workspace integration, October 3
+
+The current implementation adds opt-in managed workspaces to the existing host.
+Bootstrap issues a management key for a private workspace. Its owner can browse
+the structured catalogue with no sites, verify an Octopus connection, create a
+site, map the connection and issue a scoped agent key through the web app or
+TypeScript SDK. Dynamic hosted MCP endpoints accept sites created after startup.
+Existing operator workspaces retain their policy restrictions.
+
+ControlStore persists immutable site ownership and key grants. AuthStore encrypts
+workspace-scoped pending and active connections and uses revision checks for
+publication. The host rejects an encryption key that cannot decrypt existing
+state. Tests cover same-user workspace isolation, revocation on existing MCP
+sessions, operator-key migration, restart, backup/restore and owner-task shutdown
+cleanup. Production web acceptance passes nine tests; TypeScript SDK acceptance
+passes twelve tests. Browser checks cover desktop and mobile system-first
+onboarding and immediate site/key metadata refresh. Provider responses in these
+checks are synthetic.
+
+This slice does not complete Phase 2 or Phase 3. Shared membership and connection
+ACLs, managed OAuth configuration, additional provider forms, custom MCP
+onboarding, triggers and complete managed logs/jobs/settings journeys remain
+open. Physical-site evidence, held-out agent evaluation, independent discovery
+review, outside connector authoring and sustained operations also remain open.
+See [managed workspace setup](managed-workspaces.md) for runnable instructions.

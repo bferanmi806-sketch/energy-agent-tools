@@ -78,6 +78,10 @@ the repository path. `serve --transport streamable-http` binds a fixed identity 
 loopback. For authenticated multi-user ingress use `energy-agent host`, with
 operator-provisioned bearer-token digests and site permissions.
 
+For a workspace that connects systems before creating sites, use
+[`bootstrap` and managed hosting](docs/managed-workspaces.md). The management
+key can provision owned sites and scoped agent keys through the gateway.
+
 Connections support environment references or an encrypted local vault. OAuth
 supports one-time PKCE state, a loopback callback, refresh and revocation. The
 operator supplies the vault key and provider configuration. Credentials are absent

@@ -29,7 +29,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
-import type { DashboardData } from "@/lib/types";
+import type { OperatorDashboardData } from "@/lib/types";
+type DashboardData = OperatorDashboardData;
 
 type ViewId = "apps" | "connections" | "shared" | "sites" | "skills" | "artifacts" | "agents" | "jobs" | "logs" | "mcp" | "settings";
 
@@ -159,7 +160,7 @@ function siteName(data: DashboardData, siteId: string | null): string {
   return site?.name ?? `Site ${siteId}`;
 }
 
-export function Console({ data, initialView = "apps" }: { data: DashboardData; initialView?: "apps" | "connections" }) {
+export function Console({ data, initialView = "apps" }: { data: OperatorDashboardData; initialView?: "apps" | "connections" }) {
   const [view, setView] = useState<ViewId>(initialView);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);

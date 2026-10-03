@@ -10,11 +10,19 @@ import {
   ArtifactsResponseSchema, SkillsResponseSchema, JobRequestSchema, JobResponseSchema,
   DeleteSessionResponseSchema, DeleteArtifactResponseSchema,
   SkillExecutionRequestSchema, WorkflowResponseSchema, ToolkitsResponseSchema,
+  WorkspaceResponseSchema, WorkspaceSiteRequestSchema, WorkspaceSiteResponseSchema,
+  WorkspaceSitesResponseSchema, WorkspaceAssetRequestSchema, WorkspaceAssetResponseSchema,
+  WorkspaceAssetsResponseSchema, WorkspaceMapRequestSchema, WorkspaceAgentKeyRequestSchema,
+  WorkspaceIssuedKeyResponseSchema, WorkspaceKeysResponseSchema, WorkspaceRevokedKeyResponseSchema,
 } from "./contracts.js";
 import type {
   ConnectionVerificationResponse, ConnectionDisconnectedResponse,
   IdentityResponse, ConnectionSetupsResponse, OctopusConnectionRequest, ConnectionCreatedResponse,
-  SessionCreate, SessionResponse, SearchRequest, SearchResponse, ExecuteRequest, ExecutionResponse, CapabilityRequest, CapabilityExecutionRequest, ResolutionResponse, ConnectionsResponse, ArtifactsResponse, SkillsResponse, JobRequest, JobResponse, DeleteSessionResponse, DeleteArtifactResponse, SkillExecutionRequest, WorkflowResponse, ToolkitsResponse
+  SessionCreate, SessionResponse, SearchRequest, SearchResponse, ExecuteRequest, ExecutionResponse, CapabilityRequest, CapabilityExecutionRequest, ResolutionResponse, ConnectionsResponse, ArtifactsResponse, SkillsResponse, JobRequest, JobResponse, DeleteSessionResponse, DeleteArtifactResponse, SkillExecutionRequest, WorkflowResponse, ToolkitsResponse,
+  WorkspaceResponse, WorkspaceSiteRequest, WorkspaceSiteResponse, WorkspaceSitesResponse,
+  WorkspaceAssetRequest, WorkspaceAssetResponse, WorkspaceAssetsResponse, WorkspaceMapRequest,
+  WorkspaceAgentKeyRequest, WorkspaceIssuedKeyResponse, WorkspaceKeysResponse,
+  WorkspaceRevokedKeyResponse,
 } from "./contracts.js";
 
 const parseSessionCreate = parser<SessionCreate>(SessionCreateSchema);
@@ -42,6 +50,18 @@ const parseSkillExecutionRequest = parser<SkillExecutionRequest>(SkillExecutionR
 const parseWorkflow = parser<WorkflowResponse>(WorkflowResponseSchema);
 const parseDeleteSession = parser<DeleteSessionResponse>(DeleteSessionResponseSchema);
 const parseDeleteArtifact = parser<DeleteArtifactResponse>(DeleteArtifactResponseSchema);
+const parseWorkspace = parser<WorkspaceResponse>(WorkspaceResponseSchema);
+const parseWorkspaceSiteRequest = parser<WorkspaceSiteRequest>(WorkspaceSiteRequestSchema);
+const parseWorkspaceSite = parser<WorkspaceSiteResponse>(WorkspaceSiteResponseSchema);
+const parseWorkspaceSites = parser<WorkspaceSitesResponse>(WorkspaceSitesResponseSchema);
+const parseWorkspaceAssetRequest = parser<WorkspaceAssetRequest>(WorkspaceAssetRequestSchema);
+const parseWorkspaceAsset = parser<WorkspaceAssetResponse>(WorkspaceAssetResponseSchema);
+const parseWorkspaceAssets = parser<WorkspaceAssetsResponse>(WorkspaceAssetsResponseSchema);
+const parseWorkspaceMapRequest = parser<WorkspaceMapRequest>(WorkspaceMapRequestSchema);
+const parseWorkspaceAgentKeyRequest = parser<WorkspaceAgentKeyRequest>(WorkspaceAgentKeyRequestSchema);
+const parseWorkspaceIssuedKey = parser<WorkspaceIssuedKeyResponse>(WorkspaceIssuedKeyResponseSchema);
+const parseWorkspaceKeys = parser<WorkspaceKeysResponse>(WorkspaceKeysResponseSchema);
+const parseWorkspaceRevokedKey = parser<WorkspaceRevokedKeyResponse>(WorkspaceRevokedKeyResponseSchema);
 
 export interface RequestOptions { signal?: AbortSignal }
 
@@ -62,6 +82,11 @@ export class EnergyAgentTools {
     return this.#transport.request({ path: "me", method: "GET", parse: parseIdentity, ...options });
   }
 
+  /** Management API for the managed workspace associated with this gateway key. */
+  workspace(): EnergyWorkspace {
+    return new EnergyWorkspace(this.#transport);
+  }
+
   async createSession(input: SessionCreate = {}, options: RequestOptions = {}) {
     const response = await this.#transport.request({
       path: "sessions", method: "POST", body: parseSessionCreate(input), parse: parseSession,
@@ -74,6 +99,91 @@ export class EnergyAgentTools {
   session(input: { sessionId: string; siteId?: string | null }) {
     identifier(input.sessionId);
     return new EnergySession(this.#transport, input.sessionId, input.siteId ?? null);
+  }
+}
+
+/** Authenticated management operations for the current managed workspace. */
+export class EnergyWorkspace {
+  readonly #transport: HttpTransport;
+
+  constructor(transport: HttpTransport) {
+    this.#transport = transport;
+  }
+
+  details(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace", method: "GET", parse: parseWorkspace, ...options });
+  }
+
+  sites(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/sites", method: "GET", parse: parseWorkspaceSites, ...options });
+  }
+
+  createSite(input: WorkspaceSiteRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/sites", method: "POST",
+      body: parseWorkspaceSiteRequest(input), parse: parseWorkspaceSite, ...options });
+  }
+
+  assets(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/assets", method: "GET", parse: parseWorkspaceAssets, ...options });
+  }
+
+  createAsset(input: WorkspaceAssetRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/assets", method: "POST",
+      body: parseWorkspaceAssetRequest(input), parse: parseWorkspaceAsset, ...options });
+  }
+
+  toolkits(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/toolkits", method: "GET", parse: parseToolkits, ...options });
+  }
+
+  connectionSetups(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/connection-setups", method: "GET",
+      parse: parseConnectionSetups, ...options });
+  }
+
+  connections(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/connections", method: "GET",
+      parse: parseConnections, ...options });
+  }
+
+  connectAccount(input: OctopusConnectionRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/connections", method: "POST",
+      body: parseConnectionCreate(input), parse: parseConnectionCreated, ...options });
+  }
+
+  mapConnection(connectionId: string, input: WorkspaceMapRequest, options: RequestOptions = {}) {
+    return this.#transport.request({
+      path: `workspace/connections/${identifier(connectionId)}/map`, method: "POST",
+      body: parseWorkspaceMapRequest(input), parse: parseConnectionCreated, ...options,
+    });
+  }
+
+  verifyConnection(connectionId: string, options: RequestOptions = {}) {
+    return this.#transport.request({
+      path: `workspace/connections/${identifier(connectionId)}/verify`, method: "POST",
+      body: {}, parse: parseConnectionVerification, ...options,
+    });
+  }
+
+  disconnectConnection(connectionId: string, options: RequestOptions = {}) {
+    return this.#transport.request({
+      path: `workspace/connections/${identifier(connectionId)}/disconnect`, method: "POST",
+      body: {}, parse: parseConnectionDisconnected, ...options,
+    });
+  }
+
+  keys(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/keys", method: "GET", parse: parseWorkspaceKeys, ...options });
+  }
+
+  createAgentKey(input: WorkspaceAgentKeyRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/keys", method: "POST",
+      body: parseWorkspaceAgentKeyRequest(input), parse: parseWorkspaceIssuedKey, ...options });
+  }
+
+  revokeKey(keyId: string, options: RequestOptions = {}) {
+    return this.#transport.request({ path: `workspace/keys/${identifier(keyId)}`, method: "DELETE",
+      parse: parseWorkspaceRevokedKey, ...options });
   }
 }
 

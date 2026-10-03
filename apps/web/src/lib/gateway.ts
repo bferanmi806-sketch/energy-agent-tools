@@ -44,6 +44,36 @@ export async function loadDashboard(): Promise<DashboardState> {
   try {
     const gateway = gatewayClient(config.gatewayUrl, session.token);
     const identity = await gateway.identity();
+
+    if (identity.can_manage_workspace === true && identity.workspace?.mode === "managed") {
+      const workspace = gateway.workspace();
+      const results = await Promise.allSettled([
+        workspace.details(),
+        workspace.sites(),
+        workspace.assets(),
+        workspace.toolkits(),
+        workspace.connectionSetups(),
+        workspace.connections(),
+        workspace.keys(),
+      ]);
+
+      return {
+        kind: "ready",
+        data: {
+          kind: "managed",
+          identity,
+          workspace: settledValue(results[0]).workspace,
+          sites: settledValue(results[1]).sites,
+          assets: settledValue(results[2]).assets,
+          toolkits: settledValue(results[3]).toolkits,
+          connectionSetups: settledValue(results[4]).setups,
+          connections: settledValue(results[5]).connections,
+          keys: settledValue(results[6]).keys,
+          publicGatewayUrl: config.publicGatewayUrl,
+        },
+      };
+    }
+
     const ownedSites = identity.sites.filter((site) => site.user_id === identity.user_id);
     const selectedSite = ownedSites.find((site) => site.id === session.siteId) ?? ownedSites[0];
     const siteId = selectedSite?.id ?? null;
@@ -64,6 +94,7 @@ export async function loadDashboard(): Promise<DashboardState> {
       return {
         kind: "ready",
         data: {
+          kind: "operator",
           identity,
           siteId,
           connectionSetups: settledValue(results[4]).setups,

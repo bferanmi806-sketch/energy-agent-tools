@@ -85,7 +85,9 @@ def build_agent(
             | {a.user_id for a in accounts}
             | {config.get("user_id", "local")}
         ):
-            accounts.extend(auth_store.accounts(user_id))
+            accounts.extend(
+                account for account in auth_store.accounts(user_id) if account.workspace_id is None
+            )
         accounts = list({a.id: a for a in accounts}.values())
     return EnergyAgent(
         registry,

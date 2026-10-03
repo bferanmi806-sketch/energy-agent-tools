@@ -25,10 +25,14 @@ from .control_contracts import (
     IssuableKeyAccess,
     KeyAccess,
     ManageKeyAccess,
+    WorkspaceAssetRequest,
+    WorkspaceMode,
+    WorkspaceSiteRequest,
 )
 from .models import Asset, EnergyError, Site, StrictModel
 
 __all__ = [
+    "BootstrapWorkspace",
     "ControlStore",
     "IssuedKey",
     "KeyIdentity",
@@ -37,7 +41,7 @@ __all__ = [
     "WorkspaceRecord",
 ]
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 _LEGACY_ACCESS_JSON = '{"kind":"legacy-agent"}'
 _ISSUABLE_ACCESS_ADAPTER: TypeAdapter[IssuableKeyAccess] = TypeAdapter(IssuableKeyAccess)
 _KEY_ACCESS_ADAPTER: TypeAdapter[KeyAccess] = TypeAdapter(KeyAccess)
@@ -59,6 +63,7 @@ class WorkspaceRecord(_ControlRecord):
     id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
     user_id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
     name: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
+    mode: WorkspaceMode
 
 
 class KeyRecord(_ControlRecord):
@@ -87,11 +92,18 @@ class IssuedKey(_ControlRecord):
     token: str = Field(min_length=47, max_length=47, repr=False)
 
 
+class BootstrapWorkspace(_ControlRecord):
+    user: UserRecord
+    workspace: WorkspaceRecord
+    key: IssuedKey
+
+
 class KeyIdentity(_ControlRecord):
     user_id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
     workspace_id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
     key_id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
     access: KeyAccess
+    workspace_mode: WorkspaceMode
 
 
 def _error(code: str, message: str) -> EnergyError:
@@ -114,6 +126,22 @@ def _validate_text(value: str, *, maximum: int = _MAX_TEXT_LENGTH) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > maximum:
         _invalid_request()
     return value
+
+
+def _parse_workspace_mode(value: object) -> WorkspaceMode:
+    if value == "operator":
+        return "operator"
+    if value == "managed":
+        return "managed"
+    raise RuntimeError("Control store contains invalid workspace mode.") from None
+
+
+def _validate_workspace_mode(value: object) -> WorkspaceMode:
+    if value == "operator":
+        return "operator"
+    if value == "managed":
+        return "managed"
+    _invalid_request()
 
 
 def _aware_utc(value: datetime | None) -> datetime | None:
@@ -194,7 +222,7 @@ class ControlStore:
             version = int(db.execute("PRAGMA user_version").fetchone()[0])
             if version > _SCHEMA_VERSION:
                 raise RuntimeError("Control store schema is newer than this version supports.")
-            if version not in (0, 1, _SCHEMA_VERSION):
+            if version not in (0, 1, 2, _SCHEMA_VERSION):
                 raise RuntimeError("Control store schema version is unsupported.")
 
             db.execute("PRAGMA foreign_keys = ON")
@@ -209,7 +237,7 @@ class ControlStore:
                     db.execute(statement)
                 db.execute("PRAGMA user_version = 1")
                 version = 1
-            elif version not in (1, _SCHEMA_VERSION):
+            elif version not in (1, 2, _SCHEMA_VERSION):
                 raise RuntimeError("Control store schema version is unsupported.")
             if version == 1:
                 db.execute(
@@ -221,6 +249,16 @@ class ControlStore:
                 # converge databases created by any compatible v1 writer.
                 db.execute("UPDATE api_keys SET access_json = ?", (_LEGACY_ACCESS_JSON,))
                 db.execute("PRAGMA user_version = 2")
+                version = 2
+            if version == 2:
+                db.execute(
+                    "ALTER TABLE workspaces ADD COLUMN mode TEXT NOT NULL "
+                    "DEFAULT 'operator' CHECK(mode IN ('operator', 'managed'))"
+                )
+                # A v2 workspace has no managed marker. Keep migration
+                # conservative even if a compatible writer used another default.
+                db.execute("UPDATE workspaces SET mode = 'operator'")
+                db.execute("PRAGMA user_version = 3")
             db.commit()
         except BaseException:
             if db.in_transaction:
@@ -285,6 +323,51 @@ class ControlStore:
             access=_parse_access(row["access_json"]),
         )
 
+    @staticmethod
+    def _new_issued_key(
+        user_id: str,
+        workspace_id: str,
+        name: str,
+        expires_at: datetime | None,
+        access: KeyAccess,
+    ) -> tuple[IssuedKey, str]:
+        token = f"eat_{secrets.token_urlsafe(32)}"
+        key = KeyRecord(
+            id=uuid4().hex,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            name=name,
+            created_at=datetime.now(UTC),
+            expires_at=expires_at,
+            revoked=False,
+            token_prefix=token[:12],
+            access=access,
+        )
+        issued = IssuedKey(key=key, token=token)
+        token_hash = hashlib.sha256(token.encode("ascii")).hexdigest()
+        return issued, token_hash
+
+    @staticmethod
+    def _insert_key(db: sqlite3.Connection, issued: IssuedKey, token_hash: str) -> None:
+        record = issued.key
+        db.execute(
+            """INSERT INTO api_keys(
+                id, user_id, workspace_id, name, token_hash, token_prefix,
+                created_at, expires_at, revoked, access_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
+            (
+                record.id,
+                record.user_id,
+                record.workspace_id,
+                record.name,
+                token_hash,
+                record.token_prefix,
+                _iso(record.created_at),
+                _iso(record.expires_at) if record.expires_at is not None else None,
+                _access_json(record.access),
+            ),
+        )
+
     def create_user(self, user_id: str, name: str) -> UserRecord:
         user_id = _validate_text(user_id)
         name = _validate_text(name)
@@ -296,27 +379,81 @@ class ControlStore:
                 raise _error("conflict", "User already exists.") from exc
         return record
 
-    def create_workspace(self, user_id: str, name: str) -> WorkspaceRecord:
+    def create_workspace(
+        self, user_id: str, name: str, *, mode: WorkspaceMode = "operator"
+    ) -> WorkspaceRecord:
         user_id = _validate_text(user_id)
         name = _validate_text(name)
+        mode = _validate_workspace_mode(mode)
         with self._connection(write=True) as db:
             self._require_user(db, user_id)
-            record = WorkspaceRecord(id=uuid4().hex, user_id=user_id, name=name)
+            record = WorkspaceRecord(id=uuid4().hex, user_id=user_id, name=name, mode=mode)
             db.execute(
-                "INSERT INTO workspaces(id, user_id, name) VALUES (?, ?, ?)",
-                (record.id, record.user_id, record.name),
+                "INSERT INTO workspaces(id, user_id, name, mode) VALUES (?, ?, ?, ?)",
+                (record.id, record.user_id, record.name, record.mode),
             )
         return record
+
+    def bootstrap_workspace(
+        self, owner_name: str, workspace_name: str, key_name: str = "Management key"
+    ) -> BootstrapWorkspace:
+        owner_name = _validate_text(owner_name)
+        workspace_name = _validate_text(workspace_name)
+        key_name = _validate_text(key_name)
+        user = UserRecord(id=uuid4().hex, name=owner_name)
+        workspace = WorkspaceRecord(
+            id=uuid4().hex,
+            user_id=user.id,
+            name=workspace_name,
+            mode="managed",
+        )
+        issued, token_hash = self._new_issued_key(
+            user.id, workspace.id, key_name, None, ManageKeyAccess()
+        )
+        with self._connection(write=True) as db:
+            db.execute("INSERT INTO users(id, name) VALUES (?, ?)", (user.id, user.name))
+            db.execute(
+                "INSERT INTO workspaces(id, user_id, name, mode) VALUES (?, ?, ?, ?)",
+                (workspace.id, workspace.user_id, workspace.name, workspace.mode),
+            )
+            self._insert_key(db, issued, token_hash)
+        return BootstrapWorkspace(user=user, workspace=workspace, key=issued)
+
+    def workspace(self, user_id: str, workspace_id: str) -> WorkspaceRecord:
+        user_id = _validate_text(user_id)
+        workspace_id = _validate_text(workspace_id)
+        with self._connection() as db:
+            row = db.execute(
+                """SELECT id, user_id, name, mode FROM workspaces
+                   WHERE id = ? AND user_id = ?""",
+                (workspace_id, user_id),
+            ).fetchone()
+        if row is None:
+            _not_found()
+        return WorkspaceRecord(
+            id=row["id"],
+            user_id=row["user_id"],
+            name=row["name"],
+            mode=_parse_workspace_mode(row["mode"]),
+        )
 
     def workspaces(self, user_id: str) -> list[WorkspaceRecord]:
         user_id = _validate_text(user_id)
         with self._connection() as db:
             self._require_user(db, user_id)
             rows = db.execute(
-                "SELECT id, user_id, name FROM workspaces WHERE user_id = ? ORDER BY id",
+                "SELECT id, user_id, name, mode FROM workspaces WHERE user_id = ? ORDER BY id",
                 (user_id,),
             ).fetchall()
-        return [WorkspaceRecord.model_validate(dict(row)) for row in rows]
+        return [
+            WorkspaceRecord(
+                id=row["id"],
+                user_id=row["user_id"],
+                name=row["name"],
+                mode=_parse_workspace_mode(row["mode"]),
+            )
+            for row in rows
+        ]
 
     def create_key(
         self,
@@ -335,21 +472,7 @@ class ControlStore:
         if expiry is not None and expiry <= datetime.now(UTC):
             _invalid_request()
 
-        token = f"eat_{secrets.token_urlsafe(32)}"
-        key_id = uuid4().hex
-        created_at = datetime.now(UTC)
-        token_hash = hashlib.sha256(token.encode("ascii")).hexdigest()
-        record = KeyRecord(
-            id=key_id,
-            user_id=user_id,
-            workspace_id=workspace_id,
-            name=name,
-            created_at=created_at,
-            expires_at=expiry,
-            revoked=False,
-            token_prefix=token[:12],
-            access=access,
-        )
+        issued, token_hash = self._new_issued_key(user_id, workspace_id, name, expiry, access)
 
         with self._connection(write=True) as db:
             self._require_workspace(db, user_id, workspace_id)
@@ -364,24 +487,8 @@ class ControlStore:
                         is None
                     ):
                         _not_found()
-            db.execute(
-                """INSERT INTO api_keys(
-                    id, user_id, workspace_id, name, token_hash, token_prefix,
-                    created_at, expires_at, revoked, access_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
-                (
-                    record.id,
-                    record.user_id,
-                    record.workspace_id,
-                    record.name,
-                    token_hash,
-                    record.token_prefix,
-                    _iso(record.created_at),
-                    _iso(expiry) if expiry is not None else None,
-                    _access_json(access),
-                ),
-            )
-        return IssuedKey(key=record, token=token)
+            self._insert_key(db, issued, token_hash)
+        return issued
 
     def authenticate(self, raw_token: str) -> KeyIdentity | None:
         if (
@@ -394,15 +501,19 @@ class ControlStore:
         now = _iso(datetime.now(UTC))
         with self._connection() as db:
             row = db.execute(
-                """SELECT id, user_id, workspace_id, access_json FROM api_keys
-                   WHERE token_hash = ? AND revoked = 0
-                     AND (expires_at IS NULL OR expires_at > ?)""",
+                """SELECT k.id, k.user_id, k.workspace_id, k.access_json, w.mode
+                   FROM api_keys AS k
+                   JOIN workspaces AS w
+                     ON w.id = k.workspace_id AND w.user_id = k.user_id
+                   WHERE k.token_hash = ? AND k.revoked = 0
+                     AND (k.expires_at IS NULL OR k.expires_at > ?)""",
                 (token_hash, now),
             ).fetchone()
         if row is None:
             return None
         try:
             access = _parse_access(row["access_json"])
+            workspace_mode = _parse_workspace_mode(row["mode"])
         except RuntimeError:
             return None
         return KeyIdentity(
@@ -410,6 +521,7 @@ class ControlStore:
             workspace_id=row["workspace_id"],
             key_id=row["id"],
             access=access,
+            workspace_mode=workspace_mode,
         )
 
     def keys(self, user_id: str, workspace_id: str) -> list[KeyRecord]:
@@ -470,6 +582,47 @@ class ControlStore:
                        WHERE id = ? AND user_id = ? AND workspace_id = ?""",
                     (payload, site.id, user_id, workspace_id),
                 )
+        return site
+
+    def create_site(
+        self,
+        user_id: str,
+        workspace_id: str,
+        *,
+        name: str,
+        timezone: str,
+        latitude: float | None = None,
+        longitude: float | None = None,
+    ) -> Site:
+        user_id = _validate_text(user_id)
+        workspace_id = _validate_text(workspace_id)
+        try:
+            request = WorkspaceSiteRequest(
+                name=name,
+                timezone=timezone,
+                latitude=latitude,
+                longitude=longitude,
+            )
+            site = Site(
+                id=uuid4().hex,
+                user_id=user_id,
+                name=request.name,
+                timezone=request.timezone,
+                latitude=request.latitude,
+                longitude=request.longitude,
+            )
+        except ValidationError:
+            _invalid_request()
+
+        try:
+            with self._connection(write=True) as db:
+                self._require_workspace(db, user_id, workspace_id)
+                db.execute(
+                    "INSERT INTO sites(id, user_id, workspace_id, site_json) VALUES (?, ?, ?, ?)",
+                    (site.id, user_id, workspace_id, site.model_dump_json()),
+                )
+        except sqlite3.IntegrityError:
+            _conflict()
         return site
 
     def sites(self, user_id: str, workspace_id: str) -> list[Site]:
@@ -536,6 +689,68 @@ class ControlStore:
                         asset.site_id,
                     ),
                 )
+        return asset
+
+    def create_asset(
+        self,
+        user_id: str,
+        workspace_id: str,
+        *,
+        site_id: str,
+        name: str,
+        kind: str,
+        parent_id: str | None = None,
+        account_ids: list[str] | tuple[str, ...] = (),
+    ) -> Asset:
+        user_id = _validate_text(user_id)
+        workspace_id = _validate_text(workspace_id)
+        if not isinstance(account_ids, (list, tuple)):
+            _invalid_request()
+        try:
+            request = WorkspaceAssetRequest(
+                site_id=site_id,
+                name=name,
+                kind=kind,
+                parent_id=parent_id,
+                account_ids=list(account_ids),
+            )
+            asset = Asset(
+                id=uuid4().hex,
+                site_id=request.site_id,
+                kind=request.kind,
+                name=request.name,
+                parent_id=request.parent_id,
+                account_ids=request.account_ids,
+            )
+        except ValidationError:
+            _invalid_request()
+
+        try:
+            with self._connection(write=True) as db:
+                self._require_workspace(db, user_id, workspace_id)
+                site = db.execute(
+                    """SELECT 1 FROM sites
+                       WHERE id = ? AND user_id = ? AND workspace_id = ?""",
+                    (asset.site_id, user_id, workspace_id),
+                ).fetchone()
+                if site is None:
+                    _not_found()
+                self._check_parent(db, user_id, workspace_id, asset)
+                db.execute(
+                    """INSERT INTO assets(
+                        id, user_id, workspace_id, site_id, parent_id, asset_json
+                    ) VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        asset.id,
+                        user_id,
+                        workspace_id,
+                        asset.site_id,
+                        asset.parent_id,
+                        asset.model_dump_json(),
+                    ),
+                )
+        except sqlite3.IntegrityError:
+            _conflict()
         return asset
 
     @staticmethod

@@ -230,7 +230,7 @@ class CapabilityResolver:
         """Publish reviewed role names only inside their account and asset scope."""
 
         self.agent._scope(session)
-        self.agent._sync_connections(session.user_id)
+        self.agent._sync_connections(session.user_id, session.workspace_id)
         capabilities: dict[str, set[str]] = {}
         for binding in self.bindings:
             tool = self.agent.registry.get(binding.tool)
@@ -243,6 +243,7 @@ class CapabilityResolver:
                 if (
                     account is None
                     or account.user_id != session.user_id
+                    or account.workspace_id != session.workspace_id
                     or (session.site_id and account.site_id != session.site_id)
                 ):
                     continue
@@ -260,7 +261,7 @@ class CapabilityResolver:
 
     def resolve(self, session: Session, request: CapabilityRequest) -> Json:
         self.agent._scope(session)
-        self.agent._sync_connections(session.user_id)
+        self.agent._sync_connections(session.user_id, session.workspace_id)
         if request.asset_id:
             asset = self.agent.assets.get(request.asset_id)
             if (
@@ -304,6 +305,7 @@ class CapabilityResolver:
                 for a in self.agent.accounts.values()
                 if a.toolkit == tool.toolkit
                 and a.user_id == session.user_id
+                and a.workspace_id == session.workspace_id
                 and (session.site_id is None or a.site_id == session.site_id)
             ]
             if binding.account_id:

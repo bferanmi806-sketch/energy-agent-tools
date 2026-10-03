@@ -4,10 +4,222 @@ import argparse
 import asyncio
 import json
 import os
+import secrets
 from pathlib import Path
+from typing import Any
 
 from .app import build_agent, configure_mcp, load_config
 from .server import create_server
+
+
+def _load_cli_config(config_path: Path | None, state_dir: Path) -> dict[str, Any]:
+    if config_path is not None:
+        return load_config(config_path)
+    profile_path = state_dir / "profile.json"
+    return load_config(profile_path) if profile_path.is_file() else {}
+
+
+def _validate_fernet_key(key: bytes) -> bytes:
+    from cryptography.fernet import Fernet
+
+    try:
+        Fernet(key)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Vault key is invalid") from exc
+    return key
+
+
+def _managed_vault_config(
+    state_dir: Path, config: dict[str, Any]
+) -> tuple[dict[str, Any], bytes | None, Path | None]:
+    """Resolve the configured vault source without creating or replacing a key."""
+    import stat
+
+    root = state_dir.resolve()
+    configured = config.get("vault")
+    create_default_key = False
+    if configured in (None, {}):
+        vault = {"master_key_file": "vault.key"}
+        key_path = state_dir / "vault.key"
+        updated = {**config, "vault": vault}
+        create_default_key = True
+    elif not isinstance(configured, dict):
+        raise ValueError("Vault configuration must be an object")
+    else:
+        if set(configured) - {"master_key_env", "master_key_file"}:
+            raise ValueError("Unknown vault configuration field")
+        if "master_key_env" in configured and "master_key_file" in configured:
+            raise ValueError("Choose one vault key source")
+        updated = config
+        if "master_key_env" in configured:
+            env_name = configured["master_key_env"]
+            if not isinstance(env_name, str) or not env_name:
+                raise ValueError("Vault environment key name is invalid")
+            environment_key = os.environ.get(env_name)
+            if not environment_key:
+                raise ValueError("Configured vault master key is unavailable")
+            return updated, _validate_fernet_key(environment_key.encode()), None
+        if "master_key_file" not in configured:
+            updated = {**config, "vault": {"master_key_file": "vault.key"}}
+            key_path = state_dir / "vault.key"
+            create_default_key = True
+        else:
+            filename = configured["master_key_file"]
+            if not isinstance(filename, str) or not filename:
+                raise ValueError("Vault key file path is invalid")
+            key_path = state_dir / filename
+
+    try:
+        resolved_path = key_path.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("Vault key file path is invalid") from exc
+    if key_path.is_symlink() or not resolved_path.is_relative_to(root):
+        raise ValueError("Vault key file must be inside the private state directory")
+    if key_path.exists():
+        if not stat.S_ISREG(key_path.stat().st_mode):
+            raise ValueError("Vault key path must be a regular file")
+        try:
+            key = _validate_fernet_key(key_path.read_bytes().strip())
+        except OSError as exc:
+            raise ValueError("Vault key file cannot be read") from exc
+        try:
+            state_dir.chmod(0o700)
+            key_path.parent.chmod(0o700)
+            key_path.chmod(0o600)
+        except OSError:
+            pass
+        return updated, key, None
+    if not create_default_key:
+        raise ValueError("Configured vault key file is unavailable")
+    return updated, None, key_path
+
+
+def _ensure_private_key(path: Path, state_dir: Path) -> bytes:
+    """Create a Fernet key exclusively, using the private-profile file convention."""
+    import os
+
+    from cryptography.fernet import Fernet
+
+    state_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        state_dir.chmod(0o700)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.chmod(0o700)
+    except OSError:
+        # Keep compatibility with platforms where POSIX mode changes are unavailable.
+        pass
+    if path.is_symlink():
+        raise ValueError("Vault key cannot be a symlink")
+    if path.exists():
+        try:
+            key = _validate_fernet_key(path.read_bytes().strip())
+        except OSError as exc:
+            raise ValueError("Vault key file cannot be read") from exc
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+        return key
+
+    key = Fernet.generate_key()
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = -1
+            handle.write(key)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            if path.is_symlink():
+                raise ValueError("Vault key cannot be a symlink") from None
+            try:
+                key = _validate_fernet_key(path.read_bytes().strip())
+            except OSError as exc:
+                raise ValueError("Vault key file cannot be read") from exc
+        try:
+            path.chmod(0o600)
+            directory = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except OSError:
+            pass
+        return key
+    finally:
+        if descriptor != -1:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _prepare_managed_vault(
+    state_dir: Path, config: dict[str, Any], *, create_key: bool
+) -> tuple[dict[str, Any], bytes | None]:
+    updated, key, missing_path = _managed_vault_config(state_dir, config)
+    if missing_path is None:
+        return updated, key
+    if not create_key:
+        return updated, None
+    auth_db = state_dir / "vault" / "auth.sqlite3"
+    if auth_db.exists() or auth_db.is_symlink():
+        raise ValueError("Vault key is missing for existing encrypted state")
+    return updated, _ensure_private_key(missing_path, state_dir)
+
+
+def _preflight_auth_store(state_dir: Path, key: bytes) -> None:
+    from .auth import AuthStore
+
+    store = AuthStore(state_dir / "vault", key)
+    try:
+        store.validate_encryption_key()
+    finally:
+        store.close()
+
+
+def _bootstrap(args: argparse.Namespace, config: dict[str, Any]) -> None:
+    from .control_store import ControlStore
+
+    for value in (args.owner_name, args.name):
+        if not value.strip() or len(value) > 256:
+            raise ValueError("Owner and workspace names must contain 1 to 256 characters")
+    state_dir = args.state_dir
+    updated_config, key = _prepare_managed_vault(state_dir, config, create_key=False)
+    # Opening the control database first validates existing state before we create
+    # any new vault key or publish a bootstrap credential.
+    controls = ControlStore(state_dir / "control")
+    try:
+        if key is None:
+            auth_db = state_dir / "vault" / "auth.sqlite3"
+            if auth_db.exists() or auth_db.is_symlink():
+                raise ValueError("Vault key is missing for existing encrypted state")
+            key = _ensure_private_key(state_dir / "vault.key", state_dir)
+        if key is None:
+            raise ValueError("Vault master key is unavailable")
+        _preflight_auth_store(state_dir, key)
+        result = controls.bootstrap_workspace(args.owner_name, args.name)
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "owner": result.user.model_dump(mode="json"),
+                    "workspace": result.workspace.model_dump(mode="json"),
+                    "management_key": {
+                        "id": result.key.key.id,
+                        "name": result.key.key.name,
+                        "token": result.key.token,
+                    },
+                },
+                indent=2,
+            )
+        )
+    finally:
+        controls.close()
 
 
 def main() -> None:
@@ -17,6 +229,7 @@ def main() -> None:
         choices=[
             "serve",
             "host",
+            "bootstrap",
             "catalogue",
             "manifests",
             "validate",
@@ -41,6 +254,8 @@ def main() -> None:
     parser.add_argument("--user-id", default="local")
     parser.add_argument("--site-id")
     parser.add_argument("--name", default="Home")
+    parser.add_argument("--owner-name", default="Home owner")
+    parser.add_argument("--managed-workspaces", action="store_true")
     parser.add_argument("--timezone", default="UTC")
     parser.add_argument("--provider", choices=["octopus", "home_assistant", "emoncms"])
     parser.add_argument("--base-url")
@@ -75,6 +290,14 @@ def main() -> None:
     parser.add_argument("--oauth-provider", type=Path)
     parser.add_argument("--open-browser", action="store_true")
     args = parser.parse_args()
+    if args.command == "bootstrap":
+        try:
+            config = _load_cli_config(args.config, args.state_dir)
+            _bootstrap(args, config)
+        except Exception:
+            print(json.dumps({"ok": False, "error": "bootstrap_failed"}))
+            raise SystemExit(1) from None
+        return
     if args.command in {"backup", "restore", "inspect-backup"}:
         from .maintenance import MaintenanceError, create_backup, inspect_backup, restore_backup
 
@@ -174,17 +397,35 @@ def main() -> None:
 
         print(scaffold(args.output, args.toolkit))
         return
-    config = (
-        load_config(args.config)
-        if args.config
-        else (
-            load_config(args.state_dir / "profile.json")
-            if (args.state_dir / "profile.json").is_file()
-            else {}
-        )
-    )
-    data_root = Path(config["data_root"]).resolve() if config.get("data_root") else None
-    agent = build_agent(args.state_dir, config, data_root=data_root)
+    try:
+        config = _load_cli_config(args.config, args.state_dir)
+    except Exception:
+        if args.command == "host" and args.managed_workspaces:
+            print(json.dumps({"ok": False, "error": "managed_host_configuration_failed"}))
+            raise SystemExit(1) from None
+        raise
+    if args.command == "host" and args.managed_workspaces:
+        try:
+            config, managed_key = _prepare_managed_vault(args.state_dir, config, create_key=True)
+            if managed_key is None:
+                raise ValueError("Vault master key is unavailable")
+        except Exception:
+            print(json.dumps({"ok": False, "error": "managed_host_configuration_failed"}))
+            raise SystemExit(1) from None
+    try:
+        data_root = Path(config["data_root"]).resolve() if config.get("data_root") else None
+    except (OSError, TypeError, ValueError):
+        if args.command == "host" and args.managed_workspaces:
+            print(json.dumps({"ok": False, "error": "managed_host_configuration_failed"}))
+            raise SystemExit(1) from None
+        raise
+    try:
+        agent = build_agent(args.state_dir, config, data_root=data_root)
+    except Exception:
+        if args.command == "host" and args.managed_workspaces:
+            print(json.dumps({"ok": False, "error": "managed_host_configuration_failed"}))
+            raise SystemExit(1) from None
+        raise
     session = agent.session(
         args.user_id
         if args.user_id != "local"
@@ -209,7 +450,12 @@ def main() -> None:
         persistent_keys = options.get("persistent_keys", False)
         if not isinstance(persistent_keys, bool):
             parser.error("hosting.persistent_keys must be a boolean")
-        control_store = ControlStore(args.state_dir / "control") if persistent_keys else None
+        managed_workspaces = args.managed_workspaces
+        control_store = (
+            ControlStore(args.state_dir / "control")
+            if persistent_keys or managed_workspaces
+            else None
+        )
         principals = {
             item["user_id"]: Principal(
                 item["user_id"],
@@ -223,19 +469,25 @@ def main() -> None:
             )
             for item in options.get("principals", [])
         }
-        application = create_host(
-            agent,
-            principals,
-            max_requests_per_minute=options.get("max_requests_per_minute", 60),
-            max_body_bytes=options.get("max_body_bytes", 1000000),
-            max_sessions_per_user=options.get("max_sessions_per_user", 10),
-            session_idle_timeout=options.get("session_idle_timeout", 1800.0),
-            max_sessions_global=options.get("max_sessions_global", 1000),
-            close_agent_on_shutdown=True,
-            control_store=control_store,
-        )
+        host_options = {
+            "max_requests_per_minute": options.get("max_requests_per_minute", 60),
+            "max_body_bytes": options.get("max_body_bytes", 1000000),
+            "max_sessions_per_user": options.get("max_sessions_per_user", 10),
+            "session_idle_timeout": options.get("session_idle_timeout", 1800.0),
+            "max_sessions_global": options.get("max_sessions_global", 1000),
+            "close_agent_on_shutdown": True,
+            "control_store": control_store,
+        }
+        if managed_workspaces:
+            host_options["managed_workspaces"] = True
         try:
+            application = create_host(agent, principals, **host_options)
             uvicorn.run(application, host=args.bind_host, port=args.port, access_log=False)
+        except Exception:
+            if managed_workspaces:
+                print(json.dumps({"ok": False, "error": "managed_host_failed"}))
+                raise SystemExit(1) from None
+            raise
         finally:
             asyncio.run(agent.close())
             if control_store is not None:

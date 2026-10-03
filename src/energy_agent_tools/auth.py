@@ -26,12 +26,13 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import httpx
 from cryptography.fernet import Fernet, InvalidToken
 
-from .models import AuthConfig, ConnectedAccount, EnergyError, Json
+from .models import AuthConfig, ConnectedAccount, EnergyError, Json, Site
 
 _DEFAULT_STATE_TTL = 600
 _DEFAULT_REFRESH_SKEW = 60
 _HTTP_TIMEOUT = 15.0
 _MAX_TOKEN_RESPONSE_BYTES = 64 * 1024
+_AUTH_SCHEMA_VERSION = 1
 _RESERVED_AUTHORIZATION_PARAMS = {
     "client_id",
     "code_challenge",
@@ -240,48 +241,193 @@ class AuthStore:
         self.root.mkdir(parents=True, exist_ok=True)
         self._chmod(self.root, 0o700)
         self.path = self.root / "auth.sqlite3"
+        self._initialize(self.path)
         self._db = sqlite3.connect(self.path)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA foreign_keys = ON")
         self._db.execute("PRAGMA journal_mode = DELETE")
         self._db.execute("PRAGMA secure_delete = ON")
-        self._db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS accounts (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                toolkit TEXT NOT NULL,
-                site_id TEXT,
-                account_json TEXT NOT NULL,
-                secret_blob BLOB NOT NULL,
-                state TEXT NOT NULL,
-                enabled INTEGER NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                last_verified_at TEXT,
-                expires_at TEXT,
-                last_error TEXT
-            );
-            CREATE INDEX IF NOT EXISTS accounts_scope
-                ON accounts(user_id, site_id, toolkit);
-            CREATE TABLE IF NOT EXISTS oauth_transactions (
-                state_hash TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                connection_id TEXT NOT NULL,
-                redirect_uri TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                consumed_at TEXT,
-                transaction_blob BLOB NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS oauth_expiry
-                ON oauth_transactions(expires_at);
-            """
-        )
-        self._db.commit()
         self._chmod(self.path, 0o600)
         self.http = http
         self._clock = clock or _now_utc
         self._refresh_locks: dict[str, asyncio.Lock] = {}
+
+    @staticmethod
+    def _table_columns(db: sqlite3.Connection, table: str) -> set[str]:
+        return {str(row[1]) for row in db.execute(f"PRAGMA table_info({table})")}
+
+    @staticmethod
+    def _index_names(db: sqlite3.Connection, table: str) -> set[str]:
+        return {str(row[1]) for row in db.execute(f"PRAGMA index_list({table})")}
+
+    @staticmethod
+    def _index_columns(db: sqlite3.Connection, index: str) -> list[str]:
+        return [str(row[2]) for row in db.execute(f"PRAGMA index_info({index})")]
+
+    @classmethod
+    def _initialize(cls, path: Path) -> None:
+        db = sqlite3.connect(path, timeout=30, isolation_level=None)
+        try:
+            db.execute("PRAGMA busy_timeout = 30000")
+            version = int(db.execute("PRAGMA user_version").fetchone()[0])
+            if version > _AUTH_SCHEMA_VERSION:
+                raise RuntimeError("Auth store schema is newer than this version supports.")
+            if version not in (0, _AUTH_SCHEMA_VERSION):
+                raise RuntimeError("Auth store schema version is unsupported.")
+
+            db.execute("PRAGMA foreign_keys = ON")
+            db.execute("PRAGMA journal_mode = DELETE")
+            db.execute("PRAGMA secure_delete = ON")
+            db.execute("BEGIN IMMEDIATE")
+            version = int(db.execute("PRAGMA user_version").fetchone()[0])
+            if version > _AUTH_SCHEMA_VERSION:
+                raise RuntimeError("Auth store schema is newer than this version supports.")
+            if version == 0:
+                tables = {
+                    str(row[0])
+                    for row in db.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                    )
+                }
+                if "accounts" not in tables:
+                    if tables:
+                        raise RuntimeError("Auth store schema is corrupt or unsupported.")
+                    db.execute(
+                        """
+                        CREATE TABLE accounts (
+                            id TEXT PRIMARY KEY,
+                            user_id TEXT NOT NULL,
+                            toolkit TEXT NOT NULL,
+                            site_id TEXT,
+                            account_json TEXT NOT NULL,
+                            secret_blob BLOB NOT NULL,
+                            state TEXT NOT NULL,
+                            enabled INTEGER NOT NULL,
+                            created_at TEXT NOT NULL,
+                            updated_at TEXT NOT NULL,
+                            last_verified_at TEXT,
+                            expires_at TEXT,
+                            last_error TEXT,
+                            workspace_id TEXT,
+                            managed_revision INTEGER NOT NULL DEFAULT 0
+                        )
+                        """
+                    )
+                else:
+                    if tables != {"accounts", "oauth_transactions"}:
+                        raise RuntimeError("Auth store schema is corrupt or unsupported.")
+                    columns = cls._table_columns(db, "accounts")
+                    legacy_columns = {
+                        "id",
+                        "user_id",
+                        "toolkit",
+                        "site_id",
+                        "account_json",
+                        "secret_blob",
+                        "state",
+                        "enabled",
+                        "created_at",
+                        "updated_at",
+                        "last_verified_at",
+                        "expires_at",
+                        "last_error",
+                    }
+                    if (
+                        not legacy_columns.issubset(columns)
+                        or {
+                            "workspace_id",
+                            "managed_revision",
+                        }
+                        & columns
+                    ):
+                        raise RuntimeError("Auth store schema is corrupt or unsupported.")
+                    db.execute("ALTER TABLE accounts ADD COLUMN workspace_id TEXT")
+                    db.execute(
+                        "ALTER TABLE accounts ADD COLUMN managed_revision INTEGER NOT NULL DEFAULT 0"
+                    )
+                if "accounts" not in tables:
+                    db.execute(
+                        """
+                        CREATE TABLE oauth_transactions (
+                            state_hash TEXT PRIMARY KEY,
+                            user_id TEXT NOT NULL,
+                            connection_id TEXT NOT NULL,
+                            redirect_uri TEXT NOT NULL,
+                            expires_at TEXT NOT NULL,
+                            consumed_at TEXT,
+                            transaction_blob BLOB NOT NULL
+                        )
+                        """
+                    )
+                db.execute(
+                    "CREATE INDEX IF NOT EXISTS accounts_scope ON accounts(user_id, site_id, toolkit)"
+                )
+                db.execute(
+                    "CREATE INDEX accounts_workspace_scope ON accounts(user_id, workspace_id, id)"
+                )
+                db.execute(
+                    "CREATE INDEX IF NOT EXISTS oauth_expiry ON oauth_transactions(expires_at)"
+                )
+                db.execute(f"PRAGMA user_version = {_AUTH_SCHEMA_VERSION}")
+
+            cls._validate_schema(db)
+            db.commit()
+        except BaseException:
+            if db.in_transaction:
+                db.rollback()
+            raise
+        finally:
+            db.close()
+
+    @classmethod
+    def _validate_schema(cls, db: sqlite3.Connection) -> None:
+        required_account_columns = {
+            "id",
+            "user_id",
+            "toolkit",
+            "site_id",
+            "account_json",
+            "secret_blob",
+            "state",
+            "enabled",
+            "created_at",
+            "updated_at",
+            "last_verified_at",
+            "expires_at",
+            "last_error",
+            "workspace_id",
+            "managed_revision",
+        }
+        required_oauth_columns = {
+            "state_hash",
+            "user_id",
+            "connection_id",
+            "redirect_uri",
+            "expires_at",
+            "consumed_at",
+            "transaction_blob",
+        }
+        if (
+            int(db.execute("PRAGMA user_version").fetchone()[0]) != _AUTH_SCHEMA_VERSION
+            or {
+                str(row[0])
+                for row in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                )
+            }
+            != {"accounts", "oauth_transactions"}
+            or required_account_columns != cls._table_columns(db, "accounts")
+            or required_oauth_columns != cls._table_columns(db, "oauth_transactions")
+            or not {"accounts_scope", "accounts_workspace_scope"}.issubset(
+                cls._index_names(db, "accounts")
+            )
+            or "oauth_expiry" not in cls._index_names(db, "oauth_transactions")
+            or cls._index_columns(db, "accounts_scope") != ["user_id", "site_id", "toolkit"]
+            or cls._index_columns(db, "accounts_workspace_scope")
+            != ["user_id", "workspace_id", "id"]
+            or cls._index_columns(db, "oauth_expiry") != ["expires_at"]
+        ):
+            raise RuntimeError("Auth store schema is corrupt or unsupported.")
 
     @staticmethod
     def _chmod(path: Path, mode: int) -> None:
@@ -412,6 +558,23 @@ class AuthStore:
             raise _safe_error("credential_unavailable", "Stored credential is invalid.")
         return decoded
 
+    def validate_encryption_key(self) -> None:
+        """Verify the current Fernet key against every persisted encrypted blob.
+
+        The decrypted payloads are intentionally discarded here. Empty stores
+        have no existing ciphertext to validate.
+        """
+
+        blobs = self._db.execute("SELECT secret_blob FROM accounts").fetchall()
+        blobs.extend(self._db.execute("SELECT transaction_blob FROM oauth_transactions").fetchall())
+        for row in blobs:
+            try:
+                self._decrypt_json(row[0])
+            except (EnergyError, TypeError, ValueError) as exc:
+                raise _safe_error(
+                    "credential_unavailable", "Stored encrypted data cannot be decrypted."
+                ) from exc
+
     def _row(self, user_id: str, connection_id: str, site_id: str | None) -> sqlite3.Row:
         row = self._db.execute("SELECT * FROM accounts WHERE id = ?", (connection_id,)).fetchone()
         if row is None:
@@ -425,6 +588,16 @@ class AuthStore:
             data = json.loads(row["account_json"])
             if not isinstance(data, dict):
                 raise ValueError
+            workspace_id = row["workspace_id"]
+            revision = row["managed_revision"]
+            if data.get("workspace_id") != workspace_id:
+                raise _safe_error("connection_corrupt", "Stored connection scope is invalid.")
+            if type(revision) is not int or (workspace_id is None and revision != 0):
+                raise _safe_error("connection_corrupt", "Stored connection revision is invalid.")
+            if workspace_id is not None and (
+                not isinstance(workspace_id, str) or not workspace_id.strip() or revision < 1
+            ):
+                raise _safe_error("connection_corrupt", "Stored connection scope is invalid.")
             return self._account_with_metadata(
                 data,
                 state=row["state"],
@@ -444,6 +617,11 @@ class AuthStore:
 
         if not isinstance(connection, ConnectedAccount):
             raise TypeError("connection must be a ConnectedAccount")
+        if connection.workspace_id is not None:
+            raise _safe_error(
+                "managed_lifecycle_required",
+                "Managed connections must use workspace-scoped lifecycle operations.",
+            )
         if not isinstance(credential, str):
             raise ValueError("credential must be a non-empty string")
         if connection.auth.scheme != "oauth" and not credential:
@@ -453,12 +631,25 @@ class AuthStore:
         data = self._account_dump(connection)
         now = self._now()
         existing = self._db.execute(
-            "SELECT user_id, site_id, created_at FROM accounts WHERE id = ?", (connection.id,)
+            "SELECT * FROM accounts WHERE id = ?", (connection.id,)
         ).fetchone()
-        if existing is not None and (
-            existing["user_id"] != connection.user_id or existing["site_id"] != connection.site_id
-        ):
-            raise _safe_error("account_forbidden", "Connection belongs to another user/site.")
+        if existing is not None:
+            stored = self._view(existing)
+            if existing["workspace_id"] is not None:
+                raise _safe_error(
+                    "managed_lifecycle_required",
+                    "Managed connections must use workspace-scoped lifecycle operations.",
+                )
+            if (
+                existing["user_id"] != connection.user_id
+                or existing["site_id"] != connection.site_id
+            ):
+                raise _safe_error("account_forbidden", "Connection belongs to another user/site.")
+            if stored.workspace_id is not None:
+                raise _safe_error(
+                    "managed_lifecycle_required",
+                    "Managed connections must use workspace-scoped lifecycle operations.",
+                )
         created_at = existing["created_at"] if existing is not None else _iso(now)
         # An OAuth connection can be registered before its authorization code
         # exchange.  It stays pending and has no executable credential until
@@ -527,12 +718,308 @@ class AuthStore:
             ).fetchall()
         return [self._view(row) for row in rows]
 
+    def workspace_accounts(self, user_id: str, workspace_id: str | None) -> list[ConnectedAccount]:
+        """List accounts in exactly one namespace, including safe inactive metadata.
+
+        ``workspace_id=None`` is an exact legacy/operator query; it does not
+        include accounts belonging to managed workspaces.
+        """
+
+        if not isinstance(user_id, str) or not user_id:
+            raise ValueError("user_id is required")
+        if workspace_id is not None and (not isinstance(workspace_id, str) or not workspace_id):
+            raise ValueError("workspace_id must be non-empty when provided")
+        if workspace_id is None:
+            rows = self._db.execute(
+                "SELECT * FROM accounts WHERE user_id = ? AND workspace_id IS NULL ORDER BY id",
+                (user_id,),
+            ).fetchall()
+        else:
+            rows = self._db.execute(
+                "SELECT * FROM accounts WHERE user_id = ? AND workspace_id = ? ORDER BY id",
+                (user_id, workspace_id),
+            ).fetchall()
+        return [self._view(row) for row in rows]
+
+    def _managed_row(self, user_id: str, workspace_id: str, connection_id: str) -> sqlite3.Row:
+        if not all(
+            isinstance(value, str) and value for value in (user_id, workspace_id, connection_id)
+        ):
+            raise ValueError("user_id, workspace_id and connection_id are required")
+        row = self._db.execute("SELECT * FROM accounts WHERE id = ?", (connection_id,)).fetchone()
+        if row is None:
+            raise _safe_error("connection_not_found", "Connection is not configured.")
+        if row["user_id"] != user_id or row["workspace_id"] != workspace_id:
+            raise _safe_error(
+                "account_forbidden", "Connection is outside this user/workspace scope."
+            )
+        return row
+
+    @staticmethod
+    def _managed_revision(row: sqlite3.Row) -> int:
+        revision = row["managed_revision"]
+        if type(revision) is not int or revision < 1:
+            raise _safe_error("connection_corrupt", "Stored connection revision is invalid.")
+        return revision
+
+    @staticmethod
+    def _expected_revision(value: int | None) -> int | None:
+        if value is not None and (type(value) is not int or value < 1):
+            raise ValueError("expected_version must be a positive integer")
+        return value
+
+    def managed_snapshot(
+        self, user_id: str, workspace_id: str, connection_id: str
+    ) -> tuple[ConnectedAccount, int]:
+        """Return safe metadata and the durable revision for an exact workspace row."""
+
+        row = self._managed_row(user_id, workspace_id, connection_id)
+        account = self._view(row)
+        return account, self._managed_revision(row)
+
+    def pending_credential(self, user_id: str, workspace_id: str, connection_id: str) -> str:
+        """Read a disabled pending secret for trusted connection-management code only."""
+
+        row = self._managed_row(user_id, workspace_id, connection_id)
+        account = self._view(row)
+        if (
+            account.state != "pending_mapping"
+            or account.site_id is not None
+            or account.enabled
+            or account.last_verified_at is None
+        ):
+            raise _safe_error(
+                "connection_not_pending", "Connection is not awaiting workspace mapping."
+            )
+        payload = self._decrypt_json(row["secret_blob"])
+        credential = payload.get("credential")
+        if not isinstance(credential, str) or not credential:
+            raise _safe_error("credential_missing", "Connection credential is unavailable.")
+        return credential
+
+    def stage_managed(
+        self,
+        account: ConnectedAccount,
+        credential: str,
+        *,
+        expected_version: int | None = None,
+    ) -> ConnectedAccount:
+        """Persist a verified pending credential without making it executable.
+
+        A missing version is accepted only for an insert. Replacing an existing
+        pending or revoked record requires its snapshot revision.
+        """
+
+        if not isinstance(account, ConnectedAccount):
+            raise TypeError("connection must be a ConnectedAccount")
+        if (
+            account.workspace_id is None
+            or account.state != "pending_mapping"
+            or account.site_id is not None
+            or account.enabled
+            or account.last_verified_at is None
+        ):
+            raise ValueError("managed connections must be verified pending mappings")
+        if not isinstance(credential, str) or not credential:
+            raise ValueError("credential must be a non-empty string")
+        if not account.id or not account.user_id or not account.toolkit:
+            raise ValueError("connection id, user_id and toolkit are required")
+        expected_version = self._expected_revision(expected_version)
+        data = self._account_dump(account)
+        data["enabled"] = False
+        data["state"] = "pending_mapping"
+        data["last_verified_at"] = _iso(account.last_verified_at)
+        data["expires_at"] = _iso(account.expires_at)
+        secret_blob = self._encrypt_json(
+            {"credential": credential, "refresh_token": None, "provider": None}
+        )
+        now = self._now()
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            existing = self._db.execute(
+                "SELECT * FROM accounts WHERE id = ?", (account.id,)
+            ).fetchone()
+            if existing is None:
+                if expected_version is not None:
+                    raise _safe_error(
+                        "connection_changed", "Connection changed while it was being updated."
+                    )
+                self._db.execute(
+                    """
+                    INSERT INTO accounts(
+                        id, user_id, toolkit, site_id, account_json, secret_blob, state,
+                        enabled, created_at, updated_at, last_verified_at, expires_at,
+                        last_error, workspace_id, managed_revision
+                    ) VALUES (?, ?, ?, NULL, ?, ?, 'pending_mapping', 0, ?, ?, ?, ?, NULL, ?, 1)
+                    """,
+                    (
+                        account.id,
+                        account.user_id,
+                        account.toolkit,
+                        json.dumps(data, separators=(",", ":"), sort_keys=True),
+                        secret_blob,
+                        _iso(now),
+                        _iso(now),
+                        _iso(account.last_verified_at),
+                        _iso(account.expires_at),
+                        account.workspace_id,
+                    ),
+                )
+            else:
+                stored = self._view(existing)
+                if (
+                    existing["user_id"] != account.user_id
+                    or existing["workspace_id"] != account.workspace_id
+                ):
+                    raise _safe_error(
+                        "account_forbidden", "Connection is outside this user/workspace scope."
+                    )
+                revision = self._managed_revision(existing)
+                if expected_version is None or expected_version != revision:
+                    raise _safe_error(
+                        "connection_changed", "Connection changed while it was being updated."
+                    )
+                if stored.toolkit != account.toolkit:
+                    raise _safe_error("connection_conflict", "Connection identity cannot change.")
+                if stored.state not in {"pending_mapping", "revoked"}:
+                    raise _safe_error(
+                        "connection_conflict", "An active or mapped connection cannot be restaged."
+                    )
+                updated = self._db.execute(
+                    """
+                    UPDATE accounts SET toolkit = ?, site_id = NULL, account_json = ?,
+                        secret_blob = ?, state = 'pending_mapping', enabled = 0,
+                        updated_at = ?, last_verified_at = ?, expires_at = ?, last_error = NULL,
+                        managed_revision = managed_revision + 1
+                    WHERE id = ? AND user_id = ? AND workspace_id = ? AND managed_revision = ?
+                    """,
+                    (
+                        account.toolkit,
+                        json.dumps(data, separators=(",", ":"), sort_keys=True),
+                        secret_blob,
+                        _iso(now),
+                        _iso(account.last_verified_at),
+                        _iso(account.expires_at),
+                        account.id,
+                        account.user_id,
+                        account.workspace_id,
+                        revision,
+                    ),
+                )
+                if updated.rowcount != 1:
+                    raise _safe_error(
+                        "connection_changed", "Connection changed while it was being updated."
+                    )
+            row = self._managed_row(account.user_id, account.workspace_id, account.id)
+            view = self._view(row)
+            self._managed_revision(row)
+            self._db.commit()
+            return view
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+            raise
+
+    def activate_managed(
+        self,
+        user_id: str,
+        workspace_id: str,
+        connection_id: str,
+        *,
+        site: Site,
+        expected_version: int,
+        verified_at: datetime,
+    ) -> ConnectedAccount:
+        """Atomically map and activate a pending managed account at an owned site."""
+
+        if not isinstance(site, Site):
+            raise TypeError("site must be a Site")
+        if not site.id or site.user_id != user_id:
+            raise _safe_error("account_forbidden", "Site is outside this user/workspace scope.")
+        checked_version = self._expected_revision(expected_version)
+        if checked_version is None:
+            raise ValueError("expected_version is required")
+        expected_version = checked_version
+        if not isinstance(verified_at, datetime) or _as_utc(verified_at) is None:
+            raise ValueError("verified_at must be an aware datetime")
+        if verified_at.tzinfo is None or verified_at.utcoffset() is None:
+            raise ValueError("verified_at must be an aware datetime")
+
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._managed_row(user_id, workspace_id, connection_id)
+            account = self._view(row)
+            revision = self._managed_revision(row)
+            if account.state == "active":
+                if account.site_id == site.id:
+                    self._db.commit()
+                    return account
+                raise _safe_error(
+                    "connection_conflict", "Connection is already mapped to another site."
+                )
+            if (
+                account.state != "pending_mapping"
+                or account.site_id is not None
+                or account.enabled
+                or account.last_verified_at is None
+            ):
+                raise _safe_error(
+                    "connection_not_pending", "Connection is not awaiting workspace mapping."
+                )
+            if revision != expected_version:
+                raise _safe_error(
+                    "connection_changed", "Connection changed while it was being mapped."
+                )
+
+            now = self._now()
+            account_data = json.loads(row["account_json"])
+            account_data["site_id"] = site.id
+            account_data["state"] = "active"
+            account_data["enabled"] = True
+            account_data["last_verified_at"] = _iso(verified_at)
+            updated = self._db.execute(
+                """
+                UPDATE accounts SET site_id = ?, account_json = ?, state = 'active', enabled = 1,
+                    updated_at = ?, last_verified_at = ?, managed_revision = managed_revision + 1
+                WHERE id = ? AND user_id = ? AND workspace_id = ? AND managed_revision = ?
+                """,
+                (
+                    site.id,
+                    json.dumps(account_data, separators=(",", ":"), sort_keys=True),
+                    _iso(now),
+                    _iso(verified_at),
+                    connection_id,
+                    user_id,
+                    workspace_id,
+                    expected_version,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise _safe_error(
+                    "connection_changed", "Connection changed while it was being mapped."
+                )
+            activated_row = self._managed_row(user_id, workspace_id, connection_id)
+            activated = self._view(activated_row)
+            self._managed_revision(activated_row)
+            self._db.commit()
+            return activated
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.rollback()
+            raise
+
     def _credential_payload(
         self, user_id: str, connection_id: str, site_id: str | None = None
     ) -> tuple[sqlite3.Row, Json]:
         row = self._row(user_id, connection_id, site_id)
+        if row["workspace_id"] is not None:
+            self._view(row)
         if row["state"] == "pending":
             raise _safe_error("connection_pending", "Connection is awaiting OAuth authorization.")
+        if row["state"] == "pending_mapping":
+            raise _safe_error(
+                "connection_pending", "Connection is pending and unavailable to runtime."
+            )
         if not bool(row["enabled"]) or row["state"] in {"disabled", "revoked"}:
             raise _safe_error("connection_disabled", "Connection is disabled or revoked.")
         if row["expires_at"]:
@@ -577,6 +1064,8 @@ class AuthStore:
         remove_secret: bool = False,
     ) -> ConnectedAccount:
         row = self._row(user_id, connection_id, site_id)
+        if row["workspace_id"] is not None:
+            self._view(row)
         now = self._now()
         secret_blob = row["secret_blob"]
         account_data = json.loads(row["account_json"])
@@ -588,7 +1077,7 @@ class AuthStore:
                 {"credential": None, "refresh_token": None, "provider": None}
             )
         self._db.execute(
-            "UPDATE accounts SET account_json = ?, state = ?, enabled = ?, secret_blob = ?, updated_at = ? WHERE id = ?",
+            "UPDATE accounts SET account_json = ?, state = ?, enabled = ?, secret_blob = ?, updated_at = ?, managed_revision = managed_revision + CASE WHEN workspace_id IS NULL THEN 0 ELSE 1 END WHERE id = ?",
             (
                 json.dumps(account_data, separators=(",", ":"), sort_keys=True),
                 state,
@@ -619,6 +1108,11 @@ class AuthStore:
         self, user_id: str, connection_id: str, site_id: str | None = None
     ) -> ConnectedAccount:
         row, payload = self._credential_payload_allow_disabled(user_id, connection_id, site_id)
+        if row["workspace_id"] is not None:
+            raise _safe_error(
+                "managed_lifecycle_required",
+                "Managed connections must use workspace-scoped lifecycle operations.",
+            )
         if row["state"] == "revoked":
             raise _safe_error("connection_revoked", "Revoked connections must be configured again.")
         if not isinstance(payload.get("credential"), str) or not payload["credential"]:
@@ -629,6 +1123,8 @@ class AuthStore:
         self, user_id: str, connection_id: str, site_id: str | None
     ) -> tuple[sqlite3.Row, Json]:
         row = self._row(user_id, connection_id, site_id)
+        if row["workspace_id"] is not None:
+            self._view(row)
         payload = self._decrypt_json(row["secret_blob"])
         return row, payload
 
@@ -674,19 +1170,27 @@ class AuthStore:
         account_data = json.loads(row["account_json"])
         if "last_verified_at" in _model_fields(ConnectedAccount):
             account_data["last_verified_at"] = _iso(now)
+        where = (
+            "WHERE id = ? AND user_id = ? AND updated_at = ? AND state = 'active' AND enabled = 1"
+        )
+        parameters: tuple[Any, ...] = (
+            json.dumps(account_data, separators=(",", ":"), sort_keys=True),
+            _iso(now),
+            _iso(now),
+            connection_id,
+            user_id,
+            row["updated_at"],
+        )
+        if row["workspace_id"] is not None:
+            where += " AND workspace_id = ? AND managed_revision = ?"
+            parameters += (row["workspace_id"], self._managed_revision(row))
+        else:
+            where += " AND workspace_id IS NULL"
         updated = self._db.execute(
-            """
-            UPDATE accounts SET account_json = ?, last_verified_at = ?, updated_at = ?
-            WHERE id = ? AND user_id = ? AND updated_at = ? AND state = 'active' AND enabled = 1
-            """,
-            (
-                json.dumps(account_data, separators=(",", ":"), sort_keys=True),
-                _iso(now),
-                _iso(now),
-                connection_id,
-                user_id,
-                row["updated_at"],
-            ),
+            "UPDATE accounts SET account_json = ?, last_verified_at = ?, updated_at = ?, "
+            "managed_revision = managed_revision + CASE WHEN workspace_id IS NULL THEN 0 ELSE 1 END "
+            f"{where}",
+            parameters,
         )
         if updated.rowcount != 1:
             self._db.rollback()
@@ -736,7 +1240,12 @@ class AuthStore:
         expected_state: str,
         expected_enabled: bool,
     ) -> ConnectedAccount:
-        self._row(user_id, connection_id, site_id)
+        row = self._row(user_id, connection_id, site_id)
+        if row["workspace_id"] is not None:
+            raise _safe_error(
+                "managed_lifecycle_required",
+                "Managed connections must use workspace-scoped lifecycle operations.",
+            )
         now = self._now()
         row = self._db.execute(
             "SELECT account_json FROM accounts WHERE id = ?", (connection_id,)
@@ -755,7 +1264,8 @@ class AuthStore:
             """
             UPDATE accounts SET account_json = ?, secret_blob = ?, state = 'active', enabled = 1,
                 updated_at = ?, last_verified_at = ?, expires_at = ?, last_error = NULL
-            WHERE id = ? AND user_id = ? AND updated_at = ? AND state = ? AND enabled = ?
+            WHERE id = ? AND user_id = ? AND workspace_id IS NULL
+                AND updated_at = ? AND state = ? AND enabled = ?
             """,
             (
                 json.dumps(account_data, separators=(",", ":"), sort_keys=True),
@@ -812,6 +1322,11 @@ class AuthStore:
         self, user_id: str, connection_id: str, provider: OAuthProvider
     ) -> AuthorizationRequest:
         account = self.get_account(user_id, connection_id)
+        if account.workspace_id is not None:
+            raise _safe_error(
+                "managed_lifecycle_required",
+                "Managed connections must use workspace-scoped lifecycle operations.",
+            )
         if account.auth.scheme != "oauth":
             raise _safe_error("oauth_not_configured", "Connection does not use OAuth.")
         if account.state == "revoked":
@@ -1053,6 +1568,11 @@ class AuthStore:
     async def refresh(self, user_id: str, connection_id: str) -> ConnectedAccount:
         async with self._refresh_lock(connection_id):
             row, payload = self._credential_payload_allow_disabled(user_id, connection_id, None)
+            if row["workspace_id"] is not None:
+                raise _safe_error(
+                    "managed_lifecycle_required",
+                    "Managed connections must use workspace-scoped lifecycle operations.",
+                )
             if row["state"] in {"disabled", "revoked"} or not bool(row["enabled"]):
                 raise _safe_error("connection_disabled", "Connection is disabled or revoked.")
             provider_data = payload.get("provider")

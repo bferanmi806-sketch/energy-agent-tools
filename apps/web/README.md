@@ -2,7 +2,7 @@
 
 This Next.js application reads the authenticated Python gateway through the TypeScript SDK. The catalogue comes from toolkit metadata; it does not have a separate provider list. Users start by browsing systems, then select setup requirements and map data to sites as the control plane is completed.
 
-This first implementation uses operator-provisioned gateway access keys. It supports an Octopus API-key form for an existing owned site when the gateway has encrypted AuthStore storage enabled. Account registration, other provider forms, shared ACLs and custom MCP onboarding remain under development. It requires matching current gateway source with `GET /me` and scoped `connection-setup` routes; the published Python v0.3.0 wheel predates that route.
+Sign in with either an operator-provisioned key or a managed workspace management key. Managed workspaces support connecting an Octopus meter before creating a site, mapping the verified connection, creating sites and assets, and issuing or revoking scoped agent keys. Follow the [managed workspace guide](../../docs/managed-workspaces.md) to bootstrap the gateway. Other provider forms, shared connection ACLs, managed OAuth and custom MCP onboarding remain under development. Use matching current gateway source; the published Python v0.3.0 wheel predates managed workspace routes.
 
 ## Run locally
 
@@ -14,7 +14,7 @@ npm --prefix packages/typescript run build
 npm --prefix apps/web ci --ignore-scripts
 ```
 
-Copy `.env.example` to `.env.local` in this directory. Set the fixed gateway URL, exact web origin and independently generated 32-byte session encryption key. The Python gateway must be running with a valid principal and allowed sites. Start the app:
+Copy `.env.example` to `.env.local` in this directory. Set the fixed gateway URL, exact web origin and independently generated 32-byte session encryption key. The Python gateway must be running with a valid operator principal or managed workspace key. Managed workspaces can start with no sites. Start the app:
 
 ```sh
 npm --prefix apps/web run dev
@@ -44,16 +44,18 @@ The source includes a loopback gateway fixture in `scripts/web_reference_host.py
 Select **Octopus Energy Account** in Connect Apps. Enter the Octopus API key,
 13-digit electricity MPAN and meter serial number. The gateway probes the fixed
 Octopus API before saving an encrypted credential. Success opens Connections.
-The new connection is immediately usable by existing REST and hosted MCP sessions.
-Retrying the same meter for the same user and site updates one connection. A
+For a managed workspace, the verified connection waits for site mapping. Create
+or select an owned site, then map the connection. The gateway verifies it again
+before making it available to scoped REST and MCP sessions. For an operator key,
+the form connects directly to an existing allowed site.
+Retrying the same operator meter for the same user and site updates one connection. A
 rejected replacement does not overwrite its working credential. Accounts created
 previously by other provisioning methods keep their IDs; this form does not merge
 those records automatically.
 
-The current site is chosen from operator-provisioned sites. A disabled form
-explains when encrypted storage or an owned site is unavailable. Other toolkits
-still show setup metadata and documentation. Dynamic site provisioning, asset
-mapping and other provider forms remain separate work.
+Operator keys choose from operator-provisioned sites. Managed workspace managers
+can create sites and assets through Sites & Assets. Other toolkits show setup
+metadata and documentation rather than an implemented connection form.
 
 The HTTP acceptance runs the explicit `--octopus-fixture` transport with fictional
 credentials. It never qualifies a private Octopus account or physical meter.
@@ -65,3 +67,19 @@ persisted health history. Disconnect requires inline confirmation, removes the
 saved credential and retains a revoked record. Existing REST and MCP sessions
 cannot execute the revoked account on their next request. Connect the same meter
 again with a valid key to restore access.
+
+## Connect an agent from a managed workspace
+
+Open **Connect my agent**, name the key and select its sites. Create the key and
+copy the MCP configuration. The raw agent key appears once. The configuration
+uses the public gateway URL and the selected site endpoint with bearer
+authentication. Configure your client to accept that MCP transport and headers.
+
+Agent keys cannot manage connections, sites, assets or keys. The key list retains
+only metadata and supports revocation. A workspace management key has broader
+permissions and should remain with the workspace owner.
+
+The production HTTP acceptance in `test/managed-workspace.test.ts` runs a real
+managed gateway and web server with synthetic provider responses. It checks
+zero-site onboarding, mapping, scope boundaries and agent-key issuance. These
+fixtures do not qualify a physical meter or real provider account.

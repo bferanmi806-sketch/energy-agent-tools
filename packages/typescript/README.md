@@ -58,6 +58,24 @@ and `deleteArtifact` for the other REST operations. `energy.session` attaches
 to an existing session ID; the host still checks ownership and expiration.
 Calling `session.close()` deletes that session's artifacts on the server.
 
+## Manage a workspace
+
+For an explicitly [managed workspace](../../docs/managed-workspaces.md), use
+`energy.workspace()` with its management key. This client works before the
+workspace has any sites; it does not create an execution session.
+
+Use `details`, `toolkits`, `connectionSetups`, `connections`, `sites`, `assets`
+and `keys` to read current workspace records. `connectAccount` verifies an
+Octopus meter and saves a disabled `pending_mapping` connection. Create a site
+with `createSite`, then call `mapConnection(connectionId, { site_id })` to verify
+and activate it. `createAsset` can associate active connections at that site.
+
+`createAgentKey({ name, site_ids })` returns the raw scoped key once. Save it
+before discarding the response. `keys()` omits raw tokens. Use `revokeKey` to
+withdraw access, and `verifyConnection` or `disconnectConnection` for connection
+lifecycle actions. The host derives workspace ownership from the current key
+on every request. Agent keys cannot use management operations.
+
 Tokens may be provided by a callback so rotation takes effect on each request.
 `timeoutMs`, `maxResponseBytes` and an injected `fetch` can be configured on the
 client. Individual requests accept an `AbortSignal`. The transport does not

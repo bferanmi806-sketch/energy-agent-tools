@@ -356,14 +356,19 @@ class EnergyAgent:
         )
         return results
 
-    def _sync_connections(self, user_id: str) -> None:
+    def _sync_connections(self, user_id: str, workspace_id: str | None = None) -> None:
         if self.auth_store:
             changed = False
-            current = self.auth_store.accounts(user_id)
+            current = [
+                account
+                for account in self.auth_store.workspace_accounts(user_id, workspace_id)
+                if account.workspace_id is None or account.site_id is not None
+            ]
             current_ids = {account.id for account in current}
             for account_id, account in list(self.accounts.items()):
                 if (
                     account.user_id == user_id
+                    and account.workspace_id == workspace_id
                     and account.auth.secret_id
                     and account_id not in current_ids
                 ):
@@ -384,12 +389,13 @@ class EnergyAgent:
 
     def connections(self, session: Session) -> list[Json]:
         self._scope(session)
-        self._sync_connections(session.user_id)
+        self._sync_connections(session.user_id, session.workspace_id)
         visible_toolkits = {item["id"] for item in self.catalogue(session)}
         return [
             a.public()
             for a in self.accounts.values()
             if a.user_id == session.user_id
+            and a.workspace_id == session.workspace_id
             and (session.site_id is None or a.site_id == session.site_id)
             and (session.toolkits is None or a.toolkit in session.toolkits)
             and (session.access_mode == "local" or a.toolkit in visible_toolkits)
@@ -398,13 +404,14 @@ class EnergyAgent:
     def _account(
         self, session: Session, toolkit: str, account_id: str | None = None
     ) -> ConnectedAccount | None:
-        self._sync_connections(session.user_id)
+        self._sync_connections(session.user_id, session.workspace_id)
         selected = account_id or session.account_ids.get(toolkit)
         candidates = [
             a
             for a in self.accounts.values()
             if a.toolkit == toolkit
             and a.user_id == session.user_id
+            and a.workspace_id == session.workspace_id
             and a.enabled
             and a.state == "active"
             and (session.site_id is None or a.site_id == session.site_id)

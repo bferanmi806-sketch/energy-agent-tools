@@ -9,6 +9,52 @@ export const IdentityResponseSchema = {
       "title": "Can Manage Connections",
       "type": "boolean"
     },
+    "can_manage_workspace": {
+      "default": false,
+      "title": "Can Manage Workspace",
+      "type": "boolean"
+    },
+    "workspace": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "title": "Id",
+              "type": "string"
+            },
+            "user_id": {
+              "title": "User Id",
+              "type": "string"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "mode": {
+              "enum": [
+                "operator",
+                "managed"
+              ],
+              "title": "Mode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "user_id",
+            "name",
+            "mode"
+          ],
+          "title": "WorkspaceDetails",
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "user_id": {
       "title": "User Id",
       "type": "string"
@@ -137,6 +183,792 @@ export const IdentityResponseSchema = {
   "type": "object"
 } as const;
 export type IdentityResponse = FromSchema<typeof IdentityResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceResponseSchema = {
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "operator",
+            "managed"
+          ],
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "user_id",
+        "name",
+        "mode"
+      ],
+      "title": "WorkspaceDetails",
+      "type": "object"
+    }
+  },
+  "required": [
+    "workspace"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceResponse = FromSchema<typeof WorkspaceResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceSiteRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "timezone": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Timezone",
+      "type": "string"
+    },
+    "latitude": {
+      "anyOf": [
+        {
+          "maximum": 90,
+          "minimum": -90,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Latitude"
+    },
+    "longitude": {
+      "anyOf": [
+        {
+          "maximum": 180,
+          "minimum": -180,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Longitude"
+    }
+  },
+  "required": [
+    "name",
+    "timezone"
+  ],
+  "title": "WorkspaceSiteRequest",
+  "type": "object"
+} as const;
+export type WorkspaceSiteRequest = FromSchema<typeof WorkspaceSiteRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceSiteResponseSchema = {
+  "type": "object",
+  "properties": {
+    "site": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "timezone": {
+          "title": "Timezone",
+          "type": "string"
+        },
+        "latitude": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": -90,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latitude"
+        },
+        "longitude": {
+          "anyOf": [
+            {
+              "maximum": 180,
+              "minimum": -180,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Longitude"
+        }
+      },
+      "required": [
+        "id",
+        "user_id",
+        "name",
+        "timezone"
+      ],
+      "title": "Site",
+      "type": "object"
+    }
+  },
+  "required": [
+    "site"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceSiteResponse = FromSchema<typeof WorkspaceSiteResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceSitesResponseSchema = {
+  "type": "object",
+  "properties": {
+    "sites": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90,
+                "minimum": -90,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180,
+                "minimum": -180,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Longitude"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "timezone"
+        ],
+        "title": "Site",
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "sites"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceSitesResponse = FromSchema<typeof WorkspaceSitesResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceAssetRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "site_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Site Id",
+      "type": "string"
+    },
+    "name": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "kind": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Kind",
+      "type": "string"
+    },
+    "parent_id": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Id"
+    },
+    "account_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Account Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "site_id",
+    "name",
+    "kind"
+  ],
+  "title": "WorkspaceAssetRequest",
+  "type": "object"
+} as const;
+export type WorkspaceAssetRequest = FromSchema<typeof WorkspaceAssetRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceAssetResponseSchema = {
+  "type": "object",
+  "properties": {
+    "asset": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "site_id": {
+          "title": "Site Id",
+          "type": "string"
+        },
+        "kind": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "account_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Account Ids",
+          "type": "array"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Id"
+        }
+      },
+      "required": [
+        "id",
+        "site_id",
+        "kind",
+        "name"
+      ],
+      "title": "Asset",
+      "type": "object"
+    }
+  },
+  "required": [
+    "asset"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceAssetResponse = FromSchema<typeof WorkspaceAssetResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceAssetsResponseSchema = {
+  "type": "object",
+  "properties": {
+    "assets": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "site_id": {
+            "title": "Site Id",
+            "type": "string"
+          },
+          "kind": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Account Ids",
+            "type": "array"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "id",
+          "site_id",
+          "kind",
+          "name"
+        ],
+        "title": "Asset",
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "assets"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceAssetsResponse = FromSchema<typeof WorkspaceAssetsResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceMapRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "site_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Site Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "site_id"
+  ],
+  "title": "WorkspaceMapRequest",
+  "type": "object"
+} as const;
+export type WorkspaceMapRequest = FromSchema<typeof WorkspaceMapRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceAgentKeyRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "site_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "title": "Site Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "name",
+    "site_ids"
+  ],
+  "title": "WorkspaceAgentKeyRequest",
+  "type": "object"
+} as const;
+export type WorkspaceAgentKeyRequest = FromSchema<typeof WorkspaceAgentKeyRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceIssuedKeyResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "key": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "user_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "User Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Workspace Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expires At"
+        },
+        "revoked": {
+          "title": "Revoked",
+          "type": "boolean"
+        },
+        "token_prefix": {
+          "maxLength": 16,
+          "minLength": 1,
+          "title": "Token Prefix",
+          "type": "string"
+        },
+        "access": {
+          "discriminator": {
+            "mapping": {
+              "agent": "#/$defs/AgentKeyAccess",
+              "legacy-agent": "#/$defs/LegacyKeyAccess",
+              "manage": "#/$defs/ManageKeyAccess"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "manage",
+                  "default": "manage",
+                  "title": "Kind",
+                  "type": "string"
+                }
+              },
+              "title": "ManageKeyAccess",
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "agent",
+                  "default": "agent",
+                  "title": "Kind",
+                  "type": "string"
+                },
+                "site_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 256,
+                  "minItems": 1,
+                  "title": "Site Ids",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "site_ids"
+              ],
+              "title": "AgentKeyAccess",
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Existing v1 execution keys, never issuable through managed control routes.",
+              "properties": {
+                "kind": {
+                  "const": "legacy-agent",
+                  "default": "legacy-agent",
+                  "title": "Kind",
+                  "type": "string"
+                }
+              },
+              "title": "LegacyKeyAccess",
+              "type": "object"
+            }
+          ],
+          "title": "Access"
+        }
+      },
+      "required": [
+        "id",
+        "user_id",
+        "workspace_id",
+        "name",
+        "created_at",
+        "expires_at",
+        "revoked",
+        "token_prefix",
+        "access"
+      ],
+      "title": "KeyRecord",
+      "type": "object"
+    },
+    "token": {
+      "maxLength": 47,
+      "minLength": 47,
+      "title": "Token",
+      "type": "string"
+    }
+  },
+  "required": [
+    "key",
+    "token"
+  ],
+  "title": "IssuedKey",
+  "type": "object"
+} as const;
+export type WorkspaceIssuedKeyResponse = FromSchema<typeof WorkspaceIssuedKeyResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceKeysResponseSchema = {
+  "type": "object",
+  "properties": {
+    "keys": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "user_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "revoked": {
+            "title": "Revoked",
+            "type": "boolean"
+          },
+          "token_prefix": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Token Prefix",
+            "type": "string"
+          },
+          "access": {
+            "discriminator": {
+              "mapping": {
+                "agent": "#/$defs/AgentKeyAccess",
+                "legacy-agent": "#/$defs/LegacyKeyAccess",
+                "manage": "#/$defs/ManageKeyAccess"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "manage",
+                    "default": "manage",
+                    "title": "Kind",
+                    "type": "string"
+                  }
+                },
+                "title": "ManageKeyAccess",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "agent",
+                    "default": "agent",
+                    "title": "Kind",
+                    "type": "string"
+                  },
+                  "site_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 256,
+                    "minItems": 1,
+                    "title": "Site Ids",
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "site_ids"
+                ],
+                "title": "AgentKeyAccess",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "description": "Existing v1 execution keys, never issuable through managed control routes.",
+                "properties": {
+                  "kind": {
+                    "const": "legacy-agent",
+                    "default": "legacy-agent",
+                    "title": "Kind",
+                    "type": "string"
+                  }
+                },
+                "title": "LegacyKeyAccess",
+                "type": "object"
+              }
+            ],
+            "title": "Access"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "workspace_id",
+          "name",
+          "created_at",
+          "expires_at",
+          "revoked",
+          "token_prefix",
+          "access"
+        ],
+        "title": "KeyRecord",
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "keys"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceKeysResponse = FromSchema<typeof WorkspaceKeysResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceRevokedKeyResponseSchema = {
+  "type": "object",
+  "properties": {
+    "revoked": {
+      "const": true
+    }
+  },
+  "required": [
+    "revoked"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceRevokedKeyResponse = FromSchema<typeof WorkspaceRevokedKeyResponseSchema, { keepDefaultedPropertiesOptional: true }>;
 
 export const ConnectionSetupsResponseSchema = {
   "additionalProperties": false,

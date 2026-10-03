@@ -1,15 +1,45 @@
-import type { IdentityResponse, ConnectionSetupsResponse, ToolkitsResponse, ConnectionsResponse, SkillsResponse, ArtifactsResponse } from "@energy-agent-tools/sdk";
-export interface DashboardData {
+import type {
+  ConnectionSetupsResponse,
+  ConnectionsResponse,
+  IdentityResponse,
+  SkillsResponse,
+  ToolkitsResponse,
+  ArtifactsResponse,
+  WorkspaceAssetsResponse,
+  WorkspaceKeysResponse,
+  WorkspaceResponse,
+  WorkspaceSitesResponse,
+} from "@energy-agent-tools/sdk";
+
+interface DashboardBase {
   identity: IdentityResponse;
+  publicGatewayUrl: string | null;
+}
+
+export interface OperatorDashboardData extends DashboardBase {
+  kind: "operator";
   siteId: string | null;
   connectionSetups: ConnectionSetupsResponse["setups"];
   toolkits: ToolkitsResponse["toolkits"];
   connections: ConnectionsResponse["connections"];
   skills: SkillsResponse["skills"];
   artifacts: ArtifactsResponse["artifacts"];
-  publicGatewayUrl: string | null;
 }
+
+export interface ManagedDashboardData extends DashboardBase {
+  kind: "managed";
+  workspace: WorkspaceResponse["workspace"];
+  sites: WorkspaceSitesResponse["sites"];
+  assets: WorkspaceAssetsResponse["assets"];
+  keys: WorkspaceKeysResponse["keys"];
+  connectionSetups: ConnectionSetupsResponse["setups"];
+  toolkits: ToolkitsResponse["toolkits"];
+  connections: ConnectionsResponse["connections"];
+}
+
+export type DashboardData = OperatorDashboardData | ManagedDashboardData;
+
 export type DashboardState =
-  | {kind:"signed-out"; message:string | null}
-  | {kind:"ready"; data:DashboardData}
-  | {kind:"unavailable"; message:string};
+  | { kind: "signed-out"; message: string | null }
+  | { kind: "ready"; data: DashboardData }
+  | { kind: "unavailable"; message: string };

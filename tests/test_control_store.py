@@ -198,13 +198,13 @@ def test_expiration_and_revocation_are_visible_across_store_instances(tmp_path: 
 def test_newer_database_schema_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "control.sqlite3"
     with sqlite3.connect(path) as db:
-        db.execute("PRAGMA user_version = 3")
+        db.execute("PRAGMA user_version = 4")
 
     with pytest.raises(RuntimeError, match="newer"):
         ControlStore(tmp_path)
 
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
 
 
 def _make_v1_store(root: Path) -> dict[str, str]:
@@ -274,6 +274,32 @@ def _make_v1_store(root: Path) -> dict[str, str]:
     return tokens
 
 
+def _make_v2_store(root: Path) -> dict[str, str]:
+    tokens = _make_v1_store(root)
+    path = root / "control.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "ALTER TABLE api_keys ADD COLUMN access_json TEXT NOT NULL "
+            'DEFAULT \'{"kind":"legacy-agent"}\''
+        )
+        db.execute('UPDATE api_keys SET access_json = \'{"kind":"legacy-agent"}\'')
+        site = Site(id="alice-v2-site", user_id="alice", name="Old site", timezone="UTC")
+        db.execute(
+            "INSERT INTO sites(id, user_id, workspace_id, site_json) VALUES (?, ?, ?, ?)",
+            (site.id, "alice", "alice-home", site.model_dump_json()),
+        )
+        db.execute(
+            "UPDATE api_keys SET access_json = ? WHERE id = ?",
+            ('{"kind":"agent","site_ids":["alice-v2-site"]}', "active-key"),
+        )
+        db.execute(
+            "UPDATE api_keys SET access_json = ? WHERE id = ?",
+            ('{"kind":"manage"}', "revoked-key"),
+        )
+        db.execute("PRAGMA user_version = 2")
+    return tokens
+
+
 def test_genuine_v1_migration_preserves_keys_and_marks_them_legacy(tmp_path: Path) -> None:
     tokens = _make_v1_store(tmp_path)
     path = tmp_path / "control.sqlite3"
@@ -294,14 +320,49 @@ def test_genuine_v1_migration_preserves_keys_and_marks_them_legacy(tmp_path: Pat
     assert all(key.access == LegacyKeyAccess() for key in alice_keys + bob_keys)
 
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
         assert db.execute("SELECT * FROM api_keys ORDER BY id").fetchall() == [
             (*row, '{"kind":"legacy-agent"}') for row in original_rows
+        ]
+        assert db.execute("SELECT mode FROM workspaces ORDER BY id").fetchall() == [
+            ("operator",),
+            ("operator",),
+        ]
+    assert store.workspace("alice", "alice-home").mode == "operator"
+    assert active_identity.workspace_mode == "operator"
+    store.close()
+
+
+def test_genuine_v2_migration_preserves_modes_key_roles_and_key_state(tmp_path: Path) -> None:
+    tokens = _make_v2_store(tmp_path)
+    path = tmp_path / "control.sqlite3"
+    with sqlite3.connect(path) as db:
+        original_rows = db.execute("SELECT * FROM api_keys ORDER BY id").fetchall()
+
+    store = ControlStore(tmp_path)
+    active = store.authenticate(tokens["active"])
+    assert active is not None
+    assert active.workspace_mode == "operator"
+    assert active.access == AgentKeyAccess(site_ids=["alice-v2-site"])
+    assert store.authenticate(tokens["revoked"]) is None
+    assert store.authenticate(tokens["expired"]) is None
+    assert store.workspace("alice", "alice-home").mode == "operator"
+    assert {key.id: key.access for key in store.keys("alice", "alice-home")} == {
+        "active-key": AgentKeyAccess(site_ids=["alice-v2-site"]),
+        "revoked-key": ManageKeyAccess(),
+    }
+
+    with sqlite3.connect(path) as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("SELECT * FROM api_keys ORDER BY id").fetchall() == original_rows
+        assert db.execute("SELECT mode FROM workspaces ORDER BY id").fetchall() == [
+            ("operator",),
+            ("operator",),
         ]
     store.close()
 
 
-def test_concurrent_v1_store_initialization_converges_on_schema_v2(tmp_path: Path) -> None:
+def test_concurrent_v1_store_initialization_converges_on_schema_v3(tmp_path: Path) -> None:
     tokens = _make_v1_store(tmp_path)
 
     def open_and_close() -> str | None:
@@ -315,8 +376,9 @@ def test_concurrent_v1_store_initialization_converges_on_schema_v2(tmp_path: Pat
 
     assert results == ["legacy-agent"] * 8
     with sqlite3.connect(tmp_path / "control.sqlite3") as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
         assert db.execute("PRAGMA table_info(api_keys)").fetchall()[-1][1] == "access_json"
+        assert db.execute("PRAGMA table_info(workspaces)").fetchall()[-1][1] == "mode"
 
 
 def test_access_grants_persist_and_agent_sites_are_owner_workspace_scoped(tmp_path: Path) -> None:
@@ -411,6 +473,147 @@ def test_corrupt_access_fails_closed_without_exposing_stored_json(tmp_path: Path
     with pytest.raises(RuntimeError) as caught:
         store.keys("alice", workspace.id)
     assert "invalid key access" in str(caught.value)
+    assert marker not in str(caught.value)
+    assert caught.value.__cause__ is None
+    store.close()
+
+
+def test_managed_bootstrap_appends_atomically_without_replacing_existing_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = ControlStore(tmp_path)
+    first = store.bootstrap_workspace("Alice", "Home")
+    assert first.workspace.mode == "managed"
+    assert first.key.key.access == ManageKeyAccess()
+    assert first.key.token not in repr(first)
+    identity = store.authenticate(first.key.token)
+    assert identity is not None
+    assert identity.workspace_mode == "managed"
+    assert identity.access == ManageKeyAccess()
+
+    second = store.bootstrap_workspace("Alice", "Home")
+    assert second.user.id != first.user.id
+    assert second.workspace.id != first.workspace.id
+    assert second.key.key.id != first.key.key.id
+    assert store.authenticate(first.key.token) is not None
+    assert store.workspace(first.user.id, first.workspace.id) == first.workspace
+    assert store.workspace(second.user.id, second.workspace.id) == second.workspace
+    assert len(store.workspaces(first.user.id)) == 1
+    assert len(store.keys(first.user.id, first.workspace.id)) == 1
+
+    def fail_access_serialization(_access: object) -> str:
+        raise RuntimeError("injected key serialization failure")
+
+    monkeypatch.setattr("energy_agent_tools.control_store._access_json", fail_access_serialization)
+    with pytest.raises(RuntimeError, match="injected key serialization failure"):
+        store.bootstrap_workspace("Rollback owner", "Rollback workspace")
+    with sqlite3.connect(tmp_path / "control.sqlite3") as db:
+        assert db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 2
+        assert db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0] == 2
+        assert db.execute("SELECT COUNT(*) FROM api_keys").fetchone()[0] == 2
+    store.close()
+
+    reopened = ControlStore(tmp_path)
+    assert reopened.authenticate(first.key.token) is not None
+    assert reopened.authenticate(second.key.token) is not None
+    reopened.close()
+
+
+def test_workspace_modes_and_generated_topology_are_exactly_scoped(tmp_path: Path) -> None:
+    store = ControlStore(tmp_path)
+    store.create_user("alice", "Alice")
+    operator = store.create_workspace("alice", "Legacy operator")
+    managed = store.create_workspace("alice", "Managed home", mode="managed")
+    other_managed = store.create_workspace("alice", "Managed other", mode="managed")
+    assert operator.mode == "operator"
+    assert store.workspace("alice", operator.id).mode == "operator"
+    assert store.workspace("alice", managed.id).mode == "managed"
+    with pytest.raises(EnergyError) as caught:
+        store.create_workspace("alice", "Invalid", mode="bootstrap")  # type: ignore[arg-type]
+    assert caught.value.code == "invalid_request"
+    _assert_not_found(lambda: store.workspace("bob", managed.id))
+
+    first_site = store.create_site(
+        "alice", managed.id, name="Home", timezone="Europe/London", latitude=51.5
+    )
+    second_site = store.create_site("alice", other_managed.id, name="Other", timezone="UTC")
+    assert first_site.id != second_site.id
+    assert len(first_site.id) == 32
+    assert store.sites("alice", managed.id) == [first_site]
+    assert store.sites("alice", other_managed.id) == [second_site]
+    with pytest.raises(TypeError):
+        store.create_site(  # type: ignore[call-arg]
+            "alice", managed.id, id="caller-selected", name="Wrong", timezone="UTC"
+        )
+
+    parent = store.create_asset(
+        "alice", managed.id, site_id=first_site.id, name="Meter", kind="meter"
+    )
+    child = store.create_asset(
+        "alice",
+        managed.id,
+        site_id=first_site.id,
+        name="Submeter",
+        kind="meter",
+        parent_id=parent.id,
+    )
+    assert parent.id != child.id
+    assert {asset.id for asset in store.assets("alice", managed.id)} == {child.id, parent.id}
+    with pytest.raises(EnergyError) as caught:
+        store.create_asset(
+            "alice",
+            managed.id,
+            site_id=second_site.id,
+            name="Foreign site",
+            kind="meter",
+        )
+    assert caught.value.code == "not_found"
+    with pytest.raises(EnergyError) as caught:
+        store.create_asset(
+            "alice",
+            other_managed.id,
+            site_id=second_site.id,
+            name="Foreign parent",
+            kind="meter",
+            parent_id=parent.id,
+        )
+    assert caught.value.code == "not_found"
+    assert store.assets("alice", other_managed.id) == []
+
+    managed_key = store.create_key("alice", managed.id, "Manager", access=ManageKeyAccess())
+    operator_key = store.create_key("alice", operator.id, "Operator", access=ManageKeyAccess())
+    store.close()
+
+    reopened = ControlStore(tmp_path)
+    managed_identity = reopened.authenticate(managed_key.token)
+    operator_identity = reopened.authenticate(operator_key.token)
+    assert managed_identity is not None and managed_identity.workspace_mode == "managed"
+    assert operator_identity is not None and operator_identity.workspace_mode == "operator"
+    assert reopened.workspace("alice", managed.id) == managed
+    assert reopened.sites("alice", managed.id) == [first_site]
+    assert {asset.id for asset in reopened.assets("alice", managed.id)} == {
+        child.id,
+        parent.id,
+    }
+    reopened.close()
+
+
+def test_corrupt_workspace_mode_fails_closed_on_authentication_and_reads(tmp_path: Path) -> None:
+    store = ControlStore(tmp_path)
+    store.create_user("alice", "Alice")
+    workspace = store.create_workspace("alice", "Home", mode="managed")
+    issued = store.create_key("alice", workspace.id, "Management", access=ManageKeyAccess())
+    marker = "private-corruption-payload"
+    with sqlite3.connect(tmp_path / "control.sqlite3") as db:
+        db.execute("PRAGMA ignore_check_constraints = ON")
+        db.execute(
+            "UPDATE workspaces SET mode = ? WHERE id = ?",
+            (marker, workspace.id),
+        )
+
+    assert store.authenticate(issued.token) is None
+    with pytest.raises(RuntimeError, match="invalid workspace mode") as caught:
+        store.workspace("alice", workspace.id)
     assert marker not in str(caught.value)
     assert caught.value.__cause__ is None
     store.close()

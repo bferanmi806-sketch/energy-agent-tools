@@ -16,6 +16,14 @@ from energy_agent_tools.connection_contracts import (
     ConnectionSetupsResponse,
     OctopusConnectionRequest,
 )
+from energy_agent_tools.control_contracts import (
+    WorkspaceAgentKeyRequest,
+    WorkspaceAssetRequest,
+    WorkspaceDetails,
+    WorkspaceMapRequest,
+    WorkspaceSiteRequest,
+)
+from energy_agent_tools.control_store import IssuedKey, KeyRecord
 from energy_agent_tools.hosting import (
     IdentityResponse,
     _CapabilityExecutionRequest,
@@ -25,7 +33,7 @@ from energy_agent_tools.hosting import (
     _SessionCreate,
     _SkillExecutionRequest,
 )
-from energy_agent_tools.models import EnergyResult, Tool, Toolkit
+from energy_agent_tools.models import Asset, EnergyResult, Site, Tool, Toolkit
 
 
 def expand_model(model: Any) -> dict[str, Any]:
@@ -117,6 +125,18 @@ def schemas() -> dict[str, dict[str, Any]]:
     )
     return {
         "IdentityResponse": expand_model(IdentityResponse),
+        "WorkspaceResponse": obj({"workspace": expand_model(WorkspaceDetails)}, ["workspace"]),
+        "WorkspaceSiteRequest": expand_model(WorkspaceSiteRequest),
+        "WorkspaceSiteResponse": obj({"site": expand_model(Site)}, ["site"]),
+        "WorkspaceSitesResponse": obj({"sites": array(expand_model(Site))}, ["sites"]),
+        "WorkspaceAssetRequest": expand_model(WorkspaceAssetRequest),
+        "WorkspaceAssetResponse": obj({"asset": expand_model(Asset)}, ["asset"]),
+        "WorkspaceAssetsResponse": obj({"assets": array(expand_model(Asset))}, ["assets"]),
+        "WorkspaceMapRequest": expand_model(WorkspaceMapRequest),
+        "WorkspaceAgentKeyRequest": expand_model(WorkspaceAgentKeyRequest),
+        "WorkspaceIssuedKeyResponse": expand_model(IssuedKey),
+        "WorkspaceKeysResponse": obj({"keys": array(expand_model(KeyRecord))}, ["keys"]),
+        "WorkspaceRevokedKeyResponse": obj({"revoked": {"const": True}}, ["revoked"]),
         "ConnectionSetupsResponse": expand_model(ConnectionSetupsResponse),
         "OctopusConnectionRequest": expand_model(OctopusConnectionRequest),
         "SessionCreate": expand_model(_SessionCreate),

@@ -87,6 +87,7 @@ class ConnectedAccount(StrictModel):
     id: str
     user_id: str
     toolkit: str
+    workspace_id: str | None = Field(default=None, min_length=1, max_length=256)
     site_id: str | None = None
     auth: AuthConfig = Field(default_factory=AuthConfig)
     settings: Json = Field(default_factory=dict)
@@ -94,6 +95,25 @@ class ConnectedAccount(StrictModel):
     state: str = "active"
     last_verified_at: datetime | None = None
     expires_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def managed_scope(self) -> ConnectedAccount:
+        if self.workspace_id is None:
+            return self
+        if not self.workspace_id.strip() or self.auth.credential_env is not None:
+            raise ValueError("Managed connections require workspace-owned vault credentials")
+        if self.state == "pending_mapping":
+            if self.site_id is not None or self.enabled or self.last_verified_at is None:
+                raise ValueError("Pending managed connections must be verified and inactive")
+        elif self.state == "active":
+            if not self.site_id or not self.enabled or self.last_verified_at is None:
+                raise ValueError("Active managed connections require a verified site mapping")
+        elif self.state in {"disabled", "revoked"}:
+            if self.enabled:
+                raise ValueError("Inactive managed connections cannot be enabled")
+        else:
+            raise ValueError("Managed connection state is unsupported")
+        return self
 
     @field_validator("last_verified_at", "expires_at")
     @classmethod
@@ -174,6 +194,7 @@ class Asset(StrictModel):
 class Session(StrictModel):
     id: str = Field(default_factory=lambda: uuid4().hex)
     user_id: str
+    workspace_id: str | None = Field(default=None, min_length=1, max_length=256)
     access_mode: Literal["local", "hosted"] = "local"
     site_id: str | None = None
     toolkits: set[str] | None = None

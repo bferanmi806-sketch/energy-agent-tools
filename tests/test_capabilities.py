@@ -275,3 +275,32 @@ async def test_discovery_uses_scoped_reviewed_mapping_without_mutating_shared_to
         assert "get_current_power" not in agent.get_tool(home, "meter.read")["capabilities"]
     finally:
         await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_reviewed_account_discovery_matches_exact_workspace_namespace(tmp_path):
+    binding = CapabilityBinding(
+        capability="get_current_power",
+        tool="meter.read",
+        account_id="a",
+        reviewed=True,
+        kind=DataKind.METERED,
+        unit="kW",
+    )
+    agent = platform(tmp_path, [binding])
+    try:
+        agent.accounts["a"] = ConnectedAccount(
+            **{
+                **agent.accounts["a"].model_dump(),
+                "workspace_id": "workspace-one",
+                "last_verified_at": datetime.now(UTC),
+            }
+        )
+        owned = agent.session("u", "home", workspace_id="workspace-one")
+        other = agent.session("u", "home", workspace_id="workspace-two")
+        legacy = agent.session("u", "home")
+        assert "get_current_power" in agent.get_tool(owned, "meter.read")["capabilities"]
+        assert "get_current_power" not in agent.get_tool(other, "meter.read")["capabilities"]
+        assert "get_current_power" not in agent.get_tool(legacy, "meter.read")["capabilities"]
+    finally:
+        await agent.close()

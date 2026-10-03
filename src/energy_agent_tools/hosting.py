@@ -48,7 +48,17 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from .auth import AuthStore
 from .capabilities import CapabilityRequest
 from .connection_contracts import ConnectionSetupsResponse, OctopusConnectionRequest, octopus_setup
-from .control_contracts import AgentKeyAccess, KeyAccess, ManageKeyAccess
+from .control_contracts import (
+    AgentKeyAccess,
+    KeyAccess,
+    ManageKeyAccess,
+    WorkspaceAgentKeyRequest,
+    WorkspaceAssetRequest,
+    WorkspaceDetails,
+    WorkspaceMapRequest,
+    WorkspaceMode,
+    WorkspaceSiteRequest,
+)
 from .control_store import ControlStore
 from .models import EnergyError, Json, Session, Site
 from .runtime import EnergyAgent
@@ -78,10 +88,15 @@ class Principal:
     token_id: str | None = None
     workspace_id: str | None = None
     key_access: KeyAccess | None = None
+    workspace_mode: WorkspaceMode = "operator"
 
     def __post_init__(self) -> None:
         if not self.user_id or len(self.user_id) > 256:
             raise ValueError("Principal user_id must be non-empty and bounded.")
+        if self.workspace_mode not in {"operator", "managed"}:
+            raise ValueError("Principal workspace mode is invalid.")
+        if self.workspace_mode == "managed" and not self.workspace_id:
+            raise ValueError("Managed principals require a workspace.")
         if not _TOKEN_DIGEST.fullmatch(self.token_digest):
             raise ValueError("Principal token_digest must be a SHA-256 hexadecimal digest.")
         if not isinstance(self.revoked, bool):
@@ -127,6 +142,8 @@ class IdentityAsset(_RequestModel):
 
 class IdentityResponse(_RequestModel):
     can_manage_connections: StrictBool = False
+    can_manage_workspace: StrictBool = False
+    workspace: WorkspaceDetails | None = None
     user_id: StrictStr
     sites: list[Site]
     assets: list[IdentityAsset]
@@ -167,6 +184,30 @@ class _MCPMount:
     app: ASGIApp
     manager: Any
     session: Session
+
+
+class _MCPOwner:
+    """Enter and exit the MCP manager's AnyIO scope in one owning task."""
+
+    def __init__(self, manager: Any):
+        self._manager = manager
+        self.started: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self.stop = asyncio.Event()
+        self.task = asyncio.create_task(self._run())
+
+    async def _run(self) -> None:
+        try:
+            async with self._manager.run():
+                self.started.set_result(None)
+                await self.stop.wait()
+        except BaseException as exc:
+            if not self.started.done():
+                self.started.set_exception(exc)
+            raise
+
+    async def close(self) -> None:
+        self.stop.set()
+        await self.task
 
 
 @dataclass
@@ -269,6 +310,12 @@ class _MCPDispatcher:
                 )
                 return
         mount = self.host._mounts.get((principal.user_id, site_id))
+        if principal.workspace_mode == "managed":
+            try:
+                mount = await self.host._managed_mcp_mount(principal, site_id)
+            except EnergyError as exc:
+                await self.host._energy_error(exc)(scope, receive, send)
+                return
         if mount is None:
             await _error("site_forbidden", "Site is outside this user's scope.", 403)(
                 scope, receive, send
@@ -339,6 +386,7 @@ class AuthenticatedHost:
         max_sessions_global: int,
         close_agent_on_shutdown: bool,
         control_store: ControlStore | None = None,
+        managed_workspaces: bool = False,
     ) -> None:
         if max_requests_per_minute <= 0:
             raise ValueError("max_requests_per_minute must be positive.")
@@ -356,7 +404,18 @@ class AuthenticatedHost:
         self.max_sessions_per_user = max_sessions_per_user
         self.session_idle_timeout = session_idle_timeout
         self.max_sessions_global = max_sessions_global
-        self._principals = self._validate_principals(principals)
+        if managed_workspaces and (
+            control_store is None or not isinstance(agent.auth_store, AuthStore)
+        ):
+            raise ValueError("Managed workspaces require control and encrypted auth stores.")
+        if managed_workspaces:
+            agent.auth_store.validate_encryption_key()
+        self._managed_workspaces = managed_workspaces
+        self._operator_site_ids = frozenset(agent.sites)
+        self._operator_asset_ids = frozenset(agent.assets)
+        self._managed_sites: dict[str, str] = {}
+        self._managed_assets: dict[str, str] = {}
+        self._principals = self._validate_principals(principals, allow_empty=managed_workspaces)
         self._control_store = control_store
         self._sessions: dict[str, _StoredSession] = {}
         self._rate_events: dict[str, deque[float]] = {}
@@ -365,8 +424,32 @@ class AuthenticatedHost:
         self._mcp_sessions: dict[str, _MCPAdmission] = {}
         self._mcp_pending: dict[str, int] = {}
         self._mcp_lock = asyncio.Lock()
+        self._mount_lock = asyncio.Lock()
+        self._mcp_owners: dict[tuple[str, str | None], _MCPOwner] = {}
+        self._lifespan_active = False
         self._build_mcp_mounts()
         routes = [
+            Route("/workspace", self._workspace, methods=["GET"]),
+            Route("/workspace/sites", self._workspace_sites, methods=["GET", "POST"]),
+            Route("/workspace/assets", self._workspace_assets, methods=["GET", "POST"]),
+            Route("/workspace/keys", self._workspace_keys, methods=["GET", "POST"]),
+            Route("/workspace/keys/{key_id}", self._workspace_revoke_key, methods=["DELETE"]),
+            Route("/workspace/toolkits", self._workspace_toolkits, methods=["GET"]),
+            Route("/workspace/connection-setups", self._workspace_setups, methods=["GET"]),
+            Route("/workspace/connections", self._workspace_connections, methods=["GET", "POST"]),
+            Route(
+                "/workspace/connections/{connection_id}/map", self._workspace_map, methods=["POST"]
+            ),
+            Route(
+                "/workspace/connections/{connection_id}/verify",
+                self._workspace_verify,
+                methods=["POST"],
+            ),
+            Route(
+                "/workspace/connections/{connection_id}/disconnect",
+                self._workspace_disconnect,
+                methods=["POST"],
+            ),
             Route("/me", self._identity, methods=["GET"]),
             Route("/sessions", self._create_session, methods=["POST"]),
             Route("/sessions/{session_id}", self._delete_session, methods=["DELETE"]),
@@ -408,25 +491,42 @@ class AuthenticatedHost:
             async with AsyncExitStack() as stack:
                 for mount in self._mounts.values():
                     await stack.enter_async_context(mount.manager.run())
+                self._lifespan_active = True
                 try:
                     yield None
                 finally:
+                    async with self._mount_lock:
+                        self._lifespan_active = False
+                        owners = list(self._mcp_owners.values())
+                        for key in self._mcp_owners:
+                            self._mounts.pop(key, None)
+                        self._mcp_owners.clear()
+                    owner_results = await asyncio.gather(
+                        *(owner.close() for owner in owners), return_exceptions=True
+                    )
                     async with self._mcp_lock:
                         self._mcp_sessions.clear()
                         self._mcp_pending.clear()
                     if close_agent_on_shutdown:
                         await self.agent.close()
+                    for result in owner_results:
+                        if isinstance(result, BaseException):
+                            raise result
 
         self._app = Starlette(routes=routes, lifespan=lifespan)
 
     @staticmethod
-    def _validate_principals(principals: Mapping[str, Principal]) -> dict[str, Principal]:
-        if not principals:
+    def _validate_principals(
+        principals: Mapping[str, Principal], *, allow_empty: bool = False
+    ) -> dict[str, Principal]:
+        if not principals and not allow_empty:
             raise ValueError("At least one principal is required.")
         result: dict[str, Principal] = {}
         digests: set[str] = set()
         token_ids: set[str] = set()
         for key, principal in principals.items():
+            if principal.workspace_mode != "operator":
+                raise ValueError("Static principals must use operator mode.")
             if key != principal.user_id:
                 raise ValueError("Principal mapping keys must equal user_id.")
             if principal.user_id in result:
@@ -479,8 +579,11 @@ class AuthenticatedHost:
         immediately without rebuilding live MCP managers.
         """
 
-        candidate = self._validate_principals(principals)
-        if self._validate_mount_configuration(candidate) != set(self._mounts):
+        candidate = self._validate_principals(principals, allow_empty=self._managed_workspaces)
+        fixed_mounts = {
+            key for key, mount in self._mounts.items() if mount.session.workspace_id is None
+        }
+        if self._validate_mount_configuration(candidate) != fixed_mounts:
             raise ValueError("Principal rotation cannot change user/site mounts while running.")
         self._principals = candidate
         now = datetime.now(UTC)
@@ -492,12 +595,12 @@ class AuthenticatedHost:
         self._sessions = {
             session_id: stored
             for session_id, stored in self._sessions.items()
-            if stored.user_id in active_users
+            if stored.user_id in active_users or stored.session.workspace_id is not None
         }
         self._mcp_sessions = {
             session_id: admission
             for session_id, admission in self._mcp_sessions.items()
-            if admission.user_id in active_users
+            if admission.user_id in active_users or admission.site_id in self._managed_sites
         }
 
     def _available_sites(self, principal: Principal) -> list[str | None]:
@@ -508,7 +611,10 @@ class AuthenticatedHost:
             and self.agent.sites[site_id].user_id == principal.user_id
         ]
         if not sites:
-            owned = any(site.user_id == principal.user_id for site in self.agent.sites.values())
+            owned = any(
+                self.agent.sites[site_id].user_id == principal.user_id
+                for site_id in self._operator_site_ids
+            )
             if not owned and not principal.allowed_site_ids and principal.key_access is None:
                 return [None]
         return cast(list[str | None], sorted(sites))
@@ -531,6 +637,53 @@ class AuthenticatedHost:
                 manager = server.session_manager
                 self._mounts[(principal.user_id, site_id)] = _MCPMount(app, manager, session)
                 self._apps.append(server)
+
+    async def _managed_mcp_mount(self, principal: Principal, site_id: str | None) -> _MCPMount:
+        if site_id is None or site_id not in principal.allowed_site_ids:
+            raise EnergyError("site_forbidden", "Select an owned site for MCP.")
+        key = (principal.user_id, site_id)
+        async with self._mount_lock:
+            if not self._lifespan_active:
+                raise EnergyError("mcp_unavailable", "MCP transport is unavailable.")
+            mount = self._mounts.get(key)
+            if mount is not None:
+                owner = self._mcp_owners.get(key)
+                if (
+                    mount.session.workspace_id != principal.workspace_id
+                    or owner is None
+                    or owner.task.done()
+                ):
+                    raise EnergyError("mcp_unavailable", "MCP transport is unavailable.")
+                return mount
+            if len(self._mounts) >= self.max_sessions_global:
+                raise EnergyError("mcp_mount_limit", "Maximum MCP sites reached.")
+            session = self.agent.session(
+                principal.user_id,
+                site_id,
+                access_mode="hosted",
+                workspace_id=principal.workspace_id,
+            )
+            server = create_server(cast(EnergyAgent, _NonClosingAgent(self.agent)), session)
+            server.settings.max_request_body_size = self.max_body_bytes
+            server.settings.max_sessions = self.max_sessions_per_user
+            server.settings.session_idle_timeout = self.session_idle_timeout
+            app = server.streamable_http_app()
+            owner = _MCPOwner(server.session_manager)
+            try:
+                await asyncio.shield(owner.started)
+            except asyncio.CancelledError:
+                owner.stop.set()
+                await asyncio.gather(owner.task, return_exceptions=True)
+                raise
+            except Exception:
+                owner.stop.set()
+                await asyncio.gather(owner.task, return_exceptions=True)
+                raise EnergyError("mcp_unavailable", "MCP transport is unavailable.") from None
+            mount = _MCPMount(app, server.session_manager, session)
+            self._mcp_owners[key] = owner
+            self._mounts[key] = mount
+            self._apps.append(server)
+            return mount
 
     def _scope_principal(self, scope: Scope) -> Principal | None:
         value = scope.get("state", {}).get("principal")
@@ -630,6 +783,32 @@ class AuthenticatedHost:
         identity = self._control_store.authenticate(token)
         if identity is None:
             return None
+        if identity.workspace_mode == "managed":
+            if not self._managed_workspaces or not isinstance(
+                identity.access, (ManageKeyAccess, AgentKeyAccess)
+            ):
+                return None
+            try:
+                self._project_workspace(identity.user_id, identity.workspace_id)
+                sites = {
+                    site.id
+                    for site in self._control_store.sites(identity.user_id, identity.workspace_id)
+                    if not isinstance(identity.access, AgentKeyAccess)
+                    or site.id in identity.access.site_ids
+                }
+            except EnergyError:
+                return None
+            if isinstance(identity.access, AgentKeyAccess) and not sites:
+                return None
+            return Principal(
+                identity.user_id,
+                sites,
+                digest,
+                token_id=identity.key_id,
+                workspace_id=identity.workspace_id,
+                key_access=identity.access,
+                workspace_mode="managed",
+            )
         policy = self._principals.get(identity.user_id)
         if policy is None or not self._principal_active(policy):
             return None
@@ -656,6 +835,40 @@ class AuthenticatedHost:
             workspace_id=identity.workspace_id,
             key_access=identity.access,
         )
+
+    @staticmethod
+    def _runtime_workspace(principal: Principal) -> str | None:
+        return principal.workspace_id if principal.workspace_mode == "managed" else None
+
+    def _project_workspace(self, user_id: str, workspace_id: str) -> None:
+        assert self._control_store is not None
+        workspace = self._control_store.workspace(user_id, workspace_id)
+        if workspace.mode != "managed":
+            raise EnergyError("workspace_forbidden", "Workspace is unavailable.")
+        sites = self._control_store.sites(user_id, workspace_id)
+        assets = self._control_store.assets(user_id, workspace_id)
+        site_ids = {site.id for site in sites}
+        for site in sites:
+            if (
+                site.user_id != user_id
+                or site.id in self._operator_site_ids
+                or self._managed_sites.get(site.id, workspace_id) != workspace_id
+            ):
+                raise EnergyError("workspace_forbidden", "Workspace topology is unavailable.")
+        for asset in assets:
+            if (
+                asset.site_id not in site_ids
+                or asset.id in self._operator_asset_ids
+                or self._managed_assets.get(asset.id, workspace_id) != workspace_id
+            ):
+                raise EnergyError("workspace_forbidden", "Workspace topology is unavailable.")
+        # Validate the whole projection before publishing any runtime records.
+        for site in sites:
+            self.agent.sites[site.id] = site
+            self._managed_sites[site.id] = workspace_id
+        for asset in assets:
+            self.agent.assets[asset.id] = asset
+            self._managed_assets[asset.id] = workspace_id
 
     def _allow_rate(self, principal: Principal) -> bool:
         now = time.monotonic()
@@ -787,6 +1000,8 @@ class AuthenticatedHost:
         stored = self._sessions.get(session_id)
         if stored is None or stored.user_id != principal_value.user_id:
             return _error("session_not_found", "Session is unavailable.", 404)
+        if stored.session.workspace_id != self._runtime_workspace(principal_value):
+            return _error("session_not_found", "Session is unavailable.", 404)
         if stored.site_id is None:
             if self._available_sites(principal_value) != [None]:
                 return _error("site_forbidden", "Site is outside this user's scope.", 403)
@@ -804,24 +1019,330 @@ class AuthenticatedHost:
         status = (
             403
             if exc.code.endswith("forbidden")
+            else 503
+            if exc.code == "mcp_unavailable"
+            else 429
+            if exc.code == "mcp_mount_limit"
             else 409
-            if exc.code.startswith("ambiguous")
+            if exc.code.startswith("ambiguous") or exc.code.endswith("conflict")
             else 400
         )
         return _error(exc.code, exc.message, status)
+
+    def _workspace_details(self, principal: Principal) -> WorkspaceDetails | None:
+        if principal.workspace_mode != "managed":
+            return None
+        assert self._control_store is not None and principal.workspace_id is not None
+        record = self._control_store.workspace(principal.user_id, principal.workspace_id)
+        return WorkspaceDetails(**record.model_dump())
+
+    def _workspace_manager(self, request: Request) -> Principal | Response:
+        principal = self._principal_from_request(request)
+        if isinstance(principal, Response):
+            return principal
+        if principal.workspace_mode != "managed" or not isinstance(
+            principal.key_access, ManageKeyAccess
+        ):
+            return _error(
+                "workspace_management_forbidden", "Use a managed workspace management key.", 403
+            )
+        return principal
+
+    async def _workspace(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        details = self._workspace_details(principal)
+        assert details is not None
+        return _json_response(
+            {"workspace": details.model_dump(mode="json")}, headers={"Cache-Control": "no-store"}
+        )
+
+    async def _workspace_sites(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert self._control_store is not None and principal.workspace_id is not None
+        try:
+            if request.method == "GET":
+                sites = self._control_store.sites(principal.user_id, principal.workspace_id)
+                return _json_response({"sites": [site.model_dump(mode="json") for site in sites]})
+            parsed = await self._parse_json(request, WorkspaceSiteRequest)
+            if isinstance(parsed, Response):
+                return parsed
+            data = cast(WorkspaceSiteRequest, parsed)
+            site = self._control_store.create_site(
+                principal.user_id, principal.workspace_id, **data.model_dump()
+            )
+            self._project_workspace(principal.user_id, principal.workspace_id)
+            return _json_response({"site": site.model_dump(mode="json")}, status_code=201)
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_toolkits(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        # Catalogue metadata has no execution session identifier or site-free mount.
+        session = Session(
+            user_id=principal.user_id,
+            access_mode="hosted",
+            workspace_id=principal.workspace_id,
+        )
+        return _json_response({"toolkits": self.agent.catalogue(session)})
+
+    async def _workspace_assets(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert self._control_store is not None and principal.workspace_id is not None
+        try:
+            if request.method == "GET":
+                return _json_response(
+                    {
+                        "assets": [
+                            asset.model_dump(mode="json")
+                            for asset in self._control_store.assets(
+                                principal.user_id, principal.workspace_id
+                            )
+                        ]
+                    }
+                )
+            parsed = await self._parse_json(request, WorkspaceAssetRequest)
+            if isinstance(parsed, Response):
+                return parsed
+            data = cast(WorkspaceAssetRequest, parsed)
+            store = self.agent.auth_store
+            assert isinstance(store, AuthStore)
+            for account_id in data.account_ids:
+                account, _ = store.managed_snapshot(
+                    principal.user_id, principal.workspace_id, account_id
+                )
+                if account.site_id != data.site_id or account.state != "active":
+                    return _error(
+                        "account_forbidden", "Select active connections at this site.", 403
+                    )
+            asset = self._control_store.create_asset(
+                principal.user_id, principal.workspace_id, **data.model_dump()
+            )
+            self._project_workspace(principal.user_id, principal.workspace_id)
+            return _json_response({"asset": asset.model_dump(mode="json")}, status_code=201)
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_keys(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert self._control_store is not None and principal.workspace_id is not None
+        try:
+            if request.method == "GET":
+                return _json_response(
+                    {
+                        "keys": [
+                            key.model_dump(mode="json")
+                            for key in self._control_store.keys(
+                                principal.user_id, principal.workspace_id
+                            )
+                        ]
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
+            parsed = await self._parse_json(request, WorkspaceAgentKeyRequest)
+            if isinstance(parsed, Response):
+                return parsed
+            data = cast(WorkspaceAgentKeyRequest, parsed)
+            issued = self._control_store.create_key(
+                principal.user_id,
+                principal.workspace_id,
+                data.name,
+                access=AgentKeyAccess(site_ids=data.site_ids),
+            )
+            return _json_response(
+                issued.model_dump(mode="json"),
+                status_code=201,
+                headers={"Cache-Control": "no-store"},
+            )
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_revoke_key(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert self._control_store is not None and principal.workspace_id is not None
+        try:
+            self._control_store.revoke_key(
+                principal.user_id, principal.workspace_id, request.path_params["key_id"]
+            )
+            return _json_response({"revoked": True}, headers={"Cache-Control": "no-store"})
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_setups(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        visible = {
+            item["id"]
+            for item in self.agent.catalogue(
+                Session(
+                    user_id=principal.user_id,
+                    access_mode="hosted",
+                    workspace_id=principal.workspace_id,
+                )
+            )
+        }
+        setups = [octopus_setup(enabled=True)] if "octopus-energy-account" in visible else []
+        for setup in setups:
+            setup.description = (
+                "Verify your Octopus API key and meter, then map the connection to a site."
+            )
+        return _json_response(ConnectionSetupsResponse(setups=setups).model_dump(mode="json"))
+
+    async def _workspace_connections(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None
+        store = self.agent.auth_store
+        assert isinstance(store, AuthStore)
+        try:
+            if request.method == "GET":
+                return _json_response(
+                    {
+                        "connections": [
+                            account.public()
+                            for account in store.workspace_accounts(
+                                principal.user_id, principal.workspace_id
+                            )
+                        ]
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
+            visible = {
+                item["id"]
+                for item in self.agent.catalogue(
+                    Session(
+                        user_id=principal.user_id,
+                        access_mode="hosted",
+                        workspace_id=principal.workspace_id,
+                    )
+                )
+            }
+            if "octopus-energy-account" not in visible:
+                return _error("toolkit_forbidden", "Toolkit is unavailable.", 403)
+            parsed = await self._parse_json(request, OctopusConnectionRequest)
+            if isinstance(parsed, Response):
+                return parsed
+            data = cast(OctopusConnectionRequest, parsed)
+            from .connection_onboarding import OctopusConnectionService
+
+            result = await OctopusConnectionService(store, self.agent.http).stage_managed(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                credential=data.credential,
+                mpan=data.mpan,
+                serial_number=data.serial_number,
+            )
+            return _json_response(result, status_code=201, headers={"Cache-Control": "no-store"})
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_map(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert self._control_store is not None and principal.workspace_id is not None
+        parsed = await self._parse_json(request, WorkspaceMapRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(WorkspaceMapRequest, parsed)
+        site = next(
+            (
+                item
+                for item in self._control_store.sites(principal.user_id, principal.workspace_id)
+                if item.id == data.site_id
+            ),
+            None,
+        )
+        if site is None:
+            return _error("site_forbidden", "Select a site in this workspace.", 403)
+        store = self.agent.auth_store
+        assert isinstance(store, AuthStore)
+        from .connection_onboarding import OctopusConnectionService
+
+        try:
+            result = await OctopusConnectionService(store, self.agent.http).map_managed(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                connection_id=request.path_params["connection_id"],
+                site=site,
+            )
+            self.agent._sync_connections(principal.user_id, principal.workspace_id)
+            return _json_response(result, headers={"Cache-Control": "no-store"})
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_verify(self, request: Request) -> Response:
+        return await self._workspace_connection_action(request, verify=True)
+
+    async def _workspace_disconnect(self, request: Request) -> Response:
+        return await self._workspace_connection_action(request, verify=False)
+
+    async def _workspace_connection_action(self, request: Request, *, verify: bool) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None
+        parsed = await self._parse_json(request, _ConnectionActionRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        store = self.agent.auth_store
+        assert isinstance(store, AuthStore)
+        from .connection_lifecycle import OctopusConnectionLifecycle
+
+        try:
+            account, _ = store.managed_snapshot(
+                principal.user_id, principal.workspace_id, request.path_params["connection_id"]
+            )
+            if account.toolkit != "octopus-energy-account":
+                return _error(
+                    "unsupported_provider", "This connection provider is unsupported.", 400
+                )
+            if verify:
+                if account.site_id is None or account.site_id not in principal.allowed_site_ids:
+                    return _error(
+                        "connection_mapping_required",
+                        "Map the connection before checking its health.",
+                        409,
+                    )
+                result = await OctopusConnectionLifecycle(store, self.agent.http).verify(
+                    user_id=principal.user_id, site_id=account.site_id, connection_id=account.id
+                )
+            else:
+                revoked = store.revoke(principal.user_id, account.id, account.site_id)
+                result = {"ok": True, "account": revoked.public()}
+            self.agent._sync_connections(principal.user_id, principal.workspace_id)
+            return _json_response(result, headers={"Cache-Control": "no-store"})
+        except EnergyError as exc:
+            return self._energy_error(exc)
 
     async def _identity(self, request: Request) -> Response:
         principal = self._principal_from_request(request)
         if isinstance(principal, Response):
             return principal
         allowed = set(self._available_sites(principal))
-        self.agent._sync_connections(principal.user_id)
+        self.agent._sync_connections(principal.user_id, self._runtime_workspace(principal))
         visible_assets = {
             asset.id: asset for asset in self.agent.assets.values() if asset.site_id in allowed
         }
         result = IdentityResponse(
             user_id=principal.user_id,
             can_manage_connections=self._can_manage_connections(principal),
+            can_manage_workspace=principal.workspace_mode == "managed"
+            and isinstance(principal.key_access, ManageKeyAccess),
+            workspace=self._workspace_details(principal),
             sites=[
                 self.agent.sites[site_id]
                 for site_id in sorted(principal.allowed_site_ids)
@@ -839,6 +1360,7 @@ class AuthenticatedHost:
                         for account_id in asset.account_ids
                         if (account := self.agent.accounts.get(account_id)) is not None
                         and account.user_id == principal.user_id
+                        and account.workspace_id == self._runtime_workspace(principal)
                         and account.site_id in {None, asset.site_id}
                     ],
                 )
@@ -873,7 +1395,12 @@ class AuthenticatedHost:
         if len(self._sessions) >= self.max_sessions_global:
             return _error("global_session_limit", "Maximum sessions reached.", 429)
         try:
-            session = self.agent.session(principal_value.user_id, site_id, access_mode="hosted")
+            session = self.agent.session(
+                principal_value.user_id,
+                site_id,
+                access_mode="hosted",
+                workspace_id=self._runtime_workspace(principal_value),
+            )
             if data.resume_job_id:
                 resumed = await self.agent.job(session, "resume", job_id=data.resume_job_id)
                 if not resumed["ok"]:
@@ -1037,6 +1564,10 @@ class AuthenticatedHost:
         if isinstance(scope, Response):
             return scope
         principal, session = scope
+        if principal.workspace_mode == "managed":
+            return _error(
+                "connection_management_forbidden", "Use the workspace connection flow.", 403
+            )
         if not self._can_manage_connections(principal):
             return _error(
                 "connection_management_forbidden",
@@ -1118,8 +1649,15 @@ class AuthenticatedHost:
             "connection_id": request.path_params["connection_id"],
         }
         try:
+            connection_id = request.path_params["connection_id"]
+            if session.workspace_id is not None:
+                store.managed_snapshot(session.user_id, session.workspace_id, connection_id)
+            elif (
+                store.get_account(session.user_id, connection_id, site.id).workspace_id is not None
+            ):
+                return _error("account_forbidden", "Connection is outside this session scope.", 403)
             result = await service.verify(**args) if verify else service.disconnect(**args)
-            self.agent._sync_connections(session.user_id)
+            self.agent._sync_connections(session.user_id, session.workspace_id)
             return _json_response(result)
         except EnergyError as exc:
             return self._energy_error(exc)
@@ -1168,6 +1706,7 @@ def create_host(
     max_sessions_global: int = 1_000,
     close_agent_on_shutdown: bool = False,
     control_store: ControlStore | None = None,
+    managed_workspaces: bool = False,
 ) -> AuthenticatedHost:
     """Build an authenticated multi-user ASGI host.
 
@@ -1187,6 +1726,7 @@ def create_host(
         max_sessions_global=max_sessions_global,
         close_agent_on_shutdown=close_agent_on_shutdown,
         control_store=control_store,
+        managed_workspaces=managed_workspaces,
     )
 
 
