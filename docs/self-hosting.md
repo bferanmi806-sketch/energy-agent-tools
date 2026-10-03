@@ -318,7 +318,7 @@ store.close()
 ```
 
 This is a persistence and authentication foundation. Normal-user registration,
-workspace management, dynamic site creation and provider connection forms
+workspace management, dynamic site creation and other provider connection forms
 still need the control-plane API and web flow. The web app's current source
 and run instructions are in [apps/web](../apps/web/README.md).
 

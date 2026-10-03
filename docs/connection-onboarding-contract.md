@@ -39,3 +39,24 @@ missing setup endpoint reports the gateway unavailable.
 
 [Qualification evidence](evidence/connection-onboarding-oct03.json) separates
 production contract checks from the fictional provider transport.
+
+## Implemented lifecycle increment
+
+Add a read-only provider verification action and explicit disconnect for the
+same Octopus account. The session determines user and site, and the route looks
+up the account in that exact scope before any provider request. Verification
+returns current probe health and the public account. Its timestamp distinguishes
+a new probe from the last successful verification stored on the account.
+A failed probe must not replace credentials or claim a new successful timestamp.
+
+Disconnect revokes the record and removes its encrypted credential. Existing
+REST and MCP sessions must lose executable access on the next request. It does
+not delete the public record. Reconnecting the same meter requires supplying and
+verifying a key again. Browser actions retain exact Origin and bounded form
+checks; responses contain fixed messages and no provider text or credentials.
+
+Current source implements these actions at scoped account `verify` and
+`disconnect` POST routes. The SDK exposes both. The Connections view shows
+current check feedback, inline cancellation/confirmation and a revoked record
+with reconnect guidance. [Lifecycle evidence](evidence/connection-lifecycle-oct03.json)
+qualifies the software contracts and fictional provider journey.

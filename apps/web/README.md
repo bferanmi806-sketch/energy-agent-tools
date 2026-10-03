@@ -53,7 +53,15 @@ those records automatically.
 The current site is chosen from operator-provisioned sites. A disabled form
 explains when encrypted storage or an owned site is unavailable. Other toolkits
 still show setup metadata and documentation. Dynamic site provisioning, asset
-mapping, re-verification and disconnection controls remain separate work.
+mapping and other provider forms remain separate work.
 
 The HTTP acceptance runs the explicit `--octopus-fixture` transport with fictional
 credentials. It never qualifies a private Octopus account or physical meter.
+
+Octopus connection records now offer **Check connection** and **Disconnect**.
+A check reports current probe health and its time. A failed check preserves the
+last successful account verification and saved key. This action result is not a
+persisted health history. Disconnect requires inline confirmation, removes the
+saved credential and retains a revoked record. Existing REST and MCP sessions
+cannot execute the revoked account on their next request. Connect the same meter
+again with a valid key to restore access.

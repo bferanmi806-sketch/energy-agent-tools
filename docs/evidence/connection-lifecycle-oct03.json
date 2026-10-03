@@ -1,0 +1,41 @@
+{
+  "implementation_revision": "3f00862cadac368740b734ac13aef0a36fe6d053",
+  "date": "2026-10-03",
+  "scope": "Scoped Octopus re-verification, disconnect and reconnection",
+  "checks": {
+    "python_targeted": 65,
+    "web_http_security": 7,
+    "sdk": 11,
+    "mypy_source_files": 55,
+    "production_web_build": true,
+    "strict_typescript": true,
+    "generated_contract_drift": false
+  },
+  "journeys": [
+    "fresh probe health with checked timestamp",
+    "failed probe preserves prior successful timestamp and credential",
+    "wrong user and site denied before provider I/O",
+    "disconnect removes saved credential and survives reopen",
+    "same live REST and MCP sessions cannot execute revoked account",
+    "verification racing revocation cannot reactivate account",
+    "browser cancel and confirmed disconnect",
+    "browser reconnect with supplied verified credential",
+    "desktop and mobile healthy and revoked records"
+  ],
+  "review": "Independent read-only Luna review found no concrete flaw within assigned lifecycle paths; tests and browser verified by primary",
+  "fixture": "Explicit fictional Octopus transport. Synthetic HTTP journey uses 300 requests/minute; production host default remains 60, covered by host tests.",
+  "limits": [
+    "Latest failed probe health is returned for the action, not persisted as a separate health history",
+    "No real private provider qualification",
+    "Other provider lifecycle forms, dynamic sites/assets, workspace membership and sharing remain open"
+  ],
+  "goal_complete": false,
+  "log_sha256": {
+    "lifecycle-web-http.log": "a0ffddbb972350447a59eaffa001be13cefc4a965dae20cda5c9c30708c78a85",
+    "lifecycle-python-targets.log": "e463bd7d843791553b31c3d8cb5917fc229088f9a9e476f4930fe01e85f3ed24",
+    "lifecycle-web-check.log": "e4ab2325f1680a9c2ef518af4150f462f654b2720007fb7f1191f6baddaae95d",
+    "lifecycle-web-build.log": "432a278427efe4eacfa0a8a308c0520cd93c1dd079eaafacc4a3bbb822095ea1",
+    "lifecycle-mypy.log": "8e71d79dbad0b69ea084d2b82ffa1e884da682da321d892911c2549f0a4a4d72",
+    "lifecycle-sdk-tests.log": "3413105f7e0e9aab9c8966d5c240a0d5a1c663e2b4ad65187a801b7a0f99a7c1"
+  }
+}

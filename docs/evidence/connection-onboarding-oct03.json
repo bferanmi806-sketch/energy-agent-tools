@@ -41,5 +41,21 @@
     "onboarding-final-targets.log": "29a60d17cdd3cd93860931001cc5b4cbc2ecb0b88d6db73232c19018860f29ea",
     "onboarding-web-http.log": "2c60cc4628f25319da15db5a83c74177f793efd49cb269b8e27fbcbaca5676b5",
     "onboarding-sdk-tests.log": "f770614b2ce84acbf57da6727fa4f8e4c3c085461ce652cbb88c30356ce4905e"
+  },
+  "published_ci": {
+    "head": "00f1de3f158ab53a6ba71f487a2248e721be0366",
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37092275972",
+    "status": "success",
+    "python_tests_each": 662,
+    "python_versions": [
+      "3.11",
+      "3.12",
+      "3.13"
+    ],
+    "additional_checks": [
+      "container",
+      "upgrade",
+      "Home Assistant"
+    ]
   }
 }

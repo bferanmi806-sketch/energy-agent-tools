@@ -304,3 +304,26 @@ This increment still requires an operator-provisioned owned site and gateway
 key. Site/asset creation, workspace membership, sharing, managed OAuth and
 connection lifecycle controls remain open, along with the external qualification
 gates. Evidence is in [connection onboarding](evidence/connection-onboarding-oct03.json).
+
+## Octopus lifecycle controls, October 3
+
+Connections now offers a fresh read-only provider check and explicit disconnect.
+Checks return current health and its time; failed checks preserve the prior
+successful verification and credential. Disconnect removes the credential,
+retains a revoked record and prevents existing REST/MCP sessions from executing
+that account. A verification racing revocation cannot reactivate it. Reconnect
+requires a supplied key and a new successful probe.
+
+The browser journey exercises checking, cancelling disconnection, confirmed
+disconnection and reconnecting at mobile and desktop widths. Acceptance passes
+65 targeted Python tests, 11 SDK tests, seven production web HTTP/security tests,
+strict TypeScript, generated contract drift, Ruff and mypy across 55 source
+files. An independent read-only lifecycle review found no concrete flaw. The
+fictional HTTP fixture permits 300 requests/minute for its scripted burst; the
+production default remains 60/minute and existing host tests verify enforcement.
+
+Published onboarding CI at revision `00f1de3` passes 662 tests on each Python
+3.11–3.13 plus container, upgrade and Home Assistant checks. Lifecycle full CI
+will be recorded separately after the run completes. This still does not
+qualify a real private provider or finish the wider product/control-plane goal.
+See [lifecycle evidence](evidence/connection-lifecycle-oct03.json).

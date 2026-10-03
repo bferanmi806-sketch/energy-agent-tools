@@ -255,3 +255,10 @@ inline detail panel. Gateway metadata supplies labels and input constraints.
 Failed submission clears the key and keeps a fixed visible error; success loads
 the scoped Connections view. Fictional fixture captures qualify this interaction
 only, not private provider access or the unfinished product views.
+
+Connection actions occupy a full-width row beneath account metadata. A fresh
+check keeps its health message and timestamp inline. Disconnect uses inline
+confirmation with cancellation, then reloads the revoked record. Inactive records
+use muted Previously verified status and reconnect guidance. The existing button
+and notice styles remain in use; desktop and 390-pixel mobile captures were
+inspected against the actual production build.
