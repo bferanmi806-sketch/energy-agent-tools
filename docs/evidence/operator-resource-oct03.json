@@ -34,7 +34,18 @@
     "Standalone SDK 0.1.0 tarball predates current source contracts"
   ],
   "published_ci": {
-    "status": "pending"
+    "status": "success",
+    "head": "46bf1061470f2947f555ddeba04ef4d1dc3f8cda",
+    "run_id": 37117290279,
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37117290279",
+    "python_tests_per_version": {
+      "3.11": 689,
+      "3.12": 689,
+      "3.13": 689
+    },
+    "container": true,
+    "upgrade": true,
+    "home_assistant": true
   },
   "goal_complete": false,
   "log_sha256": {
@@ -44,6 +55,7 @@
     "resource-sdk.log": "efd5fd6bd1879f3414f2afa1dd6fe30922e50941f19cccd1c3e4b7d4bd555b85",
     "resource-web.log": "dc5e025255ddbdb5ada272aa51cb8fb7dd62ffd123f842b86cd0625a6e6c9300",
     "resource-mypy-final.log": "070c9c331a2e491aabe528a802fadba01ab960cc6017b0199149ee76a8b866b5",
-    "resource-ruff-final.log": "2b58978e81fd47460e2b5b67a55e7bf73a52f8720eb578b75cb7ad37998cf2c2"
+    "resource-ruff-final.log": "2b58978e81fd47460e2b5b67a55e7bf73a52f8720eb578b75cb7ad37998cf2c2",
+    "resource-ci.log": "0071d7fcbb952f306c1973cdeec78799d9322b79571dec1aae38bc735efef403"
   }
 }
