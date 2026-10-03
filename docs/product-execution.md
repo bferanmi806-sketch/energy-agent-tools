@@ -354,3 +354,13 @@ onboarding, triggers and complete managed logs/jobs/settings journeys remain
 open. Physical-site evidence, held-out agent evaluation, independent discovery
 review, outside connector authoring and sustained operations also remain open.
 See [managed workspace setup](managed-workspaces.md) for runnable instructions.
+
+
+Managed workspace source `c31f5430ea0dab4c41b85f417c3683f112dfb21b` is now
+[CI-qualified](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37135243730).
+Python 3.11, 3.12 and 3.13 each pass 716 tests. Repository-wide lint, formatting,
+types and package builds pass, as do container, published-baseline upgrade and
+Home Assistant development protocol checks. The [qualification record](evidence/managed-workspaces-oct03.json)
+preserves the earlier in-progress failure separately from final revision results.
+These checks do not establish private-provider access, physical meter data,
+shared connection ACLs, managed OAuth or sustained operations.

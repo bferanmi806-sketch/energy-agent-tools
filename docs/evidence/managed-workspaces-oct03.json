@@ -1,0 +1,109 @@
+{
+  "status": "ci-qualified",
+  "base_commit": "46bf1061470f2947f555ddeba04ef4d1dc3f8cda",
+  "source_dirty": false,
+  "checks": {
+    "focused_backend": {
+      "passed": 88,
+      "scope": "host, connection, auth, control, CLI, maintenance; before final supplementary tests"
+    },
+    "managed_host_acceptance": {
+      "passed": 4,
+      "scope": "REST/MCP lifecycle and scope, durable restart, backup/restore, legacy non-promotion"
+    },
+    "typescript_sdk": {
+      "passed": 12,
+      "command": "ENERGY_AGENT_TEST_PYTHON=MAIN/.venv/bin/python npm test",
+      "status": "primary-verified",
+      "revision": "c31f5430ea0dab4c41b85f417c3683f112dfb21b"
+    },
+    "python_types": {
+      "files": 56,
+      "status": "passed"
+    },
+    "cli_process_acceptance": {
+      "status": "passed",
+      "checks": [
+        "bootstrap process",
+        "host process",
+        "zero-site identity",
+        "catalogue",
+        "site-free execution denied",
+        "site creation",
+        "agent key issuance",
+        "no raw token in key listing",
+        "host termination"
+      ]
+    },
+    "latest_cli_checks": {
+      "passed": 8,
+      "includes": "wrong encryption key prevents server startup and preserves credential"
+    },
+    "full_python": {
+      "status": "one-failure",
+      "passed": 712,
+      "failed": 1,
+      "duration_seconds": 657.56,
+      "failure": "test_web_build_and_real_gateway_journey: in-progress ManagedConsole imports missing ManagedConnectionActions",
+      "followup": {
+        "test_web_product_build_py": "1 passed after worker completion",
+        "final_web_build_check_http": "passed; 9 HTTP/security tests"
+      }
+    },
+    "web": {
+      "status": "primary verified production build, TypeScript check and 9 tests",
+      "browser_confirmed": [
+        "inline site creation updates count before mapping",
+        "mapping activates connection",
+        "one-time key closes into refreshed metadata list"
+      ],
+      "viewport_sizes": [
+        "390x844",
+        "1440x1000"
+      ]
+    },
+    "independent_gateway_review": {
+      "status": "finding-fixed",
+      "finding": "MCP exit error could skip later owner cleanup",
+      "regression": "test_mcp_shutdown_stops_all_owners_when_one_manager_exit_fails",
+      "latest_host_checks_passed": 16
+    },
+    "ci": {
+      "run_id": 37135243730,
+      "status": "success",
+      "source_commit": "c31f5430ea0dab4c41b85f417c3683f112dfb21b",
+      "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37135243730",
+      "python": {
+        "3.11": {
+          "passed": 716,
+          "seconds": 244.09
+        },
+        "3.12": {
+          "passed": 716,
+          "seconds": 250.21
+        },
+        "3.13": {
+          "passed": 716,
+          "seconds": 232.7
+        }
+      },
+      "container": "success",
+      "upgrade": "success",
+      "home_assistant": "success"
+    },
+    "repository_lint": {
+      "status": "passed",
+      "command": "ruff check .; ruff format --check ."
+    }
+  },
+  "qualification_limits": [
+    "Synthetic Octopus only; no private-provider or physical-meter qualification",
+    "Current source is CI-qualified; published v0.3.0 packages predate these routes and SDK additions",
+    "Original shared ACL, managed OAuth, logs/jobs/settings, broad held-out evaluation and sustained/live-provider gates remain open"
+  ],
+  "integrated_commit": "c31f5430ea0dab4c41b85f417c3683f112dfb21b",
+  "screenshots": {
+    "connections-desktop-confirmed.png": "a086fb6e2e37d4cbcea88c574263b5804faeb1c490afc97906412b23f08b5b77",
+    "agent-mobile-confirmed.png": "d25bd9bebe537296a05d4d56da4d05faad288877021de380a44141a0f3fd7040"
+  }
+}
