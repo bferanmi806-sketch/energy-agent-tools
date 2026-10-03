@@ -6,6 +6,13 @@ connections, but an upstream server does not receive permission to read,
 calculate, write, or control an energy system merely because it advertises an
 annotation such as `readOnlyHint`.
 
+Current source marks imported MCP tools as operator resources. Authenticated
+REST and hosted MCP sessions hide and deny them, including imports with static
+credentials or no credential declaration. Direct local Python/CLI MCP use
+retains its action and review policies. Hosted public or workspace-owned MCP
+imports still require a separate reviewed resource and ownership contract;
+`reviewed: true` and `read-only` do not make a shared transport tenant-safe.
+
 ## Review contract
 
 An imported tool is `reviewed: false` unless its operator metadata contains all

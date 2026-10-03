@@ -1,6 +1,6 @@
 {
   "date": "2026-10-03",
-  "implementation_revision": "cb7fd1d",
+  "implementation_revision": "54e711a41fd7cd36e55fea8f798494d96e9def08",
   "scope": "Explicit manage/agent key access, schema v2 migration and scoped connection management",
   "checks": {
     "python_targeted": 37,
@@ -31,7 +31,20 @@
   ],
   "goal_complete": false,
   "published_ci": {
-    "status": "pending"
+    "head": "cf9a4c2777ce032d22443b84cfb1156a5596bbbf",
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37095240083",
+    "status": "success",
+    "python_tests_each": 680,
+    "python_versions": [
+      "3.11",
+      "3.12",
+      "3.13"
+    ],
+    "additional_checks": [
+      "container",
+      "upgrade",
+      "Home Assistant"
+    ]
   },
   "log_sha256": {
     "key-access-targets-final.log": "45765d05c6ee41168dd88f24fe0a0a9a7698d597779ade2d88c0ead02cf31160",
@@ -39,6 +52,7 @@
     "key-access-web.log": "2f20e4983b067042136a1ee3062571322cd1ac64ac1b6563bad8a9e156f2a46f",
     "key-access-agent-web-primary.log": "730be51407221cd814c799093a8bef6dfc62d813621ece732862ca5a9f2100b2",
     "key-access-web-check-final.log": "e4ab2325f1680a9c2ef518af4150f462f654b2720007fb7f1191f6baddaae95d",
-    "key-access-mypy.log": "070c9c331a2e491aabe528a802fadba01ab960cc6017b0199149ee76a8b866b5"
+    "key-access-mypy.log": "070c9c331a2e491aabe528a802fadba01ab960cc6017b0199149ee76a8b866b5",
+    "key-access-ci.log": "3dc67705db06d4ab4fb56fe5f57f8e979efc366412cf2bc7f220f524ac69063f"
   }
 }

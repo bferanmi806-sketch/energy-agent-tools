@@ -39,6 +39,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="THERMAL_HEAT_LOSS",
             toolkit="thermal",
+            resource_scope="session",
             description="Calculate steady-state thermal heat loss",
             input_schema=schema(
                 {
@@ -63,6 +64,16 @@ typed `EnergyResult`, preserve original units and timestamps, and add
 assumptions and provider provenance. Raise `EnergyError(code, safe_message)`
 for expected failures; never include response bodies, authenticated URLs or
 secrets in an exception.
+
+Every connector must declare `Tool.resource_scope` from its actual handler
+resources. `session` covers caller-supplied inputs and already-authorized
+artifacts, including pure calculations. `public` means an explicitly public
+provider API. `account` requires a current owned connection as well as the
+existing user/site account checks. `operator` covers configured shared file or
+model roots, executable environments and MCP transports. The default
+`unclassified` fails closed in hosted sessions. Action and review metadata do
+not grant resource access. Local Python and CLI sessions retain operator use;
+REST clients cannot choose the session's server-controlled access mode.
 
 For a capability that can be selected across providers, add a reviewed
 `CapabilityBinding` with the exact tool, account or asset, measurement kind,

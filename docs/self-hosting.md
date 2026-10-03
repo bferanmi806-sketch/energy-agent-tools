@@ -308,10 +308,25 @@ disconnect provider accounts. They can check connection health. A
 `management_key_required` for execution keys. An explicit key role never receives
 a site-free session, even when its effective site grant is empty.
 
-These roles do not create a managed multi-tenant deployment. Configured file roots
-and imported MCP servers can contain operator-private resources. The current host
+These roles do not create a managed multi-tenant deployment. The current host
 still requires explicitly admitted operator principals; automatic workspace
-registration remains disabled pending resource authorization for those tools.
+registration, shared ACLs and dynamic topology remain unimplemented.
+
+Current source gives hosted REST and MCP sessions a server-controlled resource
+policy. Shared CSV/SQLite/model readers, configured executable adapters and all
+imported MCP tools are operator resources and are hidden and denied in those
+sessions. Unclassified extensions fail closed too. Public APIs, owned provider
+connections and authorized artifacts/calculations remain usable. Direct local
+Python and CLI sessions retain operator access. To use file data through the
+host, it must first have an authorized tenant ingestion/connection contract;
+setting `data_root` or reviewing a capability binding does not grant access.
+
+Jobs persist the session's `local` or `hosted` access mode. Recovery requires
+the same mode before restoring a session ID, so hosted recovery cannot inherit
+artifacts imported through local operator access. Jobs written before this
+field existed migrate conservatively to `local`; their results remain available
+to local recovery, while hosted recovery is denied. Newly submitted hosted jobs
+retain hosted recovery across restarts.
 
 Example operator-side provisioning, with the existing `home` site model:
 

@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-03",
+  "implementation_revision": "7903f6d0cbf21e4eb8292bef13269d87c0cf74ab",
+  "scope": "Hosted operator-resource isolation and durable local/hosted job recovery scope",
+  "checks": {
+    "python_targeted": 64,
+    "sdk": 11,
+    "web_http_security": 8,
+    "production_web_build": true,
+    "strict_typescript": true,
+    "mypy_source_files": 56,
+    "generated_contract_drift": false
+  },
+  "journeys": [
+    "actual hosted CSV/SQLite read/import denial without fictional rows",
+    "operator and unclassified tools absent from scoped discovery and capability candidates",
+    "real imported MCP denied through initialized hosted MCP before provider handler",
+    "local CSV/SQLite/imported MCP behavior retained",
+    "authorized artifact processing and cross-user artifact denial",
+    "forecast-bill REST workflow from session-owned synthetic artifacts retains 192 kWh and GBP 42.72 truths and provenance",
+    "operator CSV workflow binding cannot bypass resource policy",
+    "local operator artifact inheritance through job resume reproduced then denied",
+    "hosted jobs retain recovery across restart",
+    "legacy job rows migrate to local; invalid/corrupt/mismatched modes denied"
+  ],
+  "review": "Independent read-only Luna review found job resume crossover; primary reproduced and fixed it. Final scoped review found no remaining bypass.",
+  "fixtures": "Temporary fictional CSV/SQLite sources, fake local MCP, mocked public/provider responses and synthetic forecast inputs. No actual private provider or operator data.",
+  "limits": [
+    "No managed workspace registration, dynamic topology or shared ACLs yet",
+    "All imported MCP transports remain operator-only; hosted public/workspace imports need a separate ownership contract",
+    "Legacy jobs cannot resume through hosted sessions because their original mode is unverifiable",
+    "Resource metadata is a trusted connector declaration; arbitrary in-process Python plugins are not sandboxed",
+    "No real private provider qualification",
+    "Standalone SDK 0.1.0 tarball predates current source contracts"
+  ],
+  "published_ci": {
+    "status": "pending"
+  },
+  "goal_complete": false,
+  "log_sha256": {
+    "resource-final-targets.log": "11234aa4f3b03d9896d041ea094a109761c52f649f22136329a67374ce15a948",
+    "resource-resume-repro.log": "3643108de06f793722ae19afb7f5c919a2fa37157889916320eb63f16d76e65b",
+    "resource-resume-fixed.log": "4d8dd4b562bb8d565ddc581e8b029b5f78418e134aa408bc5d09299cce501fa2",
+    "resource-sdk.log": "efd5fd6bd1879f3414f2afa1dd6fe30922e50941f19cccd1c3e4b7d4bd555b85",
+    "resource-web.log": "dc5e025255ddbdb5ada272aa51cb8fb7dd62ffd123f842b86cd0625a6e6c9300",
+    "resource-mypy-final.log": "070c9c331a2e491aabe528a802fadba01ab960cc6017b0199149ee76a8b866b5",
+    "resource-ruff-final.log": "2b58978e81fd47460e2b5b67a55e7bf73a52f8720eb578b75cb7ad37998cf2c2"
+  }
+}
