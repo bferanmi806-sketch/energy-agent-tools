@@ -4,6 +4,20 @@ Use a managed workspace to connect a system before creating a site. This guide
 requires matching current Python, TypeScript SDK and web source. The published
 Python v0.3.0 wheel predates managed workspace routes.
 
+## Explore supported questions
+
+The web app's **Skills** catalogue is available before you create any sites.
+Search by question, workflow ID, capability or supporting tool. Select a workflow
+to read its gateway-supplied sequence, pitfalls, parameters and evidence
+requirements. The connected agent executes it through a scoped gateway session;
+a catalogue entry does not establish provider availability or a completed study.
+
+Management clients use `GET /workspace/skills` or TypeScript
+`workspace.skills()`. This metadata route requires a managed workspace management
+key and returns no account details or credentials. Operator and member agent
+clients retain their existing scoped `session.skills()` and `session.runSkill()`
+interfaces.
+
 ## Create the workspace
 
 Install the gateway from this checkout. From the repository root, run:

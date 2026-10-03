@@ -117,6 +117,9 @@ test('managed workspace SDK browses, maps, executes, scopes, and revokes through
     assert.deepEqual((await workspace.connections()).connections, []);
     assert.ok((await workspace.toolkits()).toolkits.some(item => item.id === 'octopus-energy-account'));
     assert.ok((await workspace.connectionSetups()).setups.some(item => item.provider === 'octopus'));
+    const forecastSkill = (await workspace.skills()).skills.find(item => item.id === 'forecast-bill');
+    assert.equal(forecastSkill.executable, true);
+    assert.ok(forecastSkill.evidence_required.length > 0);
 
     await assert.rejects(management.createSession(), hasStatus(400));
 
@@ -157,6 +160,7 @@ test('managed workspace SDK browses, maps, executes, scopes, and revokes through
     const scopedIdentity = await scoped.identity();
     assert.deepEqual(scopedIdentity.sites.map(item => item.id), [site.site.id]);
     await assert.rejects(scoped.workspace().details(), hasStatus(403));
+    await assert.rejects(scoped.workspace().skills(), hasStatus(403));
 
     const session = await scoped.createSession({ site_id: site.site.id });
     const result = await session.capability({ capability: 'get_energy_consumption' });

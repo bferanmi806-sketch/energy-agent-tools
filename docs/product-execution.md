@@ -5,6 +5,28 @@ record extends the existing backend roadmap; it does not replace unfinished
 gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 [passing CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37032700732).
 
+## Skills catalogue follow-up, October 4
+
+The managed workspace now browses gateway workflow metadata before creating a
+site. `GET /workspace/skills` and TypeScript `workspace.skills()` require a
+management key; agent and operator clients retain scoped session interfaces.
+The web app shares a searchable catalogue across both consoles. It shows actual
+intent, sequence, capabilities, supporting tools, pitfalls and optional
+execution, parameter and evidence metadata. On narrow screens a compact workflow
+selector keeps the selected details close to the search control. No provider
+availability or execution success is inferred from a catalogue entry.
+
+The [Skills qualification record](evidence/skills-catalogue-oct04.json) preserves
+21 focused Python checks, 15 SDK tests, the production build/typecheck and 11
+web tests, plus desktop/mobile browser search, selection and no-result checks.
+The zero-site browser session made no provider requests.
+
+This implements workflow discovery in the managed product. Execution remains
+through the connected agent and the existing `runSkill` gateway interface.
+Custom MCP onboarding, logs, jobs, complete account/settings flows, broad agent
+evaluation, physical-site qualification, outside contribution, sustained
+operations and a coherent release remain open.
+
 ## Workspace sharing follow-up, October 3
 
 Managed workspaces now enroll existing users and grant selected sites and
@@ -23,6 +45,9 @@ key and saw the shared connection without owner controls; UI removal made that
 exact key fail authentication with HTTP 401. Browser inspection also led to a
 local heading-layout correction. The [qualification record](evidence/workspace-sharing-oct03.json)
 preserves the first full-suite failure and final validation state.
+[CI for published source d9d02dd](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37160148256)
+passed all six jobs, including Python 3.11/3.12/3.13, container, upgrade and
+installed Home Assistant qualification.
 
 Enrollment is by public user ID for existing instance users. It does not send
 email invitations or provision an identity provider. Any membership or grant
@@ -30,8 +55,8 @@ change invalidates captured workspace sessions; REST clients open a new session
 and MCP clients reconnect. A provider request dispatched before revocation may
 finish. These synthetic sharing checks do not qualify physical-site telemetry
 or close the broad evaluation, contribution, sustained-operation and release
-gates. The remaining web work includes complete Skills, custom MCP, logs, jobs,
-account and settings flows.
+gates. The remaining web work includes custom MCP, logs, jobs, complete account and
+settings flows.
 
 ## Installed Home Assistant authorization follow-up, October 3
 
@@ -80,7 +105,7 @@ does not close the separate live, external-review or sustained-operation gates.
 | Deployment/recovery/load/soak and resilience | CI container, restart, state upgrade and backup/restore checks | Partial; representative sustained deployment and 30-day observations remain open. |
 | Coherent new release with reproducible evidence | Published Python v0.3.0 and SDK archive; later web/control-plane source is CI-qualified | Partial; package a matching gateway, SDK and web revision after the next stable product boundary. |
 | First-class TypeScript SDK | REST and official MCP transports, generated contracts, workspace management APIs and 15 acceptance tests | Implemented for current routes; new control-plane APIs need matching SDK coverage and distribution. |
-| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; explicit shared connections are implemented; custom MCP, complete managed skills, logs, jobs, account management and settings remain open. |
+| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; explicit shared connections are implemented; Skills discovery is implemented; custom MCP, logs, jobs, complete account management and settings remain open. |
 | Hosted connection/control plane | Private managed workspaces, bootstrap identities, management/agent keys, encrypted scoped accounts, durable sites/assets, dynamic MCP, migrations and recovery acceptance | Partial; membership, explicit connection ACLs and approved Home Assistant OAuth are implemented; generic custom OAuth, events and full observability remain open. |
 | Ecosystem journeys | Existing public, telemetry and engineering connectors with differing qualification | Partial; meters, PV/storage/EV, heat/BMS, industrial/files, engineering engines and reviewed MCP must qualify honestly according to accessible supported scope. |
 | Accurate documentation and evidence | Append-only decisions, archived failures and qualification records | Ongoing; every completion claim needs current source and runnable evidence. |

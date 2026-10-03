@@ -89,7 +89,7 @@ export default async function HomePage({
     case "ready": {
       const params = searchParams ? await searchParams : undefined;
       if (state.data.kind === "managed") {
-        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent"
+        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills"
           ? params.view
           : "apps";
         const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed"
@@ -97,7 +97,7 @@ export default async function HomePage({
           : undefined;
         return <ManagedConsole data={state.data} initialView={initialView} {...(authorizationResult ? { authorizationResult } : {})} />;
       }
-      return <Console data={state.data} initialView={params?.view === "connections" ? "connections" : "apps"} />;
+      return <Console data={state.data} initialView={params?.view === "connections" || params?.view === "skills" ? params.view : "apps"} />;
     }
     case "unavailable":
       return <Unavailable message={state.message} />;

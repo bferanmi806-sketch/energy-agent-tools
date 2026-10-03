@@ -157,6 +157,11 @@ export class EnergyWorkspace {
     return this.#transport.request({ path: "workspace/toolkits", method: "GET", parse: parseToolkits, ...options });
   }
 
+  skills(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/skills", method: "GET",
+      parse: parseSkills, ...options });
+  }
+
   connectionSetups(options: RequestOptions = {}) {
     return this.#transport.request({ path: "workspace/connection-setups", method: "GET",
       parse: parseConnectionSetups, ...options });

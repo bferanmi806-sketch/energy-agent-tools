@@ -3,6 +3,7 @@
 import { GatewayForm } from "./GatewayForm";
 import { ConnectionActions } from "./ConnectionActions";
 import { ConnectionForm } from "./ConnectionForm";
+import { SkillsCatalogue } from "./SkillsCatalogue";
 
 import {
   Activity,
@@ -160,7 +161,7 @@ function siteName(data: DashboardData, siteId: string | null): string {
   return site?.name ?? `Site ${siteId}`;
 }
 
-export function Console({ data, initialView = "apps" }: { data: OperatorDashboardData; initialView?: "apps" | "connections" }) {
+export function Console({ data, initialView = "apps" }: { data: OperatorDashboardData; initialView?: "apps" | "connections" | "skills" }) {
   const [view, setView] = useState<ViewId>(initialView);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -287,7 +288,7 @@ export function Console({ data, initialView = "apps" }: { data: OperatorDashboar
           {view === "connections" ? <ConnectionsView data={data} onBrowseApps={() => setView("apps")} /> : null}
           {view === "shared" ? <SharedConnectionsView /> : null}
           {view === "sites" ? <SitesView data={data} /> : null}
-          {view === "skills" ? <SkillsView data={data} /> : null}
+          {view === "skills" ? <SkillsCatalogue skills={data.skills} /> : null}
           {view === "artifacts" ? <ArtifactsView data={data} /> : null}
           {view === "agents" ? (
             <AgentsView
@@ -548,31 +549,6 @@ function AssetRow({ asset }: { asset: DashboardData["identity"]["assets"][number
       <div className="record-field"><span>Parent</span><strong>{asset.parent_id ?? "No visible parent"}</strong></div>
       <div className="record-field"><span>Visible linked accounts</span><strong>{asset.account_ids?.length ?? 0}</strong></div>
     </article>
-  );
-}
-
-function SkillsView({ data }: { data: DashboardData }) {
-  return (
-    <section className="content-section" aria-labelledby="skills-heading">
-      <div className="section-toolbar"><div><h2 id="skills-heading">Gateway skills</h2><p>Intent, execution sequence and known pitfalls are supplied by the gateway.</p></div><span className="count-label">{data.skills.length} {data.skills.length === 1 ? "skill" : "skills"}</span></div>
-      {data.skills.length === 0 ? (
-        <div className="empty-state compact-empty"><div className="empty-icon" aria-hidden="true"><Sparkles size={17} /></div><h3>No skills returned</h3><p>The gateway did not return any workflow descriptions for this identity.</p></div>
-      ) : (
-        <div className="skill-list">
-          {data.skills.map((skill) => (
-            <article className="skill-row" key={skill.id}>
-              <div className="skill-heading"><div><span className="record-id">{skill.id}</span><h3>{skill.intent}</h3></div></div>
-              <div className="skill-details">
-                <div><h4>Capabilities</h4>{skill.capabilities.length > 0 ? <ul className="tag-list">{skill.capabilities.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None listed.</p>}</div>
-                <div><h4>Sequence</h4>{skill.sequence.length > 0 ? <ol className="sequence-list">{skill.sequence.map((item, index) => <li key={`${item}-${index}`}><span>{item}</span></li>)}</ol> : <p>No sequence supplied.</p>}</div>
-                {skill.supporting_tools && skill.supporting_tools.length > 0 ? <div><h4>Supporting tools</h4><ul className="tag-list">{skill.supporting_tools.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
-                <div className="skill-pitfalls"><h4>Known pitfalls</h4>{skill.pitfalls.length > 0 ? <ul className="pitfall-list">{skill.pitfalls.map((item) => <li key={item}>{item}</li>)}</ul> : <p>None listed by the gateway.</p>}</div>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
   );
 }
 

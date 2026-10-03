@@ -3263,6 +3263,21 @@ export const SkillsResponseSchema = {
             "items": {
               "type": "string"
             }
+          },
+          "executable": {
+            "type": "boolean"
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "evidence_required": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

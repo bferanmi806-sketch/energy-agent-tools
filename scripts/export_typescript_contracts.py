@@ -132,6 +132,9 @@ def schemas() -> dict[str, dict[str, Any]]:
             "sequence": array(text),
             "supporting_tools": array(text),
             "pitfalls": array(text),
+            "executable": boolean,
+            "parameters": {"type": "object", "additionalProperties": text},
+            "evidence_required": array(text),
         },
         ["id", "intent", "capabilities", "sequence", "pitfalls"],
     )

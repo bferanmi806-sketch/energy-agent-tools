@@ -36,6 +36,7 @@ export interface ManagedDashboardData extends DashboardBase {
   assets: WorkspaceAssetsResponse["assets"];
   keys: WorkspaceKeysResponse["keys"];
   members: WorkspaceMembersResponse["members"];
+  skills: SkillsResponse["skills"];
   connectionSetups: ConnectionSetupsResponse["setups"];
   toolkits: ToolkitsResponse["toolkits"];
   connections: ConnectionsResponse["connections"];

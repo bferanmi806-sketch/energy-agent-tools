@@ -62,7 +62,11 @@ Calling `session.close()` deletes that session's artifacts on the server.
 
 For an explicitly [managed workspace](../../docs/managed-workspaces.md), use
 `energy.workspace()` with its management key. This client works before the
-workspace has any sites; it does not create an execution session.
+workspace has any sites; it does not create an execution session. `workspace.skills()`
+returns workflow questions, sequences and optional execution/parameter/evidence
+metadata without needing a site. This describes supported recipes; it does not
+prove the necessary providers are connected. Agent clients browse and execute
+with the scoped `session.skills()` and `session.runSkill()` interfaces.
 
 Use `details`, `toolkits`, `connectionSetups`, `connections`, `sites`, `assets`
 and `keys` to read current workspace records. `connectAccount` verifies an

@@ -254,6 +254,14 @@ test("production web onboards a zero-site manager through the real managed gatew
     assert.match(dashboardHtml, /octopus-energy-account/);
     assert.doesNotMatch(dashboardHtml, /No site selected/);
     assert.ok(!dashboardHtml.includes(managerToken));
+    const skillsPage = await fetch(`${webUrl}/?view=skills`, { headers: { cookie } });
+    assert.equal(skillsPage.status, 200);
+    const skillsHtml = await skillsPage.text();
+    assert.match(skillsHtml, /Search skills/);
+    assert.match(skillsHtml, /forecast-bill/);
+    assert.match(skillsHtml, /consumption-forecast/);
+    assert.ok(!skillsHtml.includes(managerToken));
+
 
     const beforeRejected = await workspace.connections();
     assert.deepEqual(beforeRejected.connections, []);

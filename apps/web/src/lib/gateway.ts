@@ -57,6 +57,7 @@ export async function loadDashboard(): Promise<DashboardState> {
         workspace.keys(),
         workspace.authConfigurations(),
         workspace.members(),
+        workspace.skills(),
       ]);
 
       return {
@@ -73,6 +74,7 @@ export async function loadDashboard(): Promise<DashboardState> {
           keys: settledValue(results[6]).keys,
           authConfigurations: settledValue(results[7]).configurations,
           members: settledValue(results[8]).members,
+          skills: settledValue(results[9]).skills,
           publicGatewayUrl: config.publicGatewayUrl,
         },
       };

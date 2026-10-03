@@ -1,0 +1,56 @@
+{
+  "source_base": "d9d02ddfd6b14faac59badebecb707fef1ed025e",
+  "scope": "Searchable gateway skill metadata in managed, operator and member consoles. Managed discovery requires no site or execution session.",
+  "validation": {
+    "python_gateway_hosting_and_sharing": {
+      "passed": 21
+    },
+    "sdk": {
+      "passed": 15
+    },
+    "production_web": {
+      "build": "passed",
+      "typecheck": "passed",
+      "tests": 11
+    },
+    "static": {
+      "ruff": "passed",
+      "format": "173 files passed",
+      "mypy": "58 source files passed",
+      "generated_contracts": "matched"
+    },
+    "browser": {
+      "source": "Real production gateway metadata from a disposable zero-site managed workspace",
+      "catalogue_entries": 15,
+      "desktop_viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "mobile_viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "checks": [
+        "Discover skills before connecting a provider or creating a site",
+        "Search bill selects the one forecast-bill result and displays its sequence and evidence requirements",
+        "Unmatched query shows an explicit no-result state",
+        "Clear search restores all returned entries",
+        "Choose another workflow changes its actual details",
+        "Compact mobile selector changes the selected workflow without scrolling through the complete catalogue"
+      ],
+      "provider_observations": {
+        "auth_code": 0,
+        "refresh": 0,
+        "state_reads": 0,
+        "revocations": 0
+      },
+      "owned_resources": "Local servers stopped, browser tab closed, viewport override reset, private temporary token/state files removed"
+    }
+  },
+  "limits": [
+    "Metadata describes supported recipes and does not assert provider availability, successful execution or physical study qualification.",
+    "Execution remains through the connected agent and scoped runSkill interface; this catalogue has no web execution form.",
+    "The full 798-test suite and all six CI jobs qualified the prior shared-connection source d9d02dd. This new metadata route was locally qualified with 21 focused Python tests, SDK, web, static and browser checks.",
+    "Custom MCP onboarding, durable execution logs, complete jobs/account/settings, broader actual model evaluation, physical-site qualification, outside connector contribution, sustained deployment observations and coherent release remain open."
+  ]
+}

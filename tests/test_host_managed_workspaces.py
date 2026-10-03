@@ -133,6 +133,7 @@ async def test_managed_host_does_not_promote_operator_workspace_keys(tmp_path: P
                     json={"name": "Unauthorized", "timezone": "UTC"},
                 )
             ).status_code == 401
+            assert (await client.get("/workspace/skills", headers=auth)).status_code == 401
             assert control.sites(user.id, workspace.id) == []
     finally:
         await agent.close()
@@ -194,6 +195,14 @@ async def test_system_first_map_and_dynamic_mcp_with_live_revocation(tmp_path: P
             assert me.json()["can_manage_workspace"] is True
             assert (await client.post("/sessions", headers=auth, json={})).status_code == 400
             assert (await client.get("/workspace/toolkits", headers=auth)).status_code == 200
+            skills = await client.get("/workspace/skills", headers=auth)
+            assert skills.status_code == 200
+            assert skills.headers["cache-control"] == "no-store"
+            forecast = next(
+                item for item in skills.json()["skills"] if item["id"] == "forecast-bill"
+            )
+            assert forecast["executable"] is True and forecast["evidence_required"]
+            assert not probes and control.sites(bootstrap.user.id, bootstrap.workspace.id) == []
             assert (await client.get("/workspace/connection-setups", headers=auth)).json()[
                 "setups"
             ][0]["enabled"]
@@ -275,6 +284,7 @@ async def test_system_first_map_and_dynamic_mcp_with_live_revocation(tmp_path: P
                     "/workspace/sites", headers=scoped, json={"name": "Denied", "timezone": "UTC"}
                 )
             ).status_code == 403
+            assert (await client.get("/workspace/skills", headers=scoped)).status_code == 403
             mcp_headers = {**scoped, "Accept": "application/json, text/event-stream"}
             initialized = await client.post(
                 f"/mcp/{site_id}",

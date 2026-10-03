@@ -491,6 +491,7 @@ class AuthenticatedHost:
             Route("/workspace/keys", self._workspace_keys, methods=["GET", "POST"]),
             Route("/workspace/keys/{key_id}", self._workspace_revoke_key, methods=["DELETE"]),
             Route("/workspace/toolkits", self._workspace_toolkits, methods=["GET"]),
+            Route("/workspace/skills", self._workspace_skills, methods=["GET"]),
             Route("/workspace/connection-setups", self._workspace_setups, methods=["GET"]),
             Route("/workspace/connections", self._workspace_connections, methods=["GET", "POST"]),
             Route(
@@ -1219,6 +1220,12 @@ class AuthenticatedHost:
             return _json_response({"site": site.model_dump(mode="json")}, status_code=201)
         except EnergyError as exc:
             return self._energy_error(exc)
+
+    async def _workspace_skills(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        return _json_response({"skills": SKILLS}, headers={"Cache-Control": "no-store"})
 
     async def _workspace_toolkits(self, request: Request) -> Response:
         principal = self._workspace_manager(request)

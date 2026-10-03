@@ -10,6 +10,7 @@ import {
   LogOut,
   Search,
   ShieldCheck,
+  Sparkles,
   Users,
   Waves,
   X,
@@ -25,8 +26,9 @@ import { PendingConnection } from "./PendingConnection";
 import { AgentKeyPanel } from "./AgentKeyPanel";
 import { WorkspaceAssetForm, WorkspaceSiteForm } from "./WorkspaceForms";
 import { WorkspaceSharing } from "./WorkspaceSharing";
+import { SkillsCatalogue } from "./SkillsCatalogue";
 
-type ViewId = "apps" | "connections" | "sites" | "sharing" | "agent";
+type ViewId = "apps" | "connections" | "sites" | "sharing" | "agent" | "skills";
 
 interface NavigationItem {
   id: ViewId;
@@ -40,6 +42,7 @@ const NAVIGATION: NavigationItem[] = [
   { id: "sites", label: "Sites & assets", icon: ShieldCheck },
   { id: "sharing", label: "Sharing", icon: Users },
   { id: "agent", label: "Connect my agent", icon: ArrowRight },
+  { id: "skills", label: "Skills", icon: Sparkles },
 ];
 
 const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
@@ -58,6 +61,10 @@ const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
   agent: {
     title: "Connect your agent",
     description: "Create an agent key with access only to the sites you select.",
+  },
+  skills: {
+    title: "Skills",
+    description: "Explore the energy questions your agent can ask and the evidence each workflow needs.",
   },
   sharing: {
     title: "Shared connections",
@@ -261,6 +268,7 @@ export function ManagedConsole({
           {view === "connections" ? <ConnectionsView data={data} onBrowseApps={() => navigate("apps")} /> : null}
           {view === "sites" ? <SitesView data={data} /> : null}
           {view === "sharing" ? <WorkspaceSharing members={data.members} sites={data.sites} connections={data.connections} gatewayUrl={data.publicGatewayUrl} /> : null}
+          {view === "skills" ? <SkillsCatalogue skills={data.skills} /> : null}
           {view === "agent" ? <AgentKeyPanel keys={data.keys} sites={data.sites} gatewayUrl={data.publicGatewayUrl} /> : null}
         </main>
         <footer className="workspace-footer">

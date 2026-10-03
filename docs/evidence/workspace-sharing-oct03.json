@@ -73,5 +73,20 @@
     "Provider traffic in sharing acceptance is synthetic. This record does not qualify physical telemetry or private site credentials.",
     "Final review was performed by the primary agent; this is not independent human review.",
     "Skills, custom MCP, complete logs/jobs/account/settings experiences, broad agent evaluation, external contribution, sustained operations and coherent release gates remain open."
-  ]
+  ],
+  "published_source": "d9d02ddfd6b14faac59badebecb707fef1ed025e",
+  "ci": {
+    "run_id": 37160148256,
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37160148256",
+    "source": "d9d02ddfd6b14faac59badebecb707fef1ed025e",
+    "conclusion": "success",
+    "jobs": [
+      "container",
+      "upgrade",
+      "verify (3.11)",
+      "verify (3.12)",
+      "verify (3.13)",
+      "home-assistant"
+    ]
+  }
 }
