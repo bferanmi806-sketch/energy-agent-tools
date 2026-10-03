@@ -1,0 +1,589 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T00:26:15Z",
+  "title": "Design System: Energy Agent Tools",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Gateway Green",
+        "canonical": "#1d754f",
+        "tonalRamp": [
+          "oklch(15% 0.102 160.0)",
+          "oklch(26% 0.102 160.0)",
+          "oklch(38% 0.102 160.0)",
+          "oklch(49% 0.102 160.0)",
+          "oklch(61% 0.102 160.0)",
+          "oklch(72% 0.102 160.0)",
+          "oklch(84% 0.102 160.0)",
+          "oklch(95% 0.102 160.0)"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "Deeper Gateway Green",
+        "canonical": "#185f41",
+        "tonalRamp": [
+          "oklch(15% 0.085 160.8)",
+          "oklch(26% 0.085 160.8)",
+          "oklch(38% 0.085 160.8)",
+          "oklch(49% 0.085 160.8)",
+          "oklch(61% 0.085 160.8)",
+          "oklch(72% 0.085 160.8)",
+          "oklch(84% 0.085 160.8)",
+          "oklch(95% 0.085 160.8)"
+        ]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Green",
+        "canonical": "#67b48b",
+        "tonalRamp": [
+          "oklch(15% 0.098 159.2)",
+          "oklch(26% 0.098 159.2)",
+          "oklch(38% 0.098 159.2)",
+          "oklch(49% 0.098 159.2)",
+          "oklch(61% 0.098 159.2)",
+          "oklch(72% 0.098 159.2)",
+          "oklch(84% 0.098 159.2)",
+          "oklch(95% 0.098 159.2)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Daylight Canvas",
+        "canonical": "#f4f6f2",
+        "tonalRamp": [
+          "oklch(15% 0.006 128.5)",
+          "oklch(26% 0.006 128.5)",
+          "oklch(38% 0.006 128.5)",
+          "oklch(49% 0.006 128.5)",
+          "oklch(61% 0.006 128.5)",
+          "oklch(72% 0.006 128.5)",
+          "oklch(84% 0.006 128.5)",
+          "oklch(95% 0.006 128.5)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Paper Surface",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.000 89.9)",
+          "oklch(26% 0.000 89.9)",
+          "oklch(38% 0.000 89.9)",
+          "oklch(49% 0.000 89.9)",
+          "oklch(61% 0.000 89.9)",
+          "oklch(72% 0.000 89.9)",
+          "oklch(84% 0.000 89.9)",
+          "oklch(95% 0.000 89.9)"
+        ]
+      },
+      "surface-soft": {
+        "role": "neutral",
+        "displayName": "Soft Surface",
+        "canonical": "#f8faf7",
+        "tonalRamp": [
+          "oklch(15% 0.004 134.8)",
+          "oklch(26% 0.004 134.8)",
+          "oklch(38% 0.004 134.8)",
+          "oklch(49% 0.004 134.8)",
+          "oklch(61% 0.004 134.8)",
+          "oklch(72% 0.004 134.8)",
+          "oklch(84% 0.004 134.8)",
+          "oklch(95% 0.004 134.8)"
+        ]
+      },
+      "surface-green": {
+        "role": "neutral",
+        "displayName": "Green Surface",
+        "canonical": "#edf6ef",
+        "tonalRamp": [
+          "oklch(15% 0.013 152.6)",
+          "oklch(26% 0.013 152.6)",
+          "oklch(38% 0.013 152.6)",
+          "oklch(49% 0.013 152.6)",
+          "oklch(61% 0.013 152.6)",
+          "oklch(72% 0.013 152.6)",
+          "oklch(84% 0.013 152.6)",
+          "oklch(95% 0.013 152.6)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1d2b25",
+        "tonalRamp": [
+          "oklch(15% 0.022 166.5)",
+          "oklch(26% 0.022 166.5)",
+          "oklch(38% 0.022 166.5)",
+          "oklch(49% 0.022 166.5)",
+          "oklch(61% 0.022 166.5)",
+          "oklch(72% 0.022 166.5)",
+          "oklch(84% 0.022 166.5)",
+          "oklch(95% 0.022 166.5)"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "#4a5c52",
+        "tonalRamp": [
+          "oklch(15% 0.027 160.8)",
+          "oklch(26% 0.027 160.8)",
+          "oklch(38% 0.027 160.8)",
+          "oklch(49% 0.027 160.8)",
+          "oklch(61% 0.027 160.8)",
+          "oklch(72% 0.027 160.8)",
+          "oklch(84% 0.027 160.8)",
+          "oklch(95% 0.027 160.8)"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#596a60",
+        "tonalRamp": [
+          "oklch(15% 0.026 159.5)",
+          "oklch(26% 0.026 159.5)",
+          "oklch(38% 0.026 159.5)",
+          "oklch(49% 0.026 159.5)",
+          "oklch(61% 0.026 159.5)",
+          "oklch(72% 0.026 159.5)",
+          "oklch(84% 0.026 159.5)",
+          "oklch(95% 0.026 159.5)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Quiet Line",
+        "canonical": "#dfe6df",
+        "tonalRamp": [
+          "oklch(15% 0.012 145.5)",
+          "oklch(26% 0.012 145.5)",
+          "oklch(38% 0.012 145.5)",
+          "oklch(49% 0.012 145.5)",
+          "oklch(61% 0.012 145.5)",
+          "oklch(72% 0.012 145.5)",
+          "oklch(84% 0.012 145.5)",
+          "oklch(95% 0.012 145.5)"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Strong Line",
+        "canonical": "#cbd6cc",
+        "tonalRamp": [
+          "oklch(15% 0.018 148.1)",
+          "oklch(26% 0.018 148.1)",
+          "oklch(38% 0.018 148.1)",
+          "oklch(49% 0.018 148.1)",
+          "oklch(61% 0.018 148.1)",
+          "oklch(72% 0.018 148.1)",
+          "oklch(84% 0.018 148.1)",
+          "oklch(95% 0.018 148.1)"
+        ]
+      },
+      "pine-950": {
+        "role": "secondary",
+        "displayName": "Deep Pine",
+        "canonical": "#102d24",
+        "tonalRamp": [
+          "oklch(15% 0.039 170.4)",
+          "oklch(26% 0.039 170.4)",
+          "oklch(38% 0.039 170.4)",
+          "oklch(49% 0.039 170.4)",
+          "oklch(61% 0.039 170.4)",
+          "oklch(72% 0.039 170.4)",
+          "oklch(84% 0.039 170.4)",
+          "oklch(95% 0.039 170.4)"
+        ]
+      },
+      "pine-900": {
+        "role": "secondary",
+        "displayName": "Pine Navigation",
+        "canonical": "#173a2f",
+        "tonalRamp": [
+          "oklch(15% 0.046 170.3)",
+          "oklch(26% 0.046 170.3)",
+          "oklch(38% 0.046 170.3)",
+          "oklch(49% 0.046 170.3)",
+          "oklch(61% 0.046 170.3)",
+          "oklch(72% 0.046 170.3)",
+          "oklch(84% 0.046 170.3)",
+          "oklch(95% 0.046 170.3)"
+        ]
+      },
+      "pine-800": {
+        "role": "secondary",
+        "displayName": "Pine Detail",
+        "canonical": "#214a3b",
+        "tonalRamp": [
+          "oklch(15% 0.053 167.3)",
+          "oklch(26% 0.053 167.3)",
+          "oklch(38% 0.053 167.3)",
+          "oklch(49% 0.053 167.3)",
+          "oklch(61% 0.053 167.3)",
+          "oklch(72% 0.053 167.3)",
+          "oklch(84% 0.053 167.3)",
+          "oklch(95% 0.053 167.3)"
+        ]
+      },
+      "pine-active": {
+        "role": "secondary",
+        "displayName": "Active Pine",
+        "canonical": "#285443",
+        "tonalRamp": [
+          "oklch(15% 0.057 166.3)",
+          "oklch(26% 0.057 166.3)",
+          "oklch(38% 0.057 166.3)",
+          "oklch(49% 0.057 166.3)",
+          "oklch(61% 0.057 166.3)",
+          "oklch(72% 0.057 166.3)",
+          "oklch(84% 0.057 166.3)",
+          "oklch(95% 0.057 166.3)"
+        ]
+      },
+      "nav-text": {
+        "role": "neutral",
+        "displayName": "Navigation Text",
+        "canonical": "#d2e2d6",
+        "tonalRamp": [
+          "oklch(15% 0.024 153.4)",
+          "oklch(26% 0.024 153.4)",
+          "oklch(38% 0.024 153.4)",
+          "oklch(49% 0.024 153.4)",
+          "oklch(61% 0.024 153.4)",
+          "oklch(72% 0.024 153.4)",
+          "oklch(84% 0.024 153.4)",
+          "oklch(95% 0.024 153.4)"
+        ]
+      },
+      "green-soft": {
+        "role": "neutral",
+        "displayName": "Soft Green",
+        "canonical": "#e7f3e9",
+        "tonalRamp": [
+          "oklch(15% 0.018 150.6)",
+          "oklch(26% 0.018 150.6)",
+          "oklch(38% 0.018 150.6)",
+          "oklch(49% 0.018 150.6)",
+          "oklch(61% 0.018 150.6)",
+          "oklch(72% 0.018 150.6)",
+          "oklch(84% 0.018 150.6)",
+          "oklch(95% 0.018 150.6)"
+        ]
+      },
+      "status-good-ink": {
+        "role": "primary",
+        "displayName": "Positive Status Ink",
+        "canonical": "#245d3e",
+        "tonalRamp": [
+          "oklch(15% 0.079 156.8)",
+          "oklch(26% 0.079 156.8)",
+          "oklch(38% 0.079 156.8)",
+          "oklch(49% 0.079 156.8)",
+          "oklch(61% 0.079 156.8)",
+          "oklch(72% 0.079 156.8)",
+          "oklch(84% 0.079 156.8)",
+          "oklch(95% 0.079 156.8)"
+        ]
+      },
+      "amber-800": {
+        "role": "tertiary",
+        "displayName": "Caution Amber",
+        "canonical": "#7d5315",
+        "tonalRamp": [
+          "oklch(15% 0.093 71.6)",
+          "oklch(26% 0.093 71.6)",
+          "oklch(38% 0.093 71.6)",
+          "oklch(49% 0.093 71.6)",
+          "oklch(61% 0.093 71.6)",
+          "oklch(72% 0.093 71.6)",
+          "oklch(84% 0.093 71.6)",
+          "oklch(95% 0.093 71.6)"
+        ]
+      },
+      "amber-soft": {
+        "role": "tertiary",
+        "displayName": "Soft Amber",
+        "canonical": "#fbf0d8",
+        "tonalRamp": [
+          "oklch(15% 0.034 86.3)",
+          "oklch(26% 0.034 86.3)",
+          "oklch(38% 0.034 86.3)",
+          "oklch(49% 0.034 86.3)",
+          "oklch(61% 0.034 86.3)",
+          "oklch(72% 0.034 86.3)",
+          "oklch(84% 0.034 86.3)",
+          "oklch(95% 0.034 86.3)"
+        ]
+      },
+      "status-neutral-bg": {
+        "role": "neutral",
+        "displayName": "Neutral Status Surface",
+        "canonical": "#eef1ed",
+        "tonalRamp": [
+          "oklch(15% 0.006 137.8)",
+          "oklch(26% 0.006 137.8)",
+          "oklch(38% 0.006 137.8)",
+          "oklch(49% 0.006 137.8)",
+          "oklch(61% 0.006 137.8)",
+          "oklch(72% 0.006 137.8)",
+          "oklch(84% 0.006 137.8)",
+          "oklch(95% 0.006 137.8)"
+        ]
+      },
+      "status-neutral-ink": {
+        "role": "neutral",
+        "displayName": "Neutral Status Ink",
+        "canonical": "#4d5b51",
+        "tonalRamp": [
+          "oklch(15% 0.024 154.3)",
+          "oklch(26% 0.024 154.3)",
+          "oklch(38% 0.024 154.3)",
+          "oklch(49% 0.024 154.3)",
+          "oklch(61% 0.024 154.3)",
+          "oklch(72% 0.024 154.3)",
+          "oklch(84% 0.024 154.3)",
+          "oklch(95% 0.024 154.3)"
+        ]
+      },
+      "status-muted-bg": {
+        "role": "neutral",
+        "displayName": "Muted Status Surface",
+        "canonical": "#edf0ed",
+        "tonalRamp": [
+          "oklch(15% 0.005 145.5)",
+          "oklch(26% 0.005 145.5)",
+          "oklch(38% 0.005 145.5)",
+          "oklch(49% 0.005 145.5)",
+          "oklch(61% 0.005 145.5)",
+          "oklch(72% 0.005 145.5)",
+          "oklch(84% 0.005 145.5)",
+          "oklch(95% 0.005 145.5)"
+        ]
+      },
+      "status-muted-ink": {
+        "role": "neutral",
+        "displayName": "Muted Status Ink",
+        "canonical": "#627067",
+        "tonalRamp": [
+          "oklch(15% 0.022 157.4)",
+          "oklch(26% 0.022 157.4)",
+          "oklch(38% 0.022 157.4)",
+          "oklch(49% 0.022 157.4)",
+          "oklch(61% 0.022 157.4)",
+          "oklch(72% 0.022 157.4)",
+          "oklch(84% 0.022 157.4)",
+          "oklch(95% 0.022 157.4)"
+        ]
+      },
+      "red-800": {
+        "role": "tertiary",
+        "displayName": "Error Clay",
+        "canonical": "#8b3e38",
+        "tonalRamp": [
+          "oklch(15% 0.106 26.5)",
+          "oklch(26% 0.106 26.5)",
+          "oklch(38% 0.106 26.5)",
+          "oklch(49% 0.106 26.5)",
+          "oklch(61% 0.106 26.5)",
+          "oklch(72% 0.106 26.5)",
+          "oklch(84% 0.106 26.5)",
+          "oklch(95% 0.106 26.5)"
+        ]
+      },
+      "red-soft": {
+        "role": "tertiary",
+        "displayName": "Soft Error Surface",
+        "canonical": "#fae9e6",
+        "tonalRamp": [
+          "oklch(15% 0.019 29.5)",
+          "oklch(26% 0.019 29.5)",
+          "oklch(38% 0.019 29.5)",
+          "oklch(49% 0.019 29.5)",
+          "oklch(61% 0.019 29.5)",
+          "oklch(72% 0.019 29.5)",
+          "oklch(84% 0.019 29.5)",
+          "oklch(95% 0.019 29.5)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base readable copy across workspace surfaces."
+      },
+      "headline": {
+        "displayName": "Page title",
+        "purpose": "Active workspace view heading."
+      },
+      "label": {
+        "displayName": "Metadata label",
+        "purpose": "Compact, tracked section and field labels."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Compact primary and secondary actions."
+      },
+      "metadata": {
+        "displayName": "Machine data",
+        "purpose": "Identifiers and copyable configuration only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "search-focus",
+        "value": "0 0 0 3px rgba(61, 137, 85, .1)",
+        "purpose": "Soft focus feedback around the search field."
+      },
+      {
+        "name": "selected-row",
+        "value": "inset 0 0 0 1px #d3e4d5",
+        "purpose": "Quiet inner outline on the selected toolkit row."
+      },
+      {
+        "name": "centered-panel",
+        "value": "0 12px 35px rgba(25, 54, 39, .055)",
+        "purpose": "Subtle lift for sign-in and gateway status panels only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "0.14s–0.16s ease",
+        "purpose": "Short color and border transitions for rows, buttons, navigation, and filters."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Near-zero transition and animation duration when reduced motion is requested."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "workbench-tight",
+        "value": "1200px"
+      },
+      {
+        "name": "detail-inline",
+        "value": "1000px"
+      },
+      {
+        "name": "mobile-navigation",
+        "value": "700px"
+      },
+      {
+        "name": "compact-mobile",
+        "value": "390px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action for a gateway task.",
+      "html": "<button class=\"ds-button-primary\" type=\"button\">Use this site</button>",
+      "css": ".ds-button-primary{min-height:37px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 12px;border:1px solid transparent;border-radius:6px;background:var(--green-700);color:#fff;font:650 11px/1.5 var(--font-sans);cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease}.ds-button-primary:hover{background:#185f41}.ds-button-primary:focus-visible{outline:3px solid #67b48b;outline-offset:3px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Supporting documentation or secondary action.",
+      "html": "<button class=\"ds-button-secondary\" type=\"button\">Open setup guide</button>",
+      "css": ".ds-button-secondary{min-height:37px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 12px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);color:var(--pine-800);font:650 11px/1.5 var(--font-sans);cursor:pointer;transition:background-color .15s ease,border-color .15s ease,color .15s ease}.ds-button-secondary:hover{border-color:#97b09c;background:var(--surface-green)}.ds-button-secondary:focus-visible{outline:3px solid #67b48b;outline-offset:3px}"
+    },
+    {
+      "name": "Toolkit Search",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "Searches gateway registry names, IDs, descriptions, runtimes, and categories.",
+      "html": "<label class=\"ds-search\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"7\"></circle><path d=\"m20 20-4-4\"></path></svg><input type=\"search\" placeholder=\"Search toolkits, categories or runtimes\" aria-label=\"Search toolkits\"></label>",
+      "css": ".ds-search{min-height:42px;display:flex;align-items:center;gap:10px;padding:0 11px;border:1px solid var(--line-strong);border-radius:var(--radius-small);background:var(--surface);color:var(--ink-muted)}.ds-search svg{width:17px;height:17px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.ds-search:focus-within{border-color:#80a58b;box-shadow:0 0 0 3px rgba(61,137,85,.1)}.ds-search input{width:100%;min-width:0;height:40px;padding:0;border:0;outline:0;background:transparent;color:var(--ink);font:400 12px/1.5 var(--font-sans)}.ds-search input::placeholder{color:var(--ink-muted);opacity:1}"
+    },
+    {
+      "name": "Category Filter Chip",
+      "kind": "chip",
+      "refersTo": "filter-chip",
+      "description": "Filters registry results; selected state is explicit.",
+      "html": "<button class=\"ds-filter-chip\" type=\"button\" aria-pressed=\"true\">forecasting</button>",
+      "css": ".ds-filter-chip{min-height:28px;flex:0 0 auto;padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink-soft);font:400 11px/1.4 var(--font-sans);cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease}.ds-filter-chip:hover{border-color:#97b09c;color:var(--pine-900)}.ds-filter-chip[aria-pressed=true]{border-color:#b4d1b8;background:var(--green-100);color:var(--pine-900);font-weight:650}.ds-filter-chip:focus-visible{outline:3px solid #67b48b;outline-offset:3px}"
+    },
+    {
+      "name": "Workspace Navigation Item",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "Compact section link with a clear active page.",
+      "html": "<button class=\"ds-nav-item\" type=\"button\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"></rect><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"></rect></svg><span>Connect apps</span></button>",
+      "css": ".ds-nav-item{width:100%;min-height:39px;display:flex;align-items:center;gap:11px;padding:0 11px;border:1px solid transparent;border-radius:7px;background:transparent;color:#d2e2d6;text-align:left;font:500 13px/1.4 var(--font-sans);cursor:pointer;transition:background-color .16s ease,color .16s ease,border-color .16s ease}.ds-nav-item svg{width:17px;height:17px;flex:0 0 auto;fill:none;stroke:#afcbbb;stroke-width:1.8}.ds-nav-item:hover{background:rgba(238,247,239,.08);color:#fff}.ds-nav-item[aria-current=page]{border-color:rgba(185,221,194,.13);background:#285443;color:#fff}.ds-nav-item[aria-current=page] svg{stroke:#c8e8ce}.ds-nav-item[aria-current=page]:hover{background:#2d5e49}.ds-nav-item:focus-visible{outline:3px solid #67b48b;outline-offset:3px}"
+    },
+    {
+      "name": "Toolkit Catalogue Row",
+      "kind": "custom",
+      "refersTo": "toolkit-row",
+      "description": "Scannable registry result; selection drives the matching setup detail.",
+      "html": "<button class=\"ds-toolkit-row\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-toolkit-name\">Selected toolkit</span><span class=\"ds-runtime\">HTTP</span><span class=\"ds-status-badge\" data-tone=\"good\">stable</span><span class=\"ds-toolkit-action\">View setup →</span></button>",
+      "css": ".ds-toolkit-row{width:100%;min-height:74px;display:grid;grid-template-columns:minmax(0,1fr) minmax(72px,.36fr) minmax(110px,.45fr) 74px;align-items:center;gap:12px;padding:12px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--ink);text-align:left;font:400 14px/1.5 var(--font-sans);cursor:pointer;transition:background-color .14s ease}.ds-toolkit-row:hover{background:rgba(255,255,255,.78)}.ds-toolkit-row[aria-pressed=true]{background:var(--surface);box-shadow:inset 0 0 0 1px #d3e4d5}.ds-toolkit-row:focus-visible{outline:3px solid #67b48b;outline-offset:3px}.ds-toolkit-name{overflow:hidden;font-size:13px;font-weight:650;letter-spacing:-.01em;text-overflow:ellipsis;white-space:nowrap}.ds-runtime{color:var(--ink-soft);font-size:11px}.ds-toolkit-action{color:var(--green-700);font-size:11px;font-weight:650;white-space:nowrap}.ds-toolkit-row:hover .ds-toolkit-action{color:var(--pine-900)}"
+    },
+    {
+      "name": "Registry Status Badge",
+      "kind": "chip",
+      "refersTo": "status-badge-good",
+      "description": "Tinted, labeled state for registry readiness and requirements.",
+      "html": "<span class=\"ds-status-badge\" data-tone=\"good\">stable</span>",
+      "css": ".ds-status-badge{max-width:100%;width:fit-content;display:inline-flex;align-items:center;padding:4px 7px;border-radius:5px;font:650 10px/1.2 var(--font-sans)}.ds-status-badge[data-tone=good]{background:var(--green-100);color:#245d3e}.ds-status-badge[data-tone=caution]{background:var(--amber-100);color:var(--amber-800)}.ds-status-badge[data-tone=neutral]{background:#eef1ed;color:#4d5b51}.ds-status-badge[data-tone=muted]{background:#edf0ed;color:#627067}"
+    },
+    {
+      "name": "Setup Detail Card",
+      "kind": "card",
+      "refersTo": "setup-card",
+      "description": "Gateway-supplied toolkit metadata and provider setup limits.",
+      "html": "<aside class=\"ds-setup-card\"><div class=\"ds-card-kicker\">Setup detail<span class=\"ds-state-dot\"></span></div><h3>Selected toolkit</h3><p class=\"ds-description\">Gateway supplied description.</p><dl><div><dt>Toolkit ID</dt><dd><code>toolkit-id</code></dd></div><div><dt>Runtime</dt><dd>HTTP</dd></div><div><dt>Registry status</dt><dd><span class=\"ds-status-badge\" data-tone=\"good\">stable</span></dd></div></dl><p class=\"ds-limit\"><strong>Provider setup</strong><br>Credentials and account onboarding are not available here yet.</p></aside>",
+      "css": ".ds-setup-card{min-width:0;padding:18px 18px 19px;border:1px solid var(--line);border-radius:var(--radius-medium);background:var(--surface);color:var(--ink);font-family:var(--font-sans)}.ds-card-kicker{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:var(--ink-muted);font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}.ds-state-dot{width:8px;height:8px;border-radius:50%;background:#358456}.ds-setup-card h3{margin:0;font-size:19px;font-weight:660;letter-spacing:-.025em;line-height:1.28}.ds-description{margin:8px 0 17px;color:var(--ink-soft);font-size:12px;line-height:1.55}.ds-setup-card dl{margin:0;border-top:1px solid var(--line)}.ds-setup-card dl>div{min-height:36px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #edf0ed}.ds-setup-card dt{color:var(--ink-muted);font-size:10px}.ds-setup-card dd{margin:0;color:var(--ink);font-size:10px;font-weight:600;text-align:right;overflow-wrap:anywhere}.ds-setup-card code{color:var(--pine-800);font:500 9px/1.5 var(--font-mono)}.ds-limit{margin:17px 0 0;padding:12px 0 0;border-top:1px solid var(--line);color:var(--ink-soft);font-size:10px;line-height:1.5}.ds-limit strong{color:var(--pine-800)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Connector Workbench",
+    "overview": "This is an operational workbench for developers and energy-system owners connecting energy systems to agents. Daylight setup work should feel steady and precise: a pale neutral canvas carries readable system-ui type, a dark pine rail anchors navigation, and energy green marks actions and useful state.\n\nDense catalogue and gateway metadata stay scannable through ruled rows, small labels, and visible setup details. White surfaces separate related information; compact corners and simple line icons keep the interface technical without making it feel like an enterprise console. Every action and status should reflect what the authenticated gateway supplied.",
+    "keyCharacteristics": [
+      "Daylight surfaces framed by dark pine navigation.",
+      "Compact, factual metadata with quiet dividers and clear status labels.",
+      "Selected setup details stay connected to the catalogue choice at every screen size.",
+      "Registry and connection states remain grounded in gateway data."
+    ],
+    "rules": [
+      {
+        "name": "The Pine Frame Rule",
+        "body": "Keep pine on workspace identity and navigation; use green for actions and positive state. Pair caution and error colors with visible labels.",
+        "section": "colors"
+      },
+      {
+        "name": "The Metadata Legibility Rule",
+        "body": "Keep names and explanations in system UI; reserve monospace for identifiers and configuration.",
+        "section": "typography"
+      },
+      {
+        "name": "The Border Before Shadow Rule",
+        "body": "Use borders and surface contrast for catalogue structure; reserve ambient shadow for the centered sign-in and status panels.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep gateway-supplied registry metadata visually distinct from connected-account records.",
+      "Do label synthetic fixture sites and sample values as synthetic; they are not evidence of a physical installation.",
+      "Do keep “View setup” tied to a safe HTTPS guide or a clear provider-onboarding limitation.",
+      "Do keep muted text on the canvas or white surface using the `ink-muted` token.",
+      "Do keep selected setup details inline on mobile and synchronized with active filters."
+    ],
+    "donts": [
+      "Don't imply that registry metadata means a provider account is connected; provider credentials and account onboarding are not available here yet.",
+      "Don't present synthetic site or energy fixtures as physical meter records or verified site data.",
+      "Don't use color alone to communicate status, error, selection, or authentication state.",
+      "Don't add decorative raster artwork or a component pattern inferred from the missing QUALITY BAR capture card."
+    ]
+  }
+}

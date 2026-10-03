@@ -22,7 +22,13 @@
       "owned site switch",
       "sign out"
     ],
-    "full_regression": "running; not yet qualified",
+    "full_regression": {
+      "python_tests_passed": 647,
+      "seconds": 1066.87,
+      "web_lever_passed_separately": 1,
+      "combined_total": 648,
+      "note": "web lever builds and runs seven HTTP/security tests; final reviewed build reran strict TS and seven tests"
+    },
     "visual_review": {
       "disposition": "ship",
       "scope": "verdict over five listed catalogue foundation fixes",
@@ -39,5 +45,15 @@
     "current SDK identity route absent from earlier 0.1.0 tarball and v0.3.0 release",
     "no physical/private provider evidence or external agent-client connection claim",
     "broad held-out evaluation, independent contribution/review and sustained operation remain open"
-  ]
+  ],
+  "implementation_revision": "9f56f28554905fadc31c2ba8d12f9c70e3835098",
+  "log_sha256": {
+    "web-control-full-current.log": "3664b6e01fbe2def1af5d617f574c291843cc6b8516d08aa78217df53ac25e20",
+    "web-python-lever.log": "8f1844cc6c435253c9c47c5bbf7005f23566c25b042b0aba520cf672eca3dab6",
+    "web-reviewed-build.log": "60e7e7dbc482dc0d5b1208e524c6aad1e1830fc34a8ad1490d8804f2d8563100",
+    "web-reviewed-http.log": "877a61287ba34420fcf210c95afe0db94db8a670c2f4c32b1766a13297db1d49",
+    "web-control-final-mypy.log": "0f0451a70963ae73be675ad208919e74e8bf1cfecdd4689aabe892085d717fc7",
+    "public-identity-acceptance.log": "aec9f3f064a1acd7fa624f69edcd9b32d6b17fc431843e01079e9d99249ae5d0",
+    "control-combined-acceptance.log": "7ae868df2532ee541ab7e0217617359652c0069ba436db9461f4dc07a2b127b6"
+  }
 }

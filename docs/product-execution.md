@@ -265,9 +265,10 @@ agent products have not been independently connected through this web interface.
 
 Targeted verification passes 18 public identity/contract checks, 17 combined
 control-store, hosted-key and recovery checks, and seven production web HTTP and
-security tests. Full mypy passes 52 source files. The current full regression
-suite must be qualified after the final review fixes; the interrupted local run
-is not evidence of a passing full suite. Real physical/private provider evidence,
+security tests. Full mypy passes 52 source files. The fresh full Python run passes 647 tests in 1,066.87 seconds. The production
+web build test passes separately in 183.16 seconds, for 648 total checks. The
+final reviewed web build also passes strict TypeScript and seven HTTP/security
+tests. The earlier interrupted run is not used as qualification evidence. Real physical/private provider evidence,
 held-out agent evaluation, independent contribution/review and sustained operation
 remain open. This milestone does not complete Phase 2 or the full project goal.
 
@@ -276,3 +277,5 @@ fixes resolved. This verdict covers the catalogue foundation and supplied
 direction. The initial QUALITY BAR card was absent; full onboarding was not
 approved by this review. The independent boundary review found no concrete
 exploitable flaw in its assigned control, key, identity, recovery and web paths.
+
+Reproducible scope and log hashes are in [web/control evidence](evidence/web-control-oct03.json).
