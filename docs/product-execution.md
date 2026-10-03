@@ -256,9 +256,9 @@ operator runtime configuration still supplies topology and policy. Workspace
 membership, shared connection ACLs and normal user-facing provisioning remain
 open.
 
-The catalogue currently opens setup requirements rather than creating provider
-accounts. Provider authorization, encrypted connection creation, verification,
-site mapping and runtime refresh are the next integration milestone. Custom MCP,
+The original catalogue foundation opened setup requirements. The Octopus
+connection increment below now adds encrypted creation, verification, mapping
+to an existing owned site and runtime refresh. Custom MCP,
 job management and activity views explicitly disclose unavailable management
 operations. Generic MCP configuration is shown for the selected site; individual
 agent products have not been independently connected through this web interface.
@@ -279,3 +279,28 @@ approved by this review. The independent boundary review found no concrete
 exploitable flaw in its assigned control, key, identity, recovery and web paths.
 
 Reproducible scope and log hashes are in [web/control evidence](evidence/web-control-oct03.json).
+
+## Octopus connection flow, October 3
+
+Current source supports Connect Apps → Octopus Energy Account → enter key and
+meter details → verify → encrypted storage → Connections. Gateway metadata
+defines the form fields. The gateway derives user and site from the session,
+uses the fixed provider origin, and publishes only verified accounts. The form
+clears the entered key after submission and exposes fixed failure messages.
+
+New accounts refresh capability bindings in the running process. Existing REST
+and hosted MCP sessions can retrieve metered kWh immediately. Operator bindings
+remain in the resolver. Repeated meter submissions reuse one scoped account;
+failed replacements preserve the working credential.
+
+Acceptance passes 57 targeted Python tests, 11 SDK tests, seven production web
+HTTP/security tests, strict TypeScript, generated contract drift, Ruff and mypy
+across 54 source files. Browser failure and success journeys were exercised at
+mobile and desktop widths. These use a fictional Octopus transport, not a real
+private meter. The earlier foundation's published CI passes 648 tests on each
+of Python 3.11–3.13, plus container, upgrade and Home Assistant checks.
+
+This increment still requires an operator-provisioned owned site and gateway
+key. Site/asset creation, workspace membership, sharing, managed OAuth and
+connection lifecycle controls remain open, along with the external qualification
+gates. Evidence is in [connection onboarding](evidence/connection-onboarding-oct03.json).

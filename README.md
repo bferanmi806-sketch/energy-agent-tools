@@ -12,7 +12,8 @@ lineage and warnings. A forecast or simulation never becomes a meter reading.
 
 The first web console is in [apps/web](apps/web/README.md). It requires the
 current-source gateway and provides authenticated catalogue browsing and site
-selection. Provider onboarding through the web remains under development.
+selection. It can verify and securely connect an Octopus meter to an existing
+owned site. Other provider forms and the complete control plane remain under development.
 
 ## Start locally
 

@@ -248,3 +248,10 @@ Use compact tinted badges for stable, experimental, credential-required, and una
 - **Don't** present synthetic site or energy fixtures as physical meter records or verified site data.
 - **Don't** use color alone to communicate status, error, selection, or authentication state.
 - **Don't** add decorative raster artwork or a component pattern inferred from the missing QUALITY BAR capture card.
+
+The Octopus connection form uses the existing form, button and notice styles.
+It appears before toolkit metadata in both the desktop detail column and mobile
+inline detail panel. Gateway metadata supplies labels and input constraints.
+Failed submission clears the key and keeps a fixed visible error; success loads
+the scoped Connections view. Fictional fixture captures qualify this interaction
+only, not private provider access or the unfinished product views.

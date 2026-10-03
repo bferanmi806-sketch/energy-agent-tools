@@ -1,0 +1,45 @@
+{
+  "implementation_revision": "5cdf05b",
+  "date": "2026-10-03",
+  "scope": "Octopus meter onboarding into an existing owned site",
+  "qualification": "fictional provider transport; production gateway, SDK and web routes",
+  "checks": {
+    "python_targeted": 57,
+    "web_http_security": 7,
+    "sdk": 11,
+    "mypy_source_files": 54,
+    "production_web_build": true,
+    "strict_typescript": true,
+    "generated_contract_drift": false
+  },
+  "journeys": [
+    "rejected key creates no account",
+    "verified credential encrypted and survives store reopen",
+    "successful retry reuses the same scoped meter account",
+    "failed replacement preserves working credential",
+    "same running REST and MCP sessions execute new account",
+    "foreign-user denial before provider request",
+    "site switching hides other site's account",
+    "browser failure then success navigates to Connections",
+    "desktop and mobile form precedes toolkit metadata"
+  ],
+  "review": {
+    "boundary": "Independent read-only Luna review found retry ambiguity; fixed and re-reviewed with no concrete flaw found. Legacy externally provisioned account IDs are not merged automatically.",
+    "gateway_version": "Web requires the matching current gateway /me and connection-setup routes"
+  },
+  "limits": [
+    "No real private Octopus account qualification",
+    "Existing operator-provisioned sites and gateway keys required",
+    "Workspace membership, site/asset provisioning and shared ACLs remain open",
+    "No broader goal or Phase 2 completion claim"
+  ],
+  "goal_complete": false,
+  "log_sha256": {
+    "onboarding-web-check.log": "e4ab2325f1680a9c2ef518af4150f462f654b2720007fb7f1191f6baddaae95d",
+    "onboarding-mypy.log": "80244665c7088b2cce8820f63a43e8138804ae2a8a670798bf2704dd2a9a50a9",
+    "onboarding-web-build.log": "288a7f84fa94c77b757c4694adda15e7662a44ba0cfbfcecfda82a4830859110",
+    "onboarding-final-targets.log": "29a60d17cdd3cd93860931001cc5b4cbc2ecb0b88d6db73232c19018860f29ea",
+    "onboarding-web-http.log": "2c60cc4628f25319da15db5a83c74177f793efd49cb269b8e27fbcbaca5676b5",
+    "onboarding-sdk-tests.log": "f770614b2ce84acbf57da6727fa4f8e4c3c085461ce652cbb88c30356ce4905e"
+  }
+}

@@ -1,4 +1,4 @@
-# Next connection milestone
+# Octopus connection milestone
 
 The first web onboarding provider is Octopus Energy Account. Its API origin is
 fixed and the core already has credential validation, a bounded read probe and a
@@ -30,3 +30,12 @@ probe, encrypted persistence, reload after restart, use by the same live REST
 and MCP agent, failed probe with no active account, foreign-site denial before
 any outbound request, bounded secret input and no credential in logs/HTML.
 Actual private Octopus access remains an external qualification gate.
+
+The implementation is in current source. Identical user/site/meter submissions
+use the same opaque account ID, so a lost response and retry do not create
+ambiguous account bindings. Failed verification leaves an existing account and
+credential untouched. The web app requires its matching gateway version; a
+missing setup endpoint reports the gateway unavailable.
+
+[Qualification evidence](evidence/connection-onboarding-oct03.json) separates
+production contract checks from the fictional provider transport.

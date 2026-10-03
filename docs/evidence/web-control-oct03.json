@@ -55,5 +55,21 @@
     "web-control-final-mypy.log": "0f0451a70963ae73be675ad208919e74e8bf1cfecdd4689aabe892085d717fc7",
     "public-identity-acceptance.log": "aec9f3f064a1acd7fa624f69edcd9b32d6b17fc431843e01079e9d99249ae5d0",
     "control-combined-acceptance.log": "7ae868df2532ee541ab7e0217617359652c0069ba436db9461f4dc07a2b127b6"
+  },
+  "published_ci": {
+    "head": "b6e2d13c5e008e1c36dfd2fa7d499bb764ed5f25",
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37090805118",
+    "status": "success",
+    "python_tests_each": 648,
+    "python_versions": [
+      "3.11",
+      "3.12",
+      "3.13"
+    ],
+    "additional_checks": [
+      "container",
+      "upgrade",
+      "Home Assistant"
+    ]
   }
 }
