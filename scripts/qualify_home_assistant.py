@@ -597,13 +597,47 @@ def run_qualification(image: str, startup_timeout: int) -> dict[str, Any]:
             )
 
 
+def run_complete_qualification(image: str, startup_timeout: int) -> dict[str, Any]:
+    """Qualify provider reads and existing-user authorization in separate owned runs."""
+    if image != HOME_ASSISTANT_IMAGE:
+        raise QualificationFailure(
+            "invalid_image", "Complete qualification requires the pinned Home Assistant image."
+        )
+    result = run_qualification(image, startup_timeout)
+    if result.get("ok") is not True:
+        return {**result, "authorization": {"ok": False, "status": "not_attempted"}}
+    if __package__:
+        from . import qualify_home_assistant_authorization as authorization
+    else:
+        import qualify_home_assistant_authorization as authorization
+    try:
+        authorization_result = authorization.run_qualification(startup_timeout)
+    except authorization.QualificationFailure as exc:
+        authorization_result = getattr(
+            exc, "report", {"ok": False, "error": {"code": exc.code, "message": exc.message}}
+        )
+    except Exception:
+        authorization_result = {
+            "ok": False,
+            "error": {
+                "code": "qualification_failed",
+                "message": "Home Assistant authorization qualification failed safely.",
+            },
+        }
+    return {
+        **result,
+        "ok": authorization_result.get("ok") is True,
+        "authorization": authorization_result,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", default=HOME_ASSISTANT_IMAGE)
     parser.add_argument("--startup-timeout", type=int, default=STARTUP_TIMEOUT_SECONDS)
     args = parser.parse_args()
     try:
-        result = run_qualification(args.image, args.startup_timeout)
+        result = run_complete_qualification(args.image, args.startup_timeout)
     except QualificationFailure as exc:
         print(
             json.dumps(
@@ -629,6 +663,8 @@ def main() -> None:
         )
         raise SystemExit(1) from None
     print(json.dumps(result, sort_keys=True))
+    if result.get("ok") is not True:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

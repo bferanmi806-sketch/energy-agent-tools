@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -10,6 +11,63 @@ import httpx
 import pytest
 
 from scripts import qualify_home_assistant as qualification
+from scripts import qualify_home_assistant_authorization as authorization
+
+
+@pytest.mark.parametrize("outcome", ["passed", "safe_failure", "unexpected_failure"])
+def test_default_cli_requires_authorization_and_preserves_provider_evidence(
+    outcome: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stages: list[str] = []
+
+    def reads(image: str, timeout: int):
+        assert image == qualification.HOME_ASSISTANT_IMAGE
+        assert timeout == qualification.STARTUP_TIMEOUT_SECONDS
+        stages.append("reads_completed_and_cleaned")
+        return {"ok": True, "reviewed_profile": {"entity_scoped": True}}
+
+    def authorize(timeout: int):
+        assert timeout == qualification.STARTUP_TIMEOUT_SECONDS
+        stages.append("authorization")
+        if outcome == "unexpected_failure":
+            raise RuntimeError("private-provider-token")
+        if outcome == "safe_failure":
+            failure = authorization.QualificationFailure("authorization_failed", "Safe failure.")
+            failure.report = {
+                "ok": False,
+                "error": {"code": "authorization_failed", "message": "Safe failure."},
+                "cleanup": {"resources_verified_absent": True},
+            }
+            raise failure
+        return {"ok": True, "protocol": {"refresh_token_revoked": True}}
+
+    monkeypatch.setattr(sys, "argv", ["qualify_home_assistant.py"])
+    monkeypatch.setattr(qualification, "run_qualification", reads)
+    monkeypatch.setattr(authorization, "run_qualification", authorize)
+    if outcome == "passed":
+        qualification.main()
+    else:
+        with pytest.raises(SystemExit) as caught:
+            qualification.main()
+        assert caught.value.code == 1
+    output = capsys.readouterr().out
+    assert "private-provider-token" not in output
+    result = json.loads(output)
+    assert stages == ["reads_completed_and_cleaned", "authorization"]
+    assert result["reviewed_profile"] == {"entity_scoped": True}
+    assert result["ok"] is (outcome == "passed")
+    assert result["authorization"]["ok"] is (outcome == "passed")
+    if outcome == "safe_failure":
+        assert result["authorization"]["cleanup"]["resources_verified_absent"] is True
+
+
+def test_complete_qualification_rejects_unpinned_image_before_docker(monkeypatch):
+    def forbidden(*_args):
+        pytest.fail("No Docker work should run for an unpinned qualification image.")
+
+    monkeypatch.setattr(qualification, "run_qualification", forbidden)
+    with pytest.raises(qualification.QualificationFailure, match="pinned"):
+        qualification.run_complete_qualification("unapproved:latest", 180)
 
 
 def test_configuration_helper_is_minimal_and_secret_free() -> None:

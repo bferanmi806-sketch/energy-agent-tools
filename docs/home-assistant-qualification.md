@@ -1,7 +1,7 @@
 # Home Assistant protocol qualification
 
 `scripts/qualify_home_assistant.py` qualifies the Home Assistant provider
-against a real Home Assistant Docker instance. It is a protocol and boundary
+against real Home Assistant Docker instances. It is a protocol and boundary
 qualification for CI. It does not claim that a physical meter, a real
 household, or a device control path is connected.
 
@@ -10,7 +10,10 @@ The run uses the pinned official image
 (Home Assistant 2026.9.4). It creates a unique Docker volume and container,
 writes a small configuration containing `homeassistant`, `api`, `onboarding`, and
 `http`, and bounds the container to 1 GiB of memory, two CPUs, and 256
-processes. The image is not started by the local development workflow when
+processes for the provider-read stage. A second disposable instance, limited to
+2 GiB and two CPUs, qualifies existing-user authorization after the first stage
+has completed and cleaned up. Both stages use the same pinned image. The image
+is not started by the local development workflow when
 the shared Docker VM is resource constrained; the same script is intended for
 the Linux CI runner.
 
@@ -24,7 +27,13 @@ The command prints one JSON object. A successful object contains protocol,
 scope, semantic, freshness, and credential-storage evidence. It never
 contains the generated owner password, authorization code, access token,
 refresh token, provider response body, or container logs. A failed run prints
-only a bounded error code and generic message and exits nonzero.
+safe error evidence and exits nonzero. Authorization failures preserve the
+successful provider-read result and include cleanup status and exact task-owned
+resource names when available. The command fails if either stage fails.
+
+The earlier qualification entry point exercised only provider reads. Its
+default command now also runs existing-user authorization; an older successful
+report without the `authorization` section does not establish that newer gate.
 
 ## Protocol exercised
 
@@ -59,6 +68,21 @@ the qualification site and asset. The asset is associated with the connection
 before the profile is reopened, so the resolver must preserve the account,
 site, and asset boundary when selecting and executing the capability.
 
+## Existing-user authorization
+
+`scripts/qualify_home_assistant_authorization.py` can run the authorization stage
+alone. The default combined command runs it automatically and stores its safe
+report under `authorization` in the JSON result.
+
+This stage creates a disposable development owner, then authenticates that
+existing user through `/auth/login_flow`. It exchanges the resulting code,
+checks authenticated configuration and synthetic entity reads, refreshes the
+grant and reads again, revokes the refresh token, and verifies rejection of
+both the revoked refresh token and refreshed access token. These operations use
+the installed Home Assistant HTTP endpoints. They do not drive browser consent
+or qualify a physical installation, and they do not by themselves prove the
+complete managed gateway journey against a real provider.
+
 ## Resource ownership and cleanup
 
 The script generates a 32-hex-digit suffix for the container, helper
@@ -80,8 +104,12 @@ Passing evidence proves:
 - reviewed capability scope, estimated semantics, observation freshness, and
   provenance survive a profile reopen and real provider execution.
 
+The new authorization gate additionally requires normal existing-user login,
+refresh and revocation evidence. Until that gate has actually passed, those
+checks remain unverified. An older provider-read report is insufficient.
+
 It does not prove production-provider credentials, physical telemetry
-quality, long-lived token refresh, a hardware integration, or control safety.
+quality, sustained refresh over days, a hardware integration, or control safety.
 Those require an operator-owned Home Assistant installation and a separate
 reviewed qualification.
 
