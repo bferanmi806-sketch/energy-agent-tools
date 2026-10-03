@@ -1636,6 +1636,158 @@ export const ConnectionCreatedResponseSchema = {
 } as const;
 export type ConnectionCreatedResponse = FromSchema<typeof ConnectionCreatedResponseSchema, { keepDefaultedPropertiesOptional: true }>;
 
+export const ConnectionVerificationResponseSchema = {
+  "type": "object",
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "account": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "toolkit": {
+          "type": "string"
+        },
+        "site_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "auth_scheme": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "toolkit",
+        "site_id",
+        "enabled",
+        "auth_scheme",
+        "state",
+        "verified"
+      ],
+      "additionalProperties": true
+    },
+    "health": {
+      "type": "object",
+      "properties": {
+        "connection_id": {
+          "type": "string"
+        },
+        "provider": {
+          "const": "octopus"
+        },
+        "status": {
+          "enum": [
+            "healthy",
+            "unhealthy"
+          ]
+        },
+        "checked_at": {
+          "type": "string"
+        },
+        "probe": {
+          "const": "provider-read"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connection_id",
+        "provider",
+        "status",
+        "checked_at",
+        "probe",
+        "message"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "ok",
+    "account",
+    "health"
+  ],
+  "additionalProperties": true
+} as const;
+export type ConnectionVerificationResponse = FromSchema<typeof ConnectionVerificationResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const ConnectionDisconnectedResponseSchema = {
+  "type": "object",
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "account": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "toolkit": {
+          "type": "string"
+        },
+        "site_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "auth_scheme": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "toolkit",
+        "site_id",
+        "enabled",
+        "auth_scheme",
+        "state",
+        "verified"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "ok",
+    "account"
+  ],
+  "additionalProperties": true
+} as const;
+export type ConnectionDisconnectedResponse = FromSchema<typeof ConnectionDisconnectedResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
 export const ConnectionsResponseSchema = {
   "type": "object",
   "properties": {

@@ -1,6 +1,7 @@
 "use client";
 
 import { GatewayForm } from "./GatewayForm";
+import { ConnectionActions } from "./ConnectionActions";
 import { ConnectionForm } from "./ConnectionForm";
 
 import {
@@ -454,11 +455,11 @@ function ConnectionsView({ data, onBrowseApps }: { data: DashboardData; onBrowse
   return (
     <section className="content-section" aria-labelledby="connections-heading">
       <div className="section-toolbar">
-        <div><h2 id="connections-heading">Connected accounts</h2><p>Records returned for this authenticated identity. Status is read from the gateway record; this page does not run a live provider health check.</p></div>
+        <div><h2 id="connections-heading">Connected accounts</h2><p>Records for this site. Check an Octopus connection to run a fresh provider read, or disconnect it to remove its saved key.</p></div>
         <span className="count-label">{data.connections.length} {data.connections.length === 1 ? "record" : "records"}</span>
       </div>
       {data.connections.length === 0 ? (
-        <div className="empty-state compact-empty"><div className="empty-icon" aria-hidden="true"><Activity size={17} /></div><h3>No connections returned</h3><p>There are no connected account records in this gateway response.</p><p className="muted-note">Provider onboarding is not available in this web view yet.</p><button type="button" className="text-button" onClick={onBrowseApps}>Browse app setup details <ArrowRight size={14} aria-hidden="true" /></button></div>
+        <div className="empty-state compact-empty"><div className="empty-icon" aria-hidden="true"><Activity size={17} /></div><h3>No connections returned</h3><p>There are no connected account records in this gateway response.</p><p className="muted-note">Connect a supported provider from Connect apps.</p><button type="button" className="text-button" onClick={onBrowseApps}>Browse app setup details <ArrowRight size={14} aria-hidden="true" /></button></div>
       ) : (
         <div className="record-list">
           {data.connections.map((connection) => {
@@ -473,8 +474,9 @@ function ConnectionsView({ data, onBrowseApps }: { data: DashboardData; onBrowse
                 <div className="record-field"><span>Gateway state</span><strong>{connection.state}</strong></div>
                 <div className="record-field"><span>Access</span><strong>{connection.enabled ? "Enabled" : "Disabled"} · {connection.auth_scheme}</strong></div>
                 <div className="record-health">
-                  <span className={`status-badge ${connection.verified ? "status-good" : "status-muted"}`}>{connection.verified ? "Verified record" : "Not verified"}</span>
+                  <span className={`status-badge ${connection.verified && connection.enabled ? "status-good" : "status-muted"}`}>{connection.verified ? (connection.enabled ? "Verified record" : "Previously verified") : "Not verified"}</span>
                 </div>
+                {connection.toolkit === "octopus-energy-account" ? <div className="connection-actions"><ConnectionActions connectionId={connection.id} enabled={connection.enabled} state={connection.state} /></div> : null}
               </article>
             );
           })}

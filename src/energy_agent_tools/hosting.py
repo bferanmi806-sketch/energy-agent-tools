@@ -90,6 +90,10 @@ class _RequestModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
+class _ConnectionActionRequest(_RequestModel):
+    pass
+
+
 class _SessionCreate(_RequestModel):
     site_id: StrictStr | None = None
     resume_job_id: StrictStr | None = None
@@ -357,6 +361,16 @@ class AuthenticatedHost:
             Route("/sessions/{session_id}/jobs", self._jobs, methods=["POST"]),
             Route("/sessions/{session_id}/connections", self._connections, methods=["GET"]),
             Route("/sessions/{session_id}/connections", self._connect_account, methods=["POST"]),
+            Route(
+                "/sessions/{session_id}/connections/{connection_id}/verify",
+                self._verify_connection,
+                methods=["POST"],
+            ),
+            Route(
+                "/sessions/{session_id}/connections/{connection_id}/disconnect",
+                self._disconnect_connection,
+                methods=["POST"],
+            ),
             Route(
                 "/sessions/{session_id}/connection-setup", self._connection_setups, methods=["GET"]
             ),
@@ -1003,6 +1017,49 @@ class AuthenticatedHost:
             )
             self.agent._sync_connections(session.user_id)
             return _json_response(result, status_code=201)
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _verify_connection(self, request: Request) -> Response:
+        return await self._connection_action(request, verify=True)
+
+    async def _disconnect_connection(self, request: Request) -> Response:
+        return await self._connection_action(request, verify=False)
+
+    async def _connection_action(self, request: Request, *, verify: bool) -> Response:
+        scope = self._session_for(request)
+        if isinstance(scope, Response):
+            return scope
+        session = scope[1]
+        site = self.agent.sites.get(session.site_id or "")
+        if site is None or site.user_id != session.user_id:
+            return _error(
+                "site_forbidden", "Select an owned site before managing a connection.", 403
+            )
+        if "octopus-energy-account" not in {item["id"] for item in self.agent.catalogue(session)}:
+            return _error("toolkit_forbidden", "Toolkit is outside this session scope.", 403)
+        store = self.agent.auth_store
+        if not isinstance(store, AuthStore):
+            return _error(
+                "connection_storage_unavailable",
+                "Encrypted connection storage is unavailable.",
+                503,
+            )
+        parsed = await self._parse_json(request, _ConnectionActionRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        from .connection_lifecycle import OctopusConnectionLifecycle
+
+        service = OctopusConnectionLifecycle(store, self.agent.http)
+        args = {
+            "user_id": session.user_id,
+            "site_id": site.id,
+            "connection_id": request.path_params["connection_id"],
+        }
+        try:
+            result = await service.verify(**args) if verify else service.disconnect(**args)
+            self.agent._sync_connections(session.user_id)
+            return _json_response(result)
         except EnergyError as exc:
             return self._energy_error(exc)
 

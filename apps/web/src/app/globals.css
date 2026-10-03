@@ -176,6 +176,7 @@ code { overflow-wrap: anywhere; }
 .record-field > span { color: var(--ink-muted); font-size: 9px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .record-field strong { color: var(--ink-soft); font-size: 10px; font-weight: 600; overflow-wrap: anywhere; }
 .record-health { justify-self: end; }
+.connection-actions { grid-column: 1 / -1; min-width: 0; }
 .section-subheading { display: flex; align-items: flex-end; justify-content: space-between; gap: 15px; margin: 31px 0 12px; }
 .section-subheading p { margin-top: 4px; }
 .asset-row { grid-template-columns: minmax(220px, 1.6fr) minmax(110px, .8fr) minmax(120px, .8fr) minmax(110px, .7fr); }

@@ -168,6 +168,27 @@ def schemas() -> dict[str, dict[str, Any]]:
             },
             ["ok", "account", "health"],
         ),
+        "ConnectionVerificationResponse": obj(
+            {
+                "ok": {"const": True},
+                "account": connection,
+                "health": obj(
+                    {
+                        "connection_id": text,
+                        "provider": {"const": "octopus"},
+                        "status": {"enum": ["healthy", "unhealthy"]},
+                        "checked_at": text,
+                        "probe": {"const": "provider-read"},
+                        "message": text,
+                    },
+                    ["connection_id", "provider", "status", "checked_at", "probe", "message"],
+                ),
+            },
+            ["ok", "account", "health"],
+        ),
+        "ConnectionDisconnectedResponse": obj(
+            {"ok": {"const": True}, "account": connection}, ["ok", "account"]
+        ),
         "ConnectionsResponse": obj({"connections": array(connection)}, ["connections"]),
         "ArtifactsResponse": obj({"artifacts": array(record)}, ["artifacts"]),
         "SkillsResponse": obj({"skills": array(skill)}, ["skills"]),

@@ -92,6 +92,8 @@ def create_app(root: Path, *, octopus_fixture: bool = False):
             )
         },
         close_agent_on_shutdown=True,
+        # The scripted acceptance makes many requests in seconds; production keeps 60/min.
+        max_requests_per_minute=300,
     )
 
 

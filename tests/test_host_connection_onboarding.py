@@ -168,6 +168,40 @@ async def test_connect_updates_the_same_rest_and_hosted_mcp_sessions(tmp_path: P
             )
             assert denied.status_code == 404
             assert len(probes) == 3  # Verification, REST execution and the existing MCP session.
+            actions = f"/sessions/{session}/connections/{account['id']}"
+            checked = await client.post(actions + "/verify", headers=auth, json={})
+            assert checked.status_code == 200 and checked.json()["health"]["status"] == "healthy"
+            disconnected = await client.post(actions + "/disconnect", headers=auth, json={})
+            assert (
+                disconnected.status_code == 200
+                and disconnected.json()["account"]["state"] == "revoked"
+            )
+            denied_rest = (
+                await client.post(
+                    f"/sessions/{session}/capability",
+                    headers=auth,
+                    json={"capability": "get_energy_consumption"},
+                )
+            ).json()
+            assert denied_rest["ok"] is False
+            denied_mcp = _rpc(
+                await client.post(
+                    "/mcp/home",
+                    headers=mcp_headers,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 3,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "ENERGY_EXECUTE_CAPABILITY",
+                            "arguments": {"capability": "get_energy_consumption"},
+                        },
+                    },
+                )
+            )
+            assert json.loads(denied_mcp["result"]["content"][0]["text"])["ok"] is False
+            assert len(probes) == 4
+
     finally:
         await agent.close()
         await upstream.aclose()
