@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, readFile, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { EnergyAgentTools, EnergyHttpError } from '../dist/index.js';
@@ -31,7 +31,10 @@ async function startHost() {
     '--token-file', tokenFile,
   ], {
     cwd: root,
-    env: { ...process.env },
+    env: {
+      ...process.env,
+      PYTHONPATH: [join(root, 'src'), process.env.PYTHONPATH].filter(Boolean).join(delimiter),
+    },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
   let exited = false;
