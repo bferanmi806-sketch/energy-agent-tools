@@ -367,3 +367,37 @@ Home Assistant development protocol checks. The [qualification record](evidence/
 preserves the earlier in-progress failure separately from final revision results.
 These checks do not establish private-provider access, physical meter data,
 shared connection ACLs, managed OAuth or sustained operations.
+
+## Managed Home Assistant authorization, October 3
+
+Revision `af84cd2e45b84ede0b3a4cfc8cccb0dcd268c66e` adds native Home Assistant
+authorization through deployment-approved instance configurations. The web app
+starts authorization, verifies the session-bound return, maps a verified sensor
+to an owned site and supports health checks and disconnect. The TypeScript SDK
+uses the same production gateway routes. Entity restrictions apply before token
+refresh or provider requests.
+
+AuthStore schema 2 keeps failed remote revocations in an encrypted durable
+queue. Local disconnect removes execution access before provider I/O. Cleanup
+retries require the current approved provider profile and are bounded; backup
+and restore preserve pending cleanup. A final primary review reproduced old
+profile replay and an unbounded disconnect loop, both fixed with regression
+coverage. The final independent cleanup review did not finish because its worker
+hit the account usage limit.
+
+A frozen-source full suite passed 777 tests. A subsequent browser check exposed
+an authorization form that did not navigate; the final asynchronous submission
+change was separately rebuilt, type-checked and accepted by all 11 production
+web tests. Browser checks then completed authorization, site creation, mapping,
+health and disconnect against disposable synthetic provider fixtures, including
+desktop and mobile layouts and rejection of a mismatched unit. These are
+synthetic connection proofs, not real provider consent.
+
+Installed Home Assistant authorization remains unverified after a startup
+timeout. Exact task-owned Docker resources were removed in follow-up cleanup.
+Generic custom OAuth, MCP authorization discovery, shared membership/ACLs,
+complete managed logs/jobs/settings, broader evaluation, private-site evidence
+and sustained operations remain open. See the
+[qualification record](evidence/managed-home-assistant-oct03.json),
+[desktop view](evidence/managed-home-assistant-desktop.jpg) and
+[mobile view](evidence/managed-home-assistant-mobile.jpg).

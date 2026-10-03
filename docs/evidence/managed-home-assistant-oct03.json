@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-03",
+  "implementation_revision": "af84cd2e45b84ede0b3a4cfc8cccb0dcd268c66e",
+  "scope": "Managed Home Assistant native authorization through the self-hosted REST gateway, TypeScript SDK and web app. Synthetic provider responses and a disposable browser consent page.",
+  "implemented": [
+    "Deployment-approved instance configurations with exact callbacks",
+    "Session-bound web authorization and callback",
+    "Encrypted verified pending mapping, owned site activation and entity restrictions",
+    "Scoped refresh and health checks, local-first disconnect",
+    "Schema 2 durable encrypted remote revocation cleanup and bounded matching-profile retries",
+    "Migration and backup/restore of pending cleanup"
+  ],
+  "validation": {
+    "full_suite_before_final_web_submission_change": {
+      "passed": 777,
+      "failed": 0,
+      "skipped": 0,
+      "duration_seconds": 747.91,
+      "source_sha256": "41cfd082411baba217cd833e3ed1e6ba5cc3150c497b0ba143b31b9d02374166",
+      "source_unchanged": true,
+      "qualification_limit": "The final asynchronous authorization submission changed three web files after this run; it was separately rebuilt and checked below."
+    },
+    "final_web": {
+      "command": "npm run verify --prefix apps/web",
+      "production_build": "passed",
+      "typescript_check": "passed",
+      "production_acceptance_tests": 11,
+      "failed": 0
+    },
+    "sdk": {
+      "command": "npm test --prefix packages/typescript",
+      "passed": 13,
+      "provider": "synthetic"
+    },
+    "static_checks": {
+      "ruff": "passed",
+      "ruff_format_files": 168,
+      "mypy_source_files": 57
+    },
+    "browser": {
+      "provider": "synthetic local consent page; not installed Home Assistant",
+      "journey": [
+        "Sign in and system-first catalogue",
+        "Authorize a reviewed current-power sensor",
+        "Return through session-bound callback to clean pending-mapping URL",
+        "Create site inline and map connection to Active",
+        "Check connection health",
+        "Confirm disconnect and observe Disconnected"
+      ],
+      "desktop_screenshot": "managed-home-assistant-desktop.jpg",
+      "mobile_screenshot": "managed-home-assistant-mobile.jpg",
+      "mobile_viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "negative_mapping": {
+        "input_unit": "W",
+        "provider_unit": "kW",
+        "account_published": false,
+        "exchanges": 1,
+        "provider_reads": 1,
+        "revocations": 1,
+        "pending_cleanup": 0
+      },
+      "successful_run": {
+        "exchanges": 1,
+        "refreshes": 1,
+        "provider_reads": 3,
+        "revocations": 1,
+        "final_account_state": "revoked",
+        "enabled": false,
+        "pending_cleanup": 0
+      },
+      "cleanup": "Task-owned servers stopped, viewport reset, temporary tab closed, one-time token files removed"
+    },
+    "independent_review": {
+      "initial_review": "Identified stranded-grant issue; addressed by durable cleanup",
+      "final_cleanup_review": "Incomplete: worker hit account usage limit",
+      "primary_review": "Reproduced and fixed unbounded disconnect and old-profile replay; regression tests passed"
+    }
+  },
+  "installed_home_assistant_authorization": {
+    "status": "failed_unverified",
+    "version": "2026.9.4",
+    "failure": "Unauthenticated onboarding did not become ready within 300 seconds",
+    "initial_cleanup": "Failed to confirm resource removal",
+    "follow_up_cleanup": "Exact task-owned container, initializer and volume verified absent"
+  },
+  "not_established": [
+    "Real provider consent",
+    "Physical/private-site telemetry",
+    "Generic custom OAuth or automatic MCP authorization discovery",
+    "Shared workspace membership and connection ACLs",
+    "Full product/control-plane completion",
+    "Full project goal completion"
+  ]
+}
