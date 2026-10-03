@@ -7,6 +7,9 @@ gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 
 ## Current audit
 
+Updated through managed workspace source `c31f543`; implementation evidence below
+does not close the separate live, external-review or sustained-operation gates.
+
 | Requirement | Current evidence | Status and next proof |
 | --- | --- | --- |
 | One gateway, Python SDK, scoped MCP, sites/assets/accounts | Runtime, capability resolver, SDK/MCP acceptance and twelve references | Implemented; broader live qualification remains open. |
@@ -21,10 +24,10 @@ gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 | Independently reviewed discovery | 221 development/held-out intents, no independent human reviews | Open; independent relevance review and published measurements needed. |
 | External connector authoring | Connector SDK and first-party examples | Partial; an outside authored connector must qualify through documented interfaces. |
 | Deployment/recovery/load/soak and resilience | CI container, restart, state upgrade and backup/restore checks | Partial; representative sustained deployment and 30-day observations remain open. |
-| Coherent new release with reproducible evidence | Published v0.2.0; current main is unreleased | Open; gate on stable contracts and substantial backend qualification. |
-| First-class TypeScript SDK | No package | Missing; stable REST/MCP transport and cross-language contract tests required. |
-| Connect Apps web product | No application | Missing; structured catalogue, connected apps, shared connections, sites/assets, skills, custom MCP, agent setup, health, accounts, logs, jobs and settings required. |
-| Hosted connection/control plane | Operator-provisioned identities and hosted sessions | Partial; workspaces, key/user management, ACL sharing, persistent tenant state, dynamic MCP sessions, OAuth configuration, events and migrations required. |
+| Coherent new release with reproducible evidence | Published Python v0.3.0 and SDK archive; later web/control-plane source is CI-qualified | Partial; package a matching gateway, SDK and web revision after the next stable product boundary. |
+| First-class TypeScript SDK | REST and official MCP transports, generated contracts, workspace management APIs and 12 acceptance tests | Implemented for current routes; new control-plane APIs need matching SDK coverage and distribution. |
+| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; shared connections, custom MCP, complete managed skills, logs, jobs, account management and settings remain open. |
+| Hosted connection/control plane | Private managed workspaces, bootstrap identities, management/agent keys, encrypted scoped accounts, durable sites/assets, dynamic MCP, migrations and recovery acceptance | Partial; membership, explicit connection sharing ACLs, managed/custom OAuth, events and full observability remain open. |
 | Ecosystem journeys | Existing public, telemetry and engineering connectors with differing qualification | Partial; meters, PV/storage/EV, heat/BMS, industrial/files, engineering engines and reviewed MCP must qualify honestly according to accessible supported scope. |
 | Accurate documentation and evidence | Append-only decisions, archived failures and qualification records | Ongoing; every completion claim needs current source and runnable evidence. |
 
