@@ -1322,6 +1322,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="carbon_intensity_gb.get_intensity",
             toolkit="carbon-intensity-gb",
+            resource_scope="public",
             description="Get current or historical Great Britain carbon intensity, including actual and forecast rows.",
             input_schema=schema(
                 {
@@ -1347,6 +1348,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="open_meteo.get_forecast",
             toolkit="open-meteo",
+            resource_scope="public",
             description="Get hourly weather and solar radiation forecast values for a latitude and longitude.",
             input_schema=schema(
                 {
@@ -1375,6 +1377,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="octopus_energy.get_consumption",
             toolkit="octopus-energy-account",
+            resource_scope="account",
             description="Read Octopus electricity meter consumption using meter identifiers from the connected account.",
             input_schema=schema(
                 {
@@ -1403,6 +1406,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="octopus_energy.get_tariffs",
             toolkit="octopus-energy",
+            resource_scope="public",
             description="Read Octopus published electricity unit rates using product and tariff settings.",
             input_schema=schema(
                 {
@@ -1427,6 +1431,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="home_assistant.get_state",
             toolkit="home-assistant",
+            resource_scope="account",
             description="Read one Home Assistant entity state and its measurement attributes.",
             input_schema=schema({"entity_id": {"type": "string"}}, required=["entity_id"]),
             capabilities=["get_current_power", "telemetry", "home", "building", "sensor"],
@@ -1438,6 +1443,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="home_assistant.get_history",
             toolkit="home-assistant",
+            resource_scope="account",
             description="Read Home Assistant historical state changes for one entity and a bounded UTC range.",
             input_schema=schema(
                 {
@@ -1464,6 +1470,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="openenergymonitor.get_feed",
             toolkit="openenergymonitor",
+            resource_scope="account",
             description="Read an OpenEnergyMonitor Emoncms feed value or bounded time series.",
             input_schema=schema(
                 {
@@ -1493,6 +1500,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="elexon.get_grid_data",
             toolkit="elexon",
+            resource_scope="public",
             description="Read public Elexon Insights generation, demand or forecast datasets in MW.",
             input_schema=schema(
                 {

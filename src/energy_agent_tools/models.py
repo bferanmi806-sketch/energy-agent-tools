@@ -174,6 +174,7 @@ class Asset(StrictModel):
 class Session(StrictModel):
     id: str = Field(default_factory=lambda: uuid4().hex)
     user_id: str
+    access_mode: Literal["local", "hosted"] = "local"
     site_id: str | None = None
     toolkits: set[str] | None = None
     allowed_actions: set[Action] = Field(
@@ -197,6 +198,9 @@ class Toolkit(StrictModel):
 class Tool(StrictModel):
     name: str
     toolkit: str
+    resource_scope: Literal["unclassified", "operator", "public", "account", "session"] = (
+        "unclassified"
+    )
     description: str
     input_schema: Json
     capabilities: list[str]

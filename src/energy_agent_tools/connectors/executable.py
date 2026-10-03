@@ -362,6 +362,7 @@ class ExecutableAdapter:
             capabilities=list(self.capabilities),
             actions=set(self.actions),
             idempotent=idempotent,
+            resource_scope="operator",
         )
         registry.add(self.tool, self._execute)
 

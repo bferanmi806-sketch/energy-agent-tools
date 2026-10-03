@@ -70,6 +70,7 @@ def register(registry: Registry) -> None:
             ),
             capabilities=["analyse_timeseries"],
             actions={Action.CALCULATE},
+            resource_scope="session",
         ),
         window,
     )
@@ -188,6 +189,7 @@ def register(registry: Registry) -> None:
                 input_schema=inputs,
                 capabilities=capabilities,
                 actions={Action.CALCULATE},
+                resource_scope="session",
             ),
             handler,
         )
@@ -279,6 +281,7 @@ def register(registry: Registry) -> None:
                 "compare_energy_data",
             ],
             actions={Action.CALCULATE},
+            resource_scope="session",
         ),
         energy_operation,
     )
@@ -385,6 +388,7 @@ def register_csv(registry: Registry, root: Path) -> None:
                 "get_storage_state",
                 "import_timeseries",
             ],
+            resource_scope="operator",
             input_schema=schema(
                 {
                     "file": {"type": "string"},

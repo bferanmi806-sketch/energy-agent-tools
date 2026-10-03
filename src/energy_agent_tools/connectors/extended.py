@@ -1353,6 +1353,7 @@ def register_energyplus(registry: Registry, executable: Path, model_root: Path) 
         Tool(
             name="energyplus.run_simulation",
             toolkit="energyplus",
+            resource_scope="operator",
             description="Run one operator-owned EnergyPlus model with fixed arguments and bounded runtime.",
             input_schema=schema(
                 {
@@ -1399,6 +1400,7 @@ def register(registry: Registry, *, data_root: Path | None = None) -> None:
         Tool(
             name="neso.search_datasets",
             toolkit="neso",
+            resource_scope="public",
             description="Search the NESO public CKAN dataset catalogue.",
             input_schema=schema(
                 {
@@ -1418,6 +1420,7 @@ def register(registry: Registry, *, data_root: Path | None = None) -> None:
         Tool(
             name="neso.query_dataset",
             toolkit="neso",
+            resource_scope="public",
             description="Read a bounded NESO datastore resource by package, resource, scalar filters, and row limit.",
             input_schema=schema(
                 {
@@ -1463,6 +1466,7 @@ def register(registry: Registry, *, data_root: Path | None = None) -> None:
         Tool(
             name="electricitymaps.get_signal",
             toolkit="electricitymaps",
+            resource_scope="account",
             description="Read one fixed Electricity Maps v4 signal with provider units and estimation flags preserved.",
             input_schema=schema(
                 {
@@ -1508,6 +1512,7 @@ def register(registry: Registry, *, data_root: Path | None = None) -> None:
         Tool(
             name="entsoe.get_timeseries",
             toolkit="entsoe",
+            resource_scope="account",
             description="Read one ENTSO-E time series by document, process, area, and UTC interval.",
             input_schema=schema(
                 {
@@ -1553,6 +1558,7 @@ def register(registry: Registry, *, data_root: Path | None = None) -> None:
         Tool(
             name="windpowerlib.estimate_generation",
             toolkit="windpowerlib",
+            resource_scope="session",
             description="Estimate wind generation using windpowerlib's offline packaged data or an explicit power curve.",
             input_schema=schema(
                 {
@@ -1617,6 +1623,7 @@ def register(registry: Registry, *, data_root: Path | None = None) -> None:
         Tool(
             name="sqlite.read_timeseries",
             toolkit="sqlite",
+            resource_scope="operator",
             description="Read a bounded operator-owned SQLite table with explicit timestamp and value columns.",
             input_schema=schema(
                 {

@@ -236,7 +236,7 @@ class CapabilityResolver:
             tool = self.agent.registry.get(binding.tool)
             if not binding.reviewed or not tool.reviewed:
                 continue
-            if session.toolkits is not None and tool.toolkit not in session.toolkits:
+            if not self.agent._tool_visible(session, tool):
                 continue
             if binding.account_id:
                 account = self.agent.accounts.get(binding.account_id)
@@ -289,7 +289,7 @@ class CapabilityResolver:
             tool = self.agent.registry.get(binding.tool)
             if request.tool and request.tool != tool.name:
                 continue
-            if session.toolkits is not None and tool.toolkit not in session.toolkits:
+            if not self.agent._tool_visible(session, tool):
                 continue
             if binding.asset_id:
                 binding_asset = self.agent.assets[binding.asset_id]
@@ -331,7 +331,10 @@ class CapabilityResolver:
                     reasons.append("policy_denied")
                 if self.agent.registry.toolkits[tool.toolkit].status == "unavailable":
                     reasons.append("provider_unavailable")
-                if account is None and self.agent.registry.toolkits[tool.toolkit].auth_required:
+                if account is None and (
+                    self.agent.registry.toolkits[tool.toolkit].auth_required
+                    or tool.resource_scope == "account"
+                ):
                     reasons.append("connection_required")
                 if (selected or binding.account_id) and account is None:
                     reasons.append("account_unavailable")

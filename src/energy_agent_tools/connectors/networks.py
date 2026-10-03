@@ -902,6 +902,7 @@ def register(registry: Registry) -> None:
             result_kind=DataKind.SIMULATED,
             result_unit="MW, Mvar, pu, degree",
             dependencies=["pypsa"],
+            resource_scope="session",
         ),
         pypsa_power_flow,
     )
@@ -927,6 +928,7 @@ def register(registry: Registry) -> None:
             result_kind=DataKind.SIMULATED,
             result_unit="bar, K, kg/s, m/s",
             dependencies=["pandapipes"],
+            resource_scope="session",
         ),
         pandapipes_pipeflow,
     )

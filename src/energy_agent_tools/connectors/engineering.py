@@ -1344,6 +1344,7 @@ def register(registry: Registry) -> None:
                 "estimate_solar_generation",
             ],
             actions={Action.CALCULATE, Action.SIMULATE},
+            resource_scope="session",
         ),
         estimate_solar_generation,
     )
@@ -1364,6 +1365,7 @@ def register(registry: Registry) -> None:
                 "run_simulation",
             ],
             actions={Action.SIMULATE},
+            resource_scope="session",
         ),
         run_power_flow,
     )
@@ -1381,6 +1383,7 @@ def register(registry: Registry) -> None:
                 "perform_engineering_calculation",
             ],
             actions={Action.CALCULATE},
+            resource_scope="session",
         ),
         calculate_heat_loss,
     )
@@ -1401,6 +1404,7 @@ def register(registry: Registry) -> None:
                 "perform_engineering_calculation",
             ],
             actions={Action.CALCULATE, Action.SIMULATE},
+            resource_scope="session",
         ),
         schedule_battery_charging,
     )

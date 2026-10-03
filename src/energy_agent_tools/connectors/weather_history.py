@@ -206,6 +206,7 @@ def register(registry: Registry) -> None:
         Tool(
             name="open_meteo.get_historical_temperature",
             toolkit="open-meteo",
+            resource_scope="public",
             description=(
                 "Get bounded hourly historical 2 m air temperature from Open-Meteo gridded "
                 "analysis/reanalysis data."

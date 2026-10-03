@@ -312,6 +312,7 @@ def register(registry: Registry, root: Path) -> None:
                 input_schema=input_schema,
                 capabilities=["large_timeseries"],
                 actions={action},
+                resource_scope="operator" if name == "DATASET_IMPORT_CSV" else "session",
             ),
             handler,
         )

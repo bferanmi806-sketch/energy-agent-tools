@@ -46,6 +46,7 @@ def register(registry: Registry) -> None:
             actions={Action.CALCULATE},
             result_kind=DataKind.FORECAST,
             result_unit="kWh",
+            resource_scope="session",
             input_schema=schema(
                 {
                     "history_artifact": artifact,
@@ -96,6 +97,7 @@ def register(registry: Registry) -> None:
             capabilities=["explain_consumption_spike"],
             actions={Action.CALCULATE},
             result_kind=DataKind.CALCULATED,
+            resource_scope="session",
             input_schema=schema(
                 {
                     "consumption_artifact": artifact,
@@ -147,6 +149,7 @@ def register(registry: Registry) -> None:
             actions={Action.CALCULATE},
             result_kind=DataKind.CALCULATED,
             result_unit="mixed",
+            resource_scope="session",
             input_schema=schema(
                 {
                     "generation_artifact": artifact,
@@ -194,6 +197,7 @@ def register(registry: Registry) -> None:
             capabilities=["estimate_forecast_bill"],
             actions={Action.CALCULATE},
             result_kind=DataKind.CALCULATED,
+            resource_scope="session",
             input_schema=schema(
                 {
                     "forecast_artifact": artifact,

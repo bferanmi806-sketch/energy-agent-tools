@@ -805,6 +805,12 @@ async def import_mcp(
     ``True`` and ``kind``, ``unit`` and ``action``/``actions`` are all present.
     Other tools default to ``configuration-write`` and ``estimated``.
 
+    Every imported MCP tool is classified as operator-scoped. This includes
+    imports with no configured credentials: the server may still expose
+    operator-selected data or capabilities. Hosted sessions therefore cannot
+    call imported tools until a separate reviewed contract supports public or
+    tenant-owned MCP resources. Local sessions retain the existing behavior.
+
     The returned toolkit contains namespaced tools (``<toolkit_id>.<name>``).
     Names remain stable across versions; the toolkit and tools carry the
     operator supplied ``version`` metadata.  Set ``expected_schema_digest`` to
@@ -1050,6 +1056,7 @@ async def import_mcp(
                 Tool(
                     name=namespaced_name,
                     toolkit=toolkit_id,
+                    resource_scope="operator",
                     description=remote_description,
                     input_schema=input_schema,
                     capabilities=list(imported_metadata.capabilities),

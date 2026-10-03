@@ -63,6 +63,7 @@ class Registry:
         limit: int = 5,
         *,
         scoped_capabilities: Mapping[str, list[str]] | None = None,
+        allowed_tool_names: set[str] | None = None,
     ) -> list[Tool]:
         words = set(re.findall(r"[a-z0-9]+", query.lower()))
         synonyms = {
@@ -105,6 +106,8 @@ class Registry:
         frequencies = {word: len(names) for word, names in postings.items()}
         matches = set().union(*postings.values())
         for name in matches:
+            if allowed_tool_names is not None and name not in allowed_tool_names:
+                continue
             tool = self.tools[name]
             if allowed is not None and tool.toolkit not in allowed:
                 continue

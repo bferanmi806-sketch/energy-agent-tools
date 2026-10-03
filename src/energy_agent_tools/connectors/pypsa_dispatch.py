@@ -458,6 +458,7 @@ def register(registry: Registry) -> None:
             result_kind=DataKind.SIMULATED,
             result_unit="MW, caller currency/hour",
             dependencies=["pypsa", "highspy"],
+            resource_scope="session",
         ),
         optimize_dispatch,
     )

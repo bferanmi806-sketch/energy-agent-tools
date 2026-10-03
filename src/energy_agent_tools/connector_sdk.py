@@ -54,7 +54,7 @@ def register(registry):
     registry.add_toolkit(Toolkit(id="TOOLKIT", name="TOOLKIT", description="Reviewed local connector", runtime="native", status="experimental", version="1.0.0"))
     async def calculate(arguments, context):
         return EnergyResult(data={"energy_kwh": arguments["power_kw"] * arguments["hours"]}, kind=DataKind.CALCULATED, unit="kWh", source="TOOLKIT", assumptions=["Constant average power over the supplied duration."])
-    registry.add(Tool(name="TOOLKIT.calculate_energy", toolkit="TOOLKIT", description="Calculate energy from explicit average power and duration", input_schema=schema({"power_kw": {"type": "number", "minimum": 0}, "hours": {"type": "number", "exclusiveMinimum": 0}}, ["power_kw", "hours"]), capabilities=["calculate_energy"], actions={Action.CALCULATE}, result_kind=DataKind.CALCULATED, result_unit="kWh"), calculate)
+    registry.add(Tool(name="TOOLKIT.calculate_energy", toolkit="TOOLKIT", resource_scope="session", description="Calculate energy from explicit average power and duration", input_schema=schema({"power_kw": {"type": "number", "minimum": 0}, "hours": {"type": "number", "exclusiveMinimum": 0}}, ["power_kw", "hours"]), capabilities=["calculate_energy"], actions={Action.CALCULATE}, result_kind=DataKind.CALCULATED, result_unit="kWh"), calculate)
 """.replace("TOOLKIT", toolkit)
     with target.open("x") as stream:
         stream.write(source)

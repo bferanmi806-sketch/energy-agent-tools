@@ -1166,6 +1166,18 @@ export const SearchResponseSchema = {
             "title": "Toolkit",
             "type": "string"
           },
+          "resource_scope": {
+            "default": "unclassified",
+            "enum": [
+              "unclassified",
+              "operator",
+              "public",
+              "account",
+              "session"
+            ],
+            "title": "Resource Scope",
+            "type": "string"
+          },
           "description": {
             "title": "Description",
             "type": "string"

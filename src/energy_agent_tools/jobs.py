@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 try:
@@ -111,6 +111,7 @@ _TERMINAL_STATES = {
 }
 _MAX_SUPPORTED_CONCURRENCY = 2
 _INPUT_SCHEMA_VERSION = 1
+AccessMode = Literal["local", "hosted"]
 _SECRET_KEYS = {
     "authorization",
     "apikey",
@@ -144,6 +145,7 @@ class JobRecord:
     user_id: str
     session_id: str
     site_id: str | None
+    access_mode: AccessMode
     operation: SimulationOperation
     status: JobStatus
     created_at: str
@@ -162,6 +164,7 @@ class JobRecord:
             "user_id": self.user_id,
             "session_id": self.session_id,
             "site_id": self.site_id,
+            "access_mode": self.access_mode,
             "operation": self.operation.value,
             "status": self.status.value,
             "created_at": self.created_at,
@@ -186,6 +189,15 @@ def _validate_identity(value: str, name: str) -> str:
     if any(ord(char) < 32 for char in value):
         raise JobError("invalid_identity", f"{name} contains a control character.")
     return value
+
+
+def _validate_access_mode(value: object) -> AccessMode:
+    if type(value) is str:
+        if value == "local":
+            return "local"
+        if value == "hosted":
+            return "hosted"
+    raise JobError("invalid_access_mode", "Access mode must be local or hosted.")
 
 
 def _normal_key(key: str) -> str:
@@ -393,15 +405,28 @@ class JobManager:
                     finished_at TEXT,
                     pid INTEGER,
                     error_code TEXT,
-                    error_message TEXT
+                    error_message TEXT,
+                    access_mode TEXT NOT NULL DEFAULT 'local'
+                        CHECK (access_mode IN ('local', 'hosted'))
                 );
                 CREATE INDEX IF NOT EXISTS jobs_user_session_idx ON jobs (user_id, session_id, created_at);
                 CREATE INDEX IF NOT EXISTS jobs_pending_idx ON jobs (status, created_at);
                 """
             )
-            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(jobs)")}
-            if "site_id" not in columns:
-                connection.execute("ALTER TABLE jobs ADD COLUMN site_id TEXT")
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(jobs)")}
+                if "site_id" not in columns:
+                    connection.execute("ALTER TABLE jobs ADD COLUMN site_id TEXT")
+                if "access_mode" not in columns:
+                    connection.execute(
+                        "ALTER TABLE jobs ADD COLUMN access_mode TEXT NOT NULL DEFAULT 'local' "
+                        "CHECK (access_mode IN ('local', 'hosted'))"
+                    )
+                connection.commit()
+            except BaseException:
+                connection.rollback()
+                raise
             self._migrate_operations(connection)
         if self.database_path.exists():
             _chmod_private(self.database_path, stat.S_IRUSR | stat.S_IWUSR)
@@ -565,11 +590,16 @@ class JobManager:
 
     @staticmethod
     def _record(row: sqlite3.Row) -> JobRecord:
+        try:
+            access_mode = _validate_access_mode(row["access_mode"])
+        except JobError:
+            raise JobAccessDenied() from None
         return JobRecord(
             job_id=str(row["job_id"]),
             user_id=str(row["user_id"]),
             session_id=str(row["session_id"]),
             site_id=row["site_id"],
+            access_mode=access_mode,
             operation=SimulationOperation(str(row["operation"])),
             status=JobStatus(str(row["status"])),
             created_at=str(row["created_at"]),
@@ -594,10 +624,12 @@ class JobManager:
         arguments: Mapping[str, Any],
         *,
         site_id: str | None = None,
+        access_mode: AccessMode = "local",
     ) -> JobRecord:
         """Persist a validated pending job and return its scoped identifier."""
 
         self._ensure_open()
+        access_mode = _validate_access_mode(access_mode)
         user_id = _validate_identity(user_id, "user_id")
         session_id = _validate_identity(session_id, "session_id")
         if site_id is not None:
@@ -658,8 +690,8 @@ class JobManager:
                     """
                     INSERT INTO jobs (
                         job_id, user_id, session_id, site_id, operation, status,
-                        input_path, output_path, state_dir, input_bytes, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        input_path, output_path, state_dir, input_bytes, created_at, access_mode
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         job_id,
@@ -673,6 +705,7 @@ class JobManager:
                         str(state_dir),
                         len(payload),
                         now,
+                        access_mode,
                     ),
                 )
                 connection.commit()
@@ -717,7 +750,13 @@ class JobManager:
 
     get_result = result
 
-    def resume_scope(self, job_id: str, user_id: str) -> dict[str, str | None]:
+    def resume_scope(
+        self,
+        job_id: str,
+        user_id: str,
+        *,
+        access_mode: AccessMode = "local",
+    ) -> dict[str, str | None]:
         """Recover only the original session/site scope after a host restart.
 
         This deliberately returns no arguments, result, or private paths.  The
@@ -725,9 +764,17 @@ class JobManager:
         for ``user_id`` before recreating a session.
         """
 
+        try:
+            access_mode = _validate_access_mode(access_mode)
+        except JobError:
+            raise JobAccessDenied() from None
         _validate_identity(user_id, "user_id")
         row = self._row(job_id)
-        if row["user_id"] != user_id:
+        try:
+            stored_access_mode = _validate_access_mode(row["access_mode"])
+        except JobError:
+            raise JobAccessDenied() from None
+        if row["user_id"] != user_id or stored_access_mode != access_mode:
             raise JobAccessDenied()
         return {
             "job_id": str(row["job_id"]),

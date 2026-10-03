@@ -33,6 +33,7 @@ def _agent(tmp_path: Path) -> EnergyAgent:
     registry.add(
         Tool(
             name="FIXTURE_ENERGY",
+            resource_scope="session",
             toolkit="fixture",
             description="Read fixture energy",
             input_schema=schema({"value": {"type": "number"}}, ["value"]),

@@ -228,6 +228,7 @@ class EnergyAgent:
                     SimulationOperation(simulation or ""),
                     arguments or {},
                     site_id=session.site_id,
+                    access_mode=session.access_mode,
                 )
                 if self._job_task is None or self._job_task.done():
                     self._job_task = asyncio.create_task(manager.run_pending())
@@ -248,7 +249,9 @@ class EnergyAgent:
             else:
                 if not job_id:
                     raise EnergyError("job_required", "Provide a job identifier.")
-                scope = manager.resume_scope(job_id, session.user_id)
+                scope = manager.resume_scope(
+                    job_id, session.user_id, access_mode=session.access_mode
+                )
                 if scope["site_id"] != session.site_id:
                     raise EnergyError("site_forbidden", "Job belongs to a different site.")
                 record = manager.status(job_id, session.user_id, scope["session_id"] or "")
@@ -289,11 +292,18 @@ class EnergyAgent:
         if session.toolkits is not None and not session.toolkits <= self.registry.toolkits.keys():
             raise EnergyError("unknown_toolkit", "Session includes an unknown toolkit.")
 
+    @staticmethod
+    def _tool_visible(session: Session, tool: Tool) -> bool:
+        return (session.toolkits is None or tool.toolkit in session.toolkits) and (
+            session.access_mode == "local"
+            or tool.resource_scope in {"public", "account", "session"}
+        )
+
     def get_tool(self, session: Session, name: str) -> Json:
         self._scope(session)
         tool = self.registry.get(name)
-        if session.toolkits is not None and tool.toolkit not in session.toolkits:
-            raise EnergyError("tool_forbidden", "Tool is outside this session's toolkit scope.")
+        if not self._tool_visible(session, tool):
+            raise EnergyError("tool_forbidden", "Tool is outside this session's resource scope.")
         data = tool.public()
         data["capabilities"] = sorted(
             set(data["capabilities"])
@@ -313,6 +323,11 @@ class EnergyAgent:
             session.toolkits,
             max(limit, 10),
             scoped_capabilities=self.resolver.scoped_capabilities(session),
+            allowed_tool_names={
+                tool.name
+                for tool in self.registry.tools.values()
+                if self._tool_visible(session, tool)
+            },
         )
 
         def availability(tool: Tool) -> int:
@@ -320,6 +335,8 @@ class EnergyAgent:
                 return 0
             try:
                 account = self._account(session, tool.toolkit)
+                if account is None and tool.resource_scope == "account":
+                    return 0
                 return 1 if account is None or self.credential_available(account) else 0
             except EnergyError:
                 return 0
@@ -368,12 +385,14 @@ class EnergyAgent:
     def connections(self, session: Session) -> list[Json]:
         self._scope(session)
         self._sync_connections(session.user_id)
+        visible_toolkits = {item["id"] for item in self.catalogue(session)}
         return [
             a.public()
             for a in self.accounts.values()
             if a.user_id == session.user_id
             and (session.site_id is None or a.site_id == session.site_id)
             and (session.toolkits is None or a.toolkit in session.toolkits)
+            and (session.access_mode == "local" or a.toolkit in visible_toolkits)
         ]
 
     def _account(
@@ -412,6 +431,11 @@ class EnergyAgent:
             raise EnergyError("unknown_toolkit", "Toolkit does not exist.")
         if session.toolkits is not None and toolkit not in session.toolkits:
             raise EnergyError("tool_forbidden", "Toolkit is outside this session.")
+        if session.access_mode == "hosted" and not any(
+            tool.toolkit == toolkit and self._tool_visible(session, tool)
+            for tool in self.registry.tools.values()
+        ):
+            raise EnergyError("tool_forbidden", "Toolkit is outside this session's resource scope.")
         account = self._account(session, toolkit, account_id)
         assert account is not None
         session.account_ids[toolkit] = account.id
@@ -493,6 +517,8 @@ class EnergyAgent:
                     "Execution hooks changed a fixed capability argument.",
                 )
             account = self._account(session, tool.toolkit, account_id)
+            if tool.resource_scope == "account" and account is None:
+                raise EnergyError("connection_required", "An owned connection is required.")
             credential = None
             if account and account.auth.secret_id:
                 if not self.auth_store:
@@ -773,10 +799,16 @@ class EnergyAgent:
 
     def catalogue(self, session: Session) -> list[Json]:
         self._scope(session)
+        visible_toolkits = {
+            tool.toolkit
+            for tool in self.registry.tools.values()
+            if self._tool_visible(session, tool)
+        }
         return [
             t.model_dump(mode="json")
             for t in self.registry.toolkits.values()
-            if session.toolkits is None or t.id in session.toolkits
+            if (session.toolkits is None or t.id in session.toolkits)
+            and (session.access_mode == "local" or t.id in visible_toolkits)
         ]
 
     def write_manifests(self, path: Path) -> None:

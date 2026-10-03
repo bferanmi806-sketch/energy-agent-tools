@@ -122,6 +122,7 @@ def register(registry: Registry) -> None:
     registry.add(
         Tool(
             name="WORKBENCH_AGGREGATE_ENERGY",
+            resource_scope="session",
             toolkit="workbench",
             description="Stream complete metered interval energy into aligned larger intervals, retaining observed measurement lineage; refuse gaps and any required splitting.",
             input_schema=schema(

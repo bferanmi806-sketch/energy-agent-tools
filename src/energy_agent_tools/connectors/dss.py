@@ -746,6 +746,7 @@ def register(registry: Registry) -> None:
             result_kind=DataKind.SIMULATED,
             result_unit="kW, kvar, A, pu, degree",
             dependencies=["opendssdirect"],
+            resource_scope="session",
         ),
         power_flow,
     )

@@ -520,7 +520,7 @@ class AuthenticatedHost:
             if principal.allowed_site_ids and len(available) != len(principal.allowed_site_ids):
                 raise ValueError("Principal includes a site outside the agent's ownership map.")
             for site_id in available:
-                session = self.agent.session(principal.user_id, site_id)
+                session = self.agent.session(principal.user_id, site_id, access_mode="hosted")
                 server = create_server(cast(EnergyAgent, proxy), session)
                 # Bound the official MCP manager as well as the outer HTTP
                 # application.  These settings are read when the app is built.
@@ -873,7 +873,7 @@ class AuthenticatedHost:
         if len(self._sessions) >= self.max_sessions_global:
             return _error("global_session_limit", "Maximum sessions reached.", 429)
         try:
-            session = self.agent.session(principal_value.user_id, site_id)
+            session = self.agent.session(principal_value.user_id, site_id, access_mode="hosted")
             if data.resume_job_id:
                 resumed = await self.agent.job(session, "resume", job_id=data.resume_job_id)
                 if not resumed["ok"]:

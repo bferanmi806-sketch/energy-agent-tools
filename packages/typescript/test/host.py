@@ -81,6 +81,7 @@ def create_app(state_dir: Path | str) -> AuthenticatedHost:
     registry.add(
         Tool(
             name=TOOL_NAME,
+            resource_scope="session",
             toolkit="fixture_local",
             description="Calculate a deterministic fixture energy value locally.",
             input_schema={
