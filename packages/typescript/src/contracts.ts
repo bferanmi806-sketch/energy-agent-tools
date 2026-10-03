@@ -4,6 +4,11 @@ import type { FromSchema } from "json-schema-to-ts";
 export const IdentityResponseSchema = {
   "additionalProperties": false,
   "properties": {
+    "can_manage_connections": {
+      "default": false,
+      "title": "Can Manage Connections",
+      "type": "boolean"
+    },
     "user_id": {
       "title": "User Id",
       "type": "string"
@@ -156,6 +161,22 @@ export const ConnectionSetupsResponseSchema = {
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "management_key_required",
+                  "storage_unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unavailable Reason"
           },
           "fields": {
             "items": {

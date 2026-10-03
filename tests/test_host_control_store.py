@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from energy_agent_tools.control_contracts import AgentKeyAccess, ManageKeyAccess
 from energy_agent_tools.control_store import ControlStore
 from energy_agent_tools.hosting import Principal, create_host, token_digest
 from energy_agent_tools.models import Site
@@ -24,8 +25,12 @@ async def test_persisted_keys_scope_rest_and_mcp_and_revoke_on_open_host(tmp_pat
     ]
     store.put_site("one", first.id, sites[0])
     store.put_site("one", second.id, sites[1])
-    first_key = store.create_key("one", first.id, "First agent")
-    second_key = store.create_key("one", second.id, "Second agent")
+    first_key = store.create_key(
+        "one", first.id, "First agent", access=AgentKeyAccess(site_ids=["home"])
+    )
+    second_key = store.create_key(
+        "one", second.id, "Second agent", access=AgentKeyAccess(site_ids=["workshop"])
+    )
     agent = EnergyAgent(Registry(), tmp_path / "agent", sites=sites)
     policy = {"one": Principal("one", {"home", "workshop"}, token_digest("operator-test-token"))}
     host = create_host(agent, policy, control_store=store)
@@ -71,7 +76,7 @@ async def test_persisted_key_cannot_widen_operator_policy_or_get_siteless_mount(
     store = ControlStore(tmp_path / "control")
     store.create_user("one", "One")
     workspace = store.create_workspace("one", "Unmapped")
-    key = store.create_key("one", workspace.id, "Agent")
+    key = store.create_key("one", workspace.id, "Agent", access=ManageKeyAccess())
     home = Site(id="home", user_id="one", name="Home", timezone="UTC")
     denied = Site(id="denied", user_id="one", name="Private site", timezone="UTC")
     agent = EnergyAgent(Registry(), tmp_path / "agent", sites=[home, denied])
@@ -104,7 +109,7 @@ async def test_store_key_digest_in_operator_config_cannot_bypass_revocation(tmp_
     workspace = store.create_workspace("one", "Home")
     site = Site(id="home", user_id="one", name="Home", timezone="UTC")
     store.put_site("one", workspace.id, site)
-    key = store.create_key("one", workspace.id, "Agent")
+    key = store.create_key("one", workspace.id, "Agent", access=AgentKeyAccess(site_ids=["home"]))
     agent = EnergyAgent(Registry(), tmp_path / "agent", sites=[site])
     host = create_host(
         agent, {"one": Principal("one", {"home"}, token_digest(key.token))}, control_store=store

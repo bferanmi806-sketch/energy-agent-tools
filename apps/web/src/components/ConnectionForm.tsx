@@ -95,7 +95,9 @@ export function ConnectionForm({ setup, siteName }: ConnectionFormProps) {
         <p className="notice notice-neutral" role="status" style={{ margin: 0 }}>
           {!siteName
             ? "Choose a site in the workbench before adding a connection."
-            : "Encrypted connection storage is unavailable. Ask the gateway operator to enable it."}
+            : setup.unavailable_reason === "management_key_required"
+              ? "Use a workspace management key to add connections."
+              : "Encrypted connection storage is unavailable. Ask the gateway operator to enable it."}
         </p>
       ) : null}
 

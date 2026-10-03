@@ -25,6 +25,7 @@ class ConnectionSetup(_ConnectionModel):
     provider: Literal["octopus"]
     description: StrictStr
     enabled: StrictBool
+    unavailable_reason: Literal["management_key_required", "storage_unavailable"] | None = None
     fields: list[ConnectionField]
 
 
@@ -39,12 +40,17 @@ class OctopusConnectionRequest(_ConnectionModel):
     serial_number: StrictStr = Field(min_length=1, max_length=120, pattern=r"^[A-Za-z0-9._~-]+$")
 
 
-def octopus_setup(*, enabled: bool) -> ConnectionSetup:
+def octopus_setup(
+    *,
+    enabled: bool,
+    unavailable_reason: Literal["management_key_required", "storage_unavailable"] | None = None,
+) -> ConnectionSetup:
     return ConnectionSetup(
         toolkit_id="octopus-energy-account",
         provider="octopus",
         description="Verify your Octopus API key and electricity meter, then connect it to the selected site.",
         enabled=enabled,
+        unavailable_reason=unavailable_reason,
         fields=[
             ConnectionField(
                 name="credential",

@@ -7,6 +7,7 @@ assets. It does not implement workspace membership or shared access control.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import secrets
 import sqlite3
@@ -17,8 +18,14 @@ from pathlib import Path
 from typing import NoReturn
 from uuid import uuid4
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, field_validator
 
+from .control_contracts import (
+    AgentKeyAccess,
+    IssuableKeyAccess,
+    KeyAccess,
+    ManageKeyAccess,
+)
 from .models import Asset, EnergyError, Site, StrictModel
 
 __all__ = [
@@ -30,7 +37,10 @@ __all__ = [
     "WorkspaceRecord",
 ]
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+_LEGACY_ACCESS_JSON = '{"kind":"legacy-agent"}'
+_ISSUABLE_ACCESS_ADAPTER: TypeAdapter[IssuableKeyAccess] = TypeAdapter(IssuableKeyAccess)
+_KEY_ACCESS_ADAPTER: TypeAdapter[KeyAccess] = TypeAdapter(KeyAccess)
 _TOKEN_PATTERN = re.compile(r"eat_[A-Za-z0-9_-]{43}\Z")
 _MAX_TEXT_LENGTH = 256
 _MAX_TOKEN_LENGTH = 4096
@@ -60,6 +70,7 @@ class KeyRecord(_ControlRecord):
     expires_at: datetime | None
     revoked: bool
     token_prefix: str = Field(min_length=1, max_length=16)
+    access: KeyAccess
 
     @field_validator("created_at", "expires_at")
     @classmethod
@@ -80,6 +91,7 @@ class KeyIdentity(_ControlRecord):
     user_id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
     workspace_id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
     key_id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
+    access: KeyAccess
 
 
 def _error(code: str, message: str) -> EnergyError:
@@ -128,6 +140,33 @@ def _datetime(value: str | None) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
+def _access_json(access: KeyAccess) -> str:
+    """Serialize an access grant deterministically without secret material."""
+    return json.dumps(access.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+
+
+def _parse_access(value: str) -> KeyAccess:
+    try:
+        return _KEY_ACCESS_ADAPTER.validate_json(value)
+    except (ValidationError, TypeError, ValueError):
+        raise RuntimeError("Control store contains invalid key access.") from None
+
+
+def _validate_issuable_access(access: IssuableKeyAccess) -> ManageKeyAccess | AgentKeyAccess:
+    # The public API accepts the explicit grant models, never dictionaries or a
+    # legacy grant. Reparse the JSON so even model_construct() instances cannot
+    # bypass the grant constraints.
+    if type(access) not in (ManageKeyAccess, AgentKeyAccess):
+        _invalid_request()
+    try:
+        validated = _ISSUABLE_ACCESS_ADAPTER.validate_json(access.model_dump_json())
+    except (ValidationError, TypeError, ValueError):
+        _invalid_request()
+    if type(validated) not in (ManageKeyAccess, AgentKeyAccess):
+        _invalid_request()
+    return validated
+
+
 class ControlStore:
     """Persistent owner-private identities and energy site records."""
 
@@ -155,7 +194,7 @@ class ControlStore:
             version = int(db.execute("PRAGMA user_version").fetchone()[0])
             if version > _SCHEMA_VERSION:
                 raise RuntimeError("Control store schema is newer than this version supports.")
-            if version not in (0, _SCHEMA_VERSION):
+            if version not in (0, 1, _SCHEMA_VERSION):
                 raise RuntimeError("Control store schema version is unsupported.")
 
             db.execute("PRAGMA foreign_keys = ON")
@@ -168,9 +207,20 @@ class ControlStore:
             if version == 0:
                 for statement in _SCHEMA_V1:
                     db.execute(statement)
-                db.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
-            elif version != _SCHEMA_VERSION:
+                db.execute("PRAGMA user_version = 1")
+                version = 1
+            elif version not in (1, _SCHEMA_VERSION):
                 raise RuntimeError("Control store schema version is unsupported.")
+            if version == 1:
+                db.execute(
+                    "ALTER TABLE api_keys ADD COLUMN access_json TEXT NOT NULL "
+                    f"DEFAULT '{_LEGACY_ACCESS_JSON}'"
+                )
+                # SQLite fills existing rows with the column default. Keep the
+                # explicit update to make the migration intent clear and to
+                # converge databases created by any compatible v1 writer.
+                db.execute("UPDATE api_keys SET access_json = ?", (_LEGACY_ACCESS_JSON,))
+                db.execute("PRAGMA user_version = 2")
             db.commit()
         except BaseException:
             if db.in_transaction:
@@ -232,6 +282,7 @@ class ControlStore:
             expires_at=expires_at,
             revoked=bool(row["revoked"]),
             token_prefix=row["token_prefix"],
+            access=_parse_access(row["access_json"]),
         )
 
     def create_user(self, user_id: str, name: str) -> UserRecord:
@@ -273,11 +324,14 @@ class ControlStore:
         workspace_id: str,
         name: str,
         expires_at: datetime | None = None,
+        *,
+        access: IssuableKeyAccess,
     ) -> IssuedKey:
         user_id = _validate_text(user_id)
         workspace_id = _validate_text(workspace_id)
         name = _validate_text(name)
         expiry = _aware_utc(expires_at)
+        access = _validate_issuable_access(access)
         if expiry is not None and expiry <= datetime.now(UTC):
             _invalid_request()
 
@@ -294,15 +348,27 @@ class ControlStore:
             expires_at=expiry,
             revoked=False,
             token_prefix=token[:12],
+            access=access,
         )
 
         with self._connection(write=True) as db:
             self._require_workspace(db, user_id, workspace_id)
+            if isinstance(access, AgentKeyAccess):
+                for site_id in access.site_ids:
+                    if (
+                        db.execute(
+                            """SELECT 1 FROM sites
+                               WHERE id = ? AND user_id = ? AND workspace_id = ?""",
+                            (site_id, user_id, workspace_id),
+                        ).fetchone()
+                        is None
+                    ):
+                        _not_found()
             db.execute(
                 """INSERT INTO api_keys(
                     id, user_id, workspace_id, name, token_hash, token_prefix,
-                    created_at, expires_at, revoked
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                    created_at, expires_at, revoked, access_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
                 (
                     record.id,
                     record.user_id,
@@ -312,6 +378,7 @@ class ControlStore:
                     record.token_prefix,
                     _iso(record.created_at),
                     _iso(expiry) if expiry is not None else None,
+                    _access_json(access),
                 ),
             )
         return IssuedKey(key=record, token=token)
@@ -327,15 +394,22 @@ class ControlStore:
         now = _iso(datetime.now(UTC))
         with self._connection() as db:
             row = db.execute(
-                """SELECT id, user_id, workspace_id FROM api_keys
+                """SELECT id, user_id, workspace_id, access_json FROM api_keys
                    WHERE token_hash = ? AND revoked = 0
                      AND (expires_at IS NULL OR expires_at > ?)""",
                 (token_hash, now),
             ).fetchone()
         if row is None:
             return None
+        try:
+            access = _parse_access(row["access_json"])
+        except RuntimeError:
+            return None
         return KeyIdentity(
-            user_id=row["user_id"], workspace_id=row["workspace_id"], key_id=row["id"]
+            user_id=row["user_id"],
+            workspace_id=row["workspace_id"],
+            key_id=row["id"],
+            access=access,
         )
 
     def keys(self, user_id: str, workspace_id: str) -> list[KeyRecord]:
@@ -345,7 +419,7 @@ class ControlStore:
             self._require_workspace(db, user_id, workspace_id)
             rows = db.execute(
                 """SELECT id, user_id, workspace_id, name, token_prefix,
-                          created_at, expires_at, revoked
+                          created_at, expires_at, revoked, access_json
                    FROM api_keys WHERE user_id = ? AND workspace_id = ? ORDER BY created_at, id""",
                 (user_id, workspace_id),
             ).fetchall()

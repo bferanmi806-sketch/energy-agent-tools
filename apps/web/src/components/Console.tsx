@@ -476,7 +476,7 @@ function ConnectionsView({ data, onBrowseApps }: { data: DashboardData; onBrowse
                 <div className="record-health">
                   <span className={`status-badge ${connection.verified && connection.enabled ? "status-good" : "status-muted"}`}>{connection.verified ? (connection.enabled ? "Verified record" : "Previously verified") : "Not verified"}</span>
                 </div>
-                {connection.toolkit === "octopus-energy-account" ? <div className="connection-actions"><ConnectionActions connectionId={connection.id} enabled={connection.enabled} state={connection.state} /></div> : null}
+                {connection.toolkit === "octopus-energy-account" ? <div className="connection-actions"><ConnectionActions canDisconnect={data.identity.can_manage_connections === true} connectionId={connection.id} enabled={connection.enabled} state={connection.state} /></div> : null}
               </article>
             );
           })}

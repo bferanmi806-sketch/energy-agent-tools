@@ -29,7 +29,16 @@ from datetime import UTC, datetime
 from math import isfinite
 from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    TypeAdapter,
+    ValidationError,
+)
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -39,6 +48,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from .auth import AuthStore
 from .capabilities import CapabilityRequest
 from .connection_contracts import ConnectionSetupsResponse, OctopusConnectionRequest, octopus_setup
+from .control_contracts import AgentKeyAccess, KeyAccess, ManageKeyAccess
 from .control_store import ControlStore
 from .models import EnergyError, Json, Session, Site
 from .runtime import EnergyAgent
@@ -66,6 +76,8 @@ class Principal:
     expires_at: datetime | None = None
     revoked: bool = False
     token_id: str | None = None
+    workspace_id: str | None = None
+    key_access: KeyAccess | None = None
 
     def __post_init__(self) -> None:
         if not self.user_id or len(self.user_id) > 256:
@@ -83,6 +95,11 @@ class Principal:
         sites = frozenset(site for site in self.allowed_site_ids if site)
         if len(sites) != len(self.allowed_site_ids):
             raise ValueError("Principal site IDs must be non-empty.")
+        if self.key_access is not None:
+            access: KeyAccess = TypeAdapter(KeyAccess).validate_python(self.key_access.model_dump())
+            object.__setattr__(self, "key_access", access)
+            if isinstance(access, AgentKeyAccess):
+                sites = sites.intersection(access.site_ids)
         object.__setattr__(self, "allowed_site_ids", sites)
 
 
@@ -109,6 +126,7 @@ class IdentityAsset(_RequestModel):
 
 
 class IdentityResponse(_RequestModel):
+    can_manage_connections: StrictBool = False
     user_id: StrictStr
     sites: list[Site]
     assets: list[IdentityAsset]
@@ -427,6 +445,10 @@ class AuthenticatedHost:
                 expires_at=principal.expires_at,
                 revoked=principal.revoked,
                 token_id=principal.token_id,
+                workspace_id=principal.workspace_id,
+                key_access=principal.key_access.model_copy(deep=True)
+                if principal.key_access is not None
+                else None,
             )
         return result
 
@@ -487,7 +509,7 @@ class AuthenticatedHost:
         ]
         if not sites:
             owned = any(site.user_id == principal.user_id for site in self.agent.sites.values())
-            if not owned and not principal.allowed_site_ids:
+            if not owned and not principal.allowed_site_ids and principal.key_access is None:
                 return [None]
         return cast(list[str | None], sorted(sites))
 
@@ -614,7 +636,11 @@ class AuthenticatedHost:
         sites = {
             site.id
             for site in self._control_store.sites(identity.user_id, identity.workspace_id)
-            if site.id in policy.allowed_site_ids
+            if (
+                not isinstance(identity.access, AgentKeyAccess)
+                or site.id in identity.access.site_ids
+            )
+            and site.id in policy.allowed_site_ids
             and site.id in self.agent.sites
             and self.agent.sites[site.id].user_id == identity.user_id
         }
@@ -622,7 +648,14 @@ class AuthenticatedHost:
         # Provisioning and dynamic topology remain operator-controlled here.
         if not sites:
             return None
-        return Principal(identity.user_id, sites, digest, token_id=identity.key_id)
+        return Principal(
+            identity.user_id,
+            sites,
+            digest,
+            token_id=identity.key_id,
+            workspace_id=identity.workspace_id,
+            key_access=identity.access,
+        )
 
     def _allow_rate(self, principal: Principal) -> bool:
         now = time.monotonic()
@@ -788,6 +821,7 @@ class AuthenticatedHost:
         }
         result = IdentityResponse(
             user_id=principal.user_id,
+            can_manage_connections=self._can_manage_connections(principal),
             sites=[
                 self.agent.sites[site_id]
                 for site_id in sorted(principal.allowed_site_ids)
@@ -971,6 +1005,10 @@ class AuthenticatedHost:
         except EnergyError as exc:
             return self._energy_error(exc)
 
+    @staticmethod
+    def _can_manage_connections(principal: Principal) -> bool:
+        return principal.key_access is None or isinstance(principal.key_access, ManageKeyAccess)
+
     async def _connection_setups(self, request: Request) -> Response:
         scope = self._session_for(request)
         if isinstance(scope, Response):
@@ -979,7 +1017,18 @@ class AuthenticatedHost:
         visible = {toolkit["id"] for toolkit in self.agent.catalogue(session)}
         setups = []
         if "octopus-energy-account" in visible:
-            setups.append(octopus_setup(enabled=isinstance(self.agent.auth_store, AuthStore)))
+            can_manage = self._can_manage_connections(scope[0])
+            has_storage = isinstance(self.agent.auth_store, AuthStore)
+            setups.append(
+                octopus_setup(
+                    enabled=can_manage and has_storage,
+                    unavailable_reason=None
+                    if can_manage and has_storage
+                    else "management_key_required"
+                    if not can_manage
+                    else "storage_unavailable",
+                )
+            )
         response = ConnectionSetupsResponse(setups=setups)
         return _json_response(response.model_dump(mode="json"))
 
@@ -987,7 +1036,13 @@ class AuthenticatedHost:
         scope = self._session_for(request)
         if isinstance(scope, Response):
             return scope
-        session = scope[1]
+        principal, session = scope
+        if not self._can_manage_connections(principal):
+            return _error(
+                "connection_management_forbidden",
+                "Use a workspace management key to connect accounts.",
+                403,
+            )
         visible = {toolkit["id"] for toolkit in self.agent.catalogue(session)}
         if "octopus-energy-account" not in visible:
             return _error("toolkit_forbidden", "Toolkit is outside this session scope.", 403)
@@ -1030,7 +1085,13 @@ class AuthenticatedHost:
         scope = self._session_for(request)
         if isinstance(scope, Response):
             return scope
-        session = scope[1]
+        principal, session = scope
+        if not verify and not self._can_manage_connections(principal):
+            return _error(
+                "connection_management_forbidden",
+                "Use a workspace management key to disconnect accounts.",
+                403,
+            )
         site = self.agent.sites.get(session.site_id or "")
         if site is None or site.user_id != session.user_id:
             return _error(

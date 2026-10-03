@@ -20,6 +20,7 @@ type ConnectionActionsProps = {
   connectionId: string;
   enabled: boolean;
   state: string;
+  canDisconnect: boolean;
 };
 
 const checkedAtPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
@@ -56,7 +57,7 @@ function parseResponse(value: unknown, action: Action): ParsedResponse | null {
   }
 }
 
-export function ConnectionActions({ connectionId, enabled, state }: ConnectionActionsProps) {
+export function ConnectionActions({ connectionId, enabled, state, canDisconnect }: ConnectionActionsProps) {
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
   const unavailable = !enabled || ["disabled", "revoked"].includes(state.trim().toLowerCase());
   const pending = feedback.kind === "pending";
@@ -107,7 +108,7 @@ export function ConnectionActions({ connectionId, enabled, state }: ConnectionAc
     >
       {unavailable ? (
         <p className="notice notice-neutral" role="status" style={{ margin: 0 }}>
-          This connection needs reconnecting. Add the account again from app setup to restore access.
+          {canDisconnect ? "This connection needs reconnecting. Add the account again from app setup to restore access." : "Use a workspace management key to reconnect this account."}
         </p>
       ) : (
         <>
@@ -149,7 +150,7 @@ export function ConnectionActions({ connectionId, enabled, state }: ConnectionAc
               >
                 Check connection
               </button>
-              <button
+              {canDisconnect ? <button
                 className="button button-secondary"
                 type="button"
                 disabled={pending}
@@ -157,7 +158,7 @@ export function ConnectionActions({ connectionId, enabled, state }: ConnectionAc
                 aria-label="Disconnect connection"
               >
                 Disconnect
-              </button>
+              </button> : null}
             </div>
           )}
 

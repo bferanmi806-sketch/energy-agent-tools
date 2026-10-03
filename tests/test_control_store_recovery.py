@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from energy_agent_tools.control_contracts import AgentKeyAccess
 from energy_agent_tools.control_store import ControlStore
 from energy_agent_tools.maintenance import create_backup, restore_backup
 from energy_agent_tools.models import Asset, Site
@@ -16,8 +17,12 @@ def test_control_records_and_revocation_survive_backup_restore(tmp_path: Path):
     asset = Asset(id="meter", site_id=site.id, kind="meter", name="Meter")
     store.put_site("one", workspace.id, site)
     store.put_asset("one", workspace.id, asset)
-    active = store.create_key("one", workspace.id, "Active")
-    revoked = store.create_key("one", workspace.id, "Revoked")
+    active = store.create_key(
+        "one", workspace.id, "Active", access=AgentKeyAccess(site_ids=["home"])
+    )
+    revoked = store.create_key(
+        "one", workspace.id, "Revoked", access=AgentKeyAccess(site_ids=["home"])
+    )
     store.revoke_key("one", workspace.id, revoked.key.id)
     store.close()
     archive = tmp_path / "backup.tar.gz"
@@ -31,7 +36,8 @@ def test_control_records_and_revocation_survive_backup_restore(tmp_path: Path):
     assert restored.workspaces("one") == [workspace]
     assert restored.sites("one", workspace.id) == [site]
     assert restored.assets("one", workspace.id) == [asset]
-    assert restored.authenticate(active.token) is not None
+    restored_identity = restored.authenticate(active.token)
+    assert restored_identity is not None and restored_identity.access == active.key.access
     assert restored.authenticate(revoked.token) is None
     assert len(restored.keys("one", workspace.id)) == 2
     restored.close()
