@@ -5,6 +5,32 @@ record extends the existing backend roadmap; it does not replace unfinished
 gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 [passing CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37032700732).
 
+## Installed Home Assistant authorization follow-up, October 3
+
+Source `8d25feb` makes installed native authorization part of the default Home
+Assistant qualification. [CI attempt 2](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37156401053)
+passed all jobs. Attempt 1 failed while fetching the dependency installer release
+from GitHub, before qualification ran. The successful pinned
+[authorization report](evidence/home-assistant-authorization-ci-oct03.json)
+preserves both the existing provider-read checks and the added existing-user
+login, code exchange, token refresh, API reads, revocation and rejection of
+revoked access/refresh tokens. Owned Docker resources were verified absent.
+
+This supersedes the installed-protocol uncertainty in the earlier
+[managed Home Assistant record](evidence/managed-home-assistant-oct03.json).
+Its local startup failure remains historical evidence. The CI run uses an
+ephemeral development owner and synthetic entity. It does not establish browser
+consent against installed Home Assistant, an installed-provider journey through
+the managed gateway, physical telemetry or an independent final cleanup review.
+
+Source `4f11e98` adds SDK acceptance for failed verification and two provider
+revocation failures. No account is published; the encrypted cleanup remains
+pending, agent/foreign workspace access is denied, and an owner retry clears it.
+All 14 SDK tests passed in the primary's integration run. The disconnected web
+row now retains its safe display name; production build and TypeScript check
+passed. Shared workspace membership and connection ACLs remain the next control
+plane implementation unit.
+
 ## Current audit
 
 Updated through managed workspace source `c31f543`; implementation evidence below

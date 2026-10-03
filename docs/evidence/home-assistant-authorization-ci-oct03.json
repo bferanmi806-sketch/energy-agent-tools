@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-03",
+  "implementation_revision": "8d25feb911bb3144a2581eb9199166fc94cd440d",
+  "ci": {
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37156401053",
+    "attempt": 2,
+    "conclusion": "success",
+    "completed_at": "2026-10-03T22:05:15Z",
+    "previous_attempt": "Dependency setup failed before qualification because the GitHub release API was unavailable."
+  },
+  "command": "uv run --no-dev python scripts/qualify_home_assistant.py",
+  "report": {
+    "authorization": {
+      "cleanup": {
+        "attempted": true,
+        "command_succeeded": true,
+        "resources_verified_absent": true
+      },
+      "home_assistant_version": "2026.9.4",
+      "image": "ghcr.io/home-assistant/home-assistant@sha256:3e6710a7ab2a61311d9d899b719f6c3657791c63e8f4942cec4ebc42401d6b76",
+      "ok": true,
+      "protocol": {
+        "access_token_api_verified": true,
+        "browser_consent_driven": false,
+        "existing_user_login_flow_completed": true,
+        "login_flow_authorization_code_exchanged": true,
+        "refresh_token_accepted": true,
+        "refresh_token_revoked": true,
+        "refreshed_access_token_api_verified": true,
+        "revoked_access_token_rejected": true,
+        "revoked_refresh_token_rejected": true,
+        "synthetic_entity_read": true
+      },
+      "provider": "home-assistant",
+      "qualification_limit": "Ephemeral Home Assistant development owner and synthetic entity; no browser consent, physical meter, device control, or private-user evidence.",
+      "resources": {
+        "container": "eat-ha-qualification-5562a4a830dc4a1296a56b9225ba5ea1",
+        "initializer": "eat-ha-qualification-5562a4a830dc4a1296a56b9225ba5ea1-init",
+        "volume": "eat-ha-qualification-5562a4a830dc4a1296a56b9225ba5ea1"
+      },
+      "synthetic_entity": {
+        "entity_id": "sensor.eat_qualification_power",
+        "state": "1.75",
+        "state_class": null,
+        "unit": "kW"
+      }
+    },
+    "binding": {
+      "reviewed": true,
+      "scope": "account + site + asset",
+      "tool": "home_assistant.get_state"
+    },
+    "credential_storage": {
+      "encrypted_vault": true,
+      "output_excludes_credential": true,
+      "profile_excludes_credential": true
+    },
+    "freshness": {
+      "max_age_seconds": 300,
+      "observation_timestamp_required": true,
+      "provenance_recorded": true,
+      "stale_read_rejected": true
+    },
+    "home_assistant_version": "2026.9.4",
+    "image": "ghcr.io/home-assistant/home-assistant@sha256:3e6710a7ab2a61311d9d899b719f6c3657791c63e8f4942cec4ebc42401d6b76",
+    "ok": true,
+    "protocol": {
+      "authorization_code_exchanged": true,
+      "onboarding_steps_read": true,
+      "owner_created": true,
+      "state_seeded": true
+    },
+    "provider": "home-assistant",
+    "qualification_limit": "Synthetic Home Assistant API state; no physical meter or device control claim.",
+    "scope": {
+      "account_id": "ha-qualification",
+      "asset_id": "qualification-power-sensor",
+      "foreign_user_account_denied": true,
+      "foreign_user_site_denied": true,
+      "site_id": "qualification-site",
+      "user_id": "qualification-user"
+    },
+    "synthetic_reading": {
+      "entity_id": "sensor.eat_qualification_power",
+      "kind": "estimated",
+      "quantity_shape": "instantaneous",
+      "state_class": null,
+      "unit": "kW",
+      "value": 1.75
+    }
+  },
+  "not_established": [
+    "Browser consent against installed Home Assistant",
+    "Managed gateway end-to-end execution against installed Home Assistant",
+    "Physical or private-site telemetry",
+    "Independent final cleanup review",
+    "Full project goal completion"
+  ]
+}
