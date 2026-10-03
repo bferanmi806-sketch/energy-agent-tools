@@ -3,18 +3,21 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
+import benchmarks.harness as benchmark_harness
 from benchmarks.fixture import write_fixture
 from benchmarks.harness import (
     BenchmarkCase,
     ParsedRun,
     ToolCall,
     _agent_prompt,
+    _subprocess_runner,
     benchmark_cases,
     codex_command,
     parse_codex_jsonl,
@@ -375,6 +378,210 @@ def test_run_case_accepts_injected_jsonl_runner_and_bounds_contract(tmp_path: Pa
     environment = observed["environment"]
     assert isinstance(environment, dict)
     assert "OPENAI_API_KEY" not in environment
+
+
+def test_streaming_runner_records_incremental_events_and_call_timing(tmp_path: Path):
+    fixture = write_fixture(tmp_path / "fixture")
+    started = {
+        "type": "item.started",
+        "item": {
+            "id": "streamed-call",
+            "type": "mcp_tool_call",
+            "server": "energy",
+            "tool": "CSV_READ_TIMESERIES",
+            "arguments": {"kind": "metered"},
+            "status": "in_progress",
+        },
+    }
+    completed = {
+        "type": "item.completed",
+        "item": {
+            **started["item"],
+            "result": {"structured_content": {"ok": True}},
+            "status": "completed",
+        },
+    }
+    completed["type"] = "item.completed"
+    terminal = {"type": "turn.completed", "usage": {"input_tokens": 7}}
+    script = "\n".join(
+        (
+            "import json, time",
+            f"print({json.dumps(json.dumps(started))}, flush=True)",
+            "time.sleep(0.08)",
+            f"print({json.dumps(json.dumps(completed))}, flush=True)",
+            "time.sleep(0.04)",
+            f"print({json.dumps(json.dumps(terminal))}, flush=True)",
+        )
+    )
+
+    def runner(command, environment, timeout):
+        return _subprocess_runner([sys.executable, "-u", "-c", script], environment, timeout)
+
+    result = run_case(
+        BenchmarkCase(id="stream", prompt="Read the meter.", intent="read"),
+        fixture,
+        repo=tmp_path,
+        timeout=2,
+        runner=runner,
+    )
+    timing = result.run.streaming
+    assert timing["schema"] == "codex-streaming-events-v1"
+    assert timing["process_start_monotonic_ns"] <= timing["process_end_monotonic_ns"]
+    receipts = timing["event_receipts"]
+    assert [event["event_type"] for event in receipts] == [
+        "item.started",
+        "item.completed",
+        "turn.completed",
+    ]
+    assert receipts[0]["received_monotonic_ns"] < receipts[1]["received_monotonic_ns"]
+    call = timing["mcp_calls"][0]
+    assert call["start_monotonic_ns"] < call["end_monotonic_ns"]
+    assert call["duration_seconds"] >= 0.04
+    assert timing["turn_terminal"]["event_type"] == "turn.completed"
+    assert result.run.usage == {"input_tokens": 7}
+    assert result.run.partial_usage == {"input_tokens": 7}
+
+
+def test_streaming_timeout_keeps_received_calls_and_kills_child_tree(tmp_path: Path):
+    fixture = write_fixture(tmp_path / "fixture")
+    marker = tmp_path / "orphan-wrote-after-timeout"
+    started = {
+        "type": "item.started",
+        "item": {
+            "id": "unfinished-call",
+            "type": "mcp_tool_call",
+            "server": "energy",
+            "tool": "WORKBENCH_JOIN",
+            "arguments": {},
+            "status": "in_progress",
+        },
+    }
+    partial = {"type": "turn.in_progress", "usage": {"input_tokens": 5}}
+    child_started = {"type": "fixture.child_started"}
+    child = (
+        f"import pathlib, time; time.sleep(1); pathlib.Path({str(marker)!r}).write_text('orphan')"
+    )
+    script = "\n".join(
+        (
+            "import json, subprocess, sys, time",
+            f"print({json.dumps(json.dumps(started))}, flush=True)",
+            f"print({json.dumps(json.dumps(partial))}, flush=True)",
+            f"subprocess.Popen([sys.executable, '-c', {child!r}])",
+            f"print({json.dumps(json.dumps(child_started))}, flush=True)",
+            "time.sleep(5)",
+        )
+    )
+
+    def runner(command, environment, timeout):
+        return _subprocess_runner([sys.executable, "-u", "-c", script], environment, timeout)
+
+    result = run_case(
+        BenchmarkCase(id="timeout", prompt="Join data.", intent="join"),
+        fixture,
+        repo=tmp_path,
+        timeout=0.5,
+        runner=runner,
+    )
+    assert result.run.timed_out
+    assert result.run.call_count == 1
+    assert result.run.tool_calls[0].id == "unfinished-call"
+    assert result.run.tool_calls[0].status == "in_progress"
+    assert result.run.streaming["timeout_monotonic_ns"] is not None
+    assert result.run.partial_usage == {"input_tokens": 5}
+    assert result.run.usage == {}
+    assert "fixture.child_started" in [
+        event["event_type"] for event in result.run.streaming["event_receipts"]
+    ]
+    assert (
+        result.run.streaming["process_end_monotonic_ns"]
+        >= result.run.streaming["timeout_monotonic_ns"]
+    )
+    time.sleep(1.1)
+    assert not marker.exists()
+
+
+def test_streaming_capture_bounds_lines_and_redacts_malformed_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    fixture = write_fixture(tmp_path / "fixture")
+    secret = "stream-secret-value"
+    terminal = {"type": "turn.completed", "usage": {"output_tokens": 2}}
+    script = "\n".join(
+        (
+            "import json, sys",
+            f"print({('not-json ' + secret)!r}, flush=True)",
+            "print('x' * 1_000_001, flush=True)",
+            f"print({json.dumps(json.dumps(terminal))}, flush=True)",
+        )
+    )
+
+    def runner(command, environment, timeout):
+        return _subprocess_runner([sys.executable, "-u", "-c", script], environment, timeout)
+
+    monkeypatch.setenv("BENCHMARK_SECRET", secret)
+    result = run_case(
+        BenchmarkCase(id="bounded", prompt="Read the meter.", intent="read"),
+        fixture,
+        repo=tmp_path,
+        timeout=2,
+        runner=runner,
+    )
+    serialized = json.dumps(result.run.to_json())
+    assert secret not in serialized
+    assert "[REDACTED]" in serialized
+    assert result.run.streaming["oversized_lines"] == 1
+    assert any("line exceeded" in error for error in result.run.parse_errors)
+    assert result.run.partial_usage == {"output_tokens": 2}
+
+
+def test_streaming_truncation_omits_partial_secret_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    fixture = write_fixture(tmp_path / "fixture")
+    secret = "zzq9-SENSITIVE-boundary-token-123"
+    monkeypatch.setenv("BENCHMARK_SECRET", secret)
+    stdout_prefix = json.dumps({"type": "thread.started"}) + "\n"
+    monkeypatch.setattr(benchmark_harness, "MAX_CAPTURED_STDOUT_BYTES", len(stdout_prefix) + 4)
+    stdout = stdout_prefix + secret + "-tail\n"
+    stderr = "x" * 90 + secret + "y" * (4_100 - 90 - len(secret))
+    assert len(stderr) == 4_100
+    script = (
+        "import sys; "
+        f"sys.stdout.write({stdout!r}); sys.stdout.flush(); "
+        f"sys.stderr.write({stderr!r}); sys.stderr.flush()"
+    )
+
+    def runner(command, environment, timeout):
+        return _subprocess_runner([sys.executable, "-u", "-c", script], environment, timeout)
+
+    result = run_case(
+        BenchmarkCase(id="truncated", prompt="Read the meter.", intent="read"),
+        fixture,
+        repo=tmp_path,
+        timeout=2,
+        runner=runner,
+    )
+    serialized = json.dumps(result.run.to_json())
+    assert secret not in serialized
+    assert secret[:4] not in serialized
+    assert result.run.events == [{"type": "thread.started"}]
+    assert result.run.parse_errors == [
+        "streaming stdout capture limit reached; trailing partial JSONL record omitted"
+    ]
+    assert result.run.streaming["stderr_tail_truncated"]
+    assert result.run.streaming["stderr_tail_omitted_for_redaction"]
+    assert result.run.stderr_tail == ""
+
+
+def test_parser_redacts_stderr_before_tail_truncation(monkeypatch: pytest.MonkeyPatch):
+    secret = "zzq9-SENSITIVE-boundary-token-123"
+    monkeypatch.setenv("BENCHMARK_SECRET", secret)
+    stderr = "x" * 90 + secret + "y" * (4_100 - 90 - len(secret))
+
+    parsed = parse_codex_jsonl("", returncode=1, stderr=stderr)
+
+    assert secret not in parsed.stderr_tail
+    assert "[REDACTED]" in parsed.stderr_tail
 
 
 def test_run_suite_persists_machine_readable_evidence(tmp_path: Path):

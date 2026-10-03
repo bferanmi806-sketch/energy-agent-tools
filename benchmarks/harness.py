@@ -10,13 +10,17 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
+import selectors
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -26,6 +30,17 @@ from typing import Any
 from .fixture import Fixture, write_fixture
 
 Json = dict[str, Any]
+
+MAX_JSONL_LINE_BYTES = 1_000_000
+MAX_JSONL_LINE_CHARS = 1_000_000
+MAX_CAPTURED_STDOUT_BYTES = 16 * 1024 * 1024
+MAX_STDERR_TAIL_CHARS = 4_000
+MAX_RETAINED_EVENTS = 20_000
+MAX_RETAINED_CALLS = 1_000
+MAX_RETAINED_MESSAGES = 1_000
+MAX_PARSE_ERRORS = 100
+MAX_STREAM_RECEIPTS = 20_000
+MAX_STREAM_CALLS = 1_000
 
 
 @dataclass(frozen=True)
@@ -70,7 +85,9 @@ class ParsedRun:
     messages: list[str] = field(default_factory=list)
     final_text: str = ""
     usage: Json = field(default_factory=dict)
+    partial_usage: Json = field(default_factory=dict)
     parse_errors: list[str] = field(default_factory=list)
+    streaming: Json = field(default_factory=dict)
     turn_completed: bool = False
     returncode: int | None = None
     timed_out: bool = False
@@ -107,7 +124,9 @@ class ParsedRun:
             "messages": self.messages,
             "final_text": self.final_text,
             "usage": self.usage,
+            "partial_usage": self.partial_usage,
             "parse_errors": self.parse_errors,
+            "streaming": self.streaming,
             "turn_completed": self.turn_completed,
             "returncode": self.returncode,
             "timed_out": self.timed_out,
@@ -490,20 +509,33 @@ def parse_codex_jsonl(stdout: str, *, returncode: int | None = None, stderr: str
     run = ParsedRun(returncode=returncode)
     calls: dict[str, ToolCall] = {}
     secrets = _secret_values()
-    for raw_line in stdout.splitlines():
+
+    def parse_error(message: str) -> None:
+        if len(run.parse_errors) < MAX_PARSE_ERRORS:
+            run.parse_errors.append(_redact(message, secrets))
+        elif len(run.parse_errors) == MAX_PARSE_ERRORS:
+            run.parse_errors.append("additional parse errors omitted")
+
+    for raw_line in io.StringIO(stdout):
         line = raw_line.strip()
         if not line:
+            continue
+        if len(line) > MAX_JSONL_LINE_CHARS:
+            parse_error(f"JSONL line exceeded {MAX_JSONL_LINE_CHARS} characters")
             continue
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
-            run.parse_errors.append(line[:300])
+            parse_error(line[:300])
             continue
         if not isinstance(event, dict):
-            run.parse_errors.append("event was not an object")
+            parse_error("event was not an object")
             continue
         safe_event = _truncate(_redact(event, secrets))
-        run.events.append(safe_event)
+        if len(run.events) < MAX_RETAINED_EVENTS:
+            run.events.append(safe_event)
+        if isinstance(event.get("usage"), dict):
+            run.partial_usage = _truncate(_redact(event["usage"], secrets), 2_000)
         event_type = event.get("type")
         item = event.get("item")
         if event_type == "turn.completed":
@@ -514,12 +546,16 @@ def parse_codex_jsonl(stdout: str, *, returncode: int | None = None, stderr: str
             if isinstance(item, dict) and item.get("type") == "agent_message":
                 text = item.get("text")
                 if isinstance(text, str) and text.strip():
-                    run.messages.append(_redact(text, secrets))
-                    run.final_text = run.messages[-1]
+                    safe_text = _redact(text, secrets)
+                    if len(run.messages) < MAX_RETAINED_MESSAGES:
+                        run.messages.append(safe_text)
+                    run.final_text = safe_text
             continue
         call_id = str(item.get("id", f"call_{len(calls)}"))
         existing = calls.get(call_id)
         if event_type == "item.started":
+            if existing is None and len(calls) >= MAX_RETAINED_CALLS:
+                continue
             call = ToolCall(
                 id=call_id,
                 server=str(item.get("server", "")),
@@ -530,6 +566,8 @@ def parse_codex_jsonl(stdout: str, *, returncode: int | None = None, stderr: str
             calls[call_id] = call
         elif event_type == "item.completed":
             if existing is None:
+                if len(calls) >= MAX_RETAINED_CALLS:
+                    continue
                 existing = ToolCall(
                     id=call_id,
                     server=str(item.get("server", "")),
@@ -541,7 +579,7 @@ def parse_codex_jsonl(stdout: str, *, returncode: int | None = None, stderr: str
             existing.error = _truncate(_redact(item.get("error"), secrets))
             existing.status = str(item.get("status", "completed"))
     run.tool_calls = list(calls.values())
-    run.stderr_tail = _redact(stderr[-4_000:], secrets)
+    run.stderr_tail = _redact(stderr, secrets)[-MAX_STDERR_TAIL_CHARS:]
     return run
 
 
@@ -1135,35 +1173,360 @@ def _agent_prompt(case: BenchmarkCase) -> str:
     )
 
 
-Runner = Callable[[Sequence[str], Mapping[str, str], float], tuple[int, str, str]]
+@dataclass
+class StreamingCapture:
+    """Bounded stdout/stderr capture plus receipt-time observations from a live child."""
+
+    returncode: int
+    stdout: str
+    stderr: str
+    streaming: Json
+    timed_out: bool = False
+
+
+RunnerResult = tuple[int, str, str] | StreamingCapture
+Runner = Callable[[Sequence[str], Mapping[str, str], float], RunnerResult]
+
+
+def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
+    """Stop the CLI and subprocesses it started after timeout or reader failure."""
+
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=0.2)
+        except subprocess.TimeoutExpired:
+            pass
+        # The direct process may have exited while an MCP child ignored SIGTERM.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    elif process.poll() is None:
+        process.terminate()
+
+    try:
+        process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _subprocess_runner(
     command: Sequence[str], environment: Mapping[str, str], timeout: float
-) -> tuple[int, str, str]:
+) -> StreamingCapture:
+    """Read the CLI's JSONL as it arrives and retain bounded, redacted evidence."""
+
+    secrets = _secret_values()
+    process = subprocess.Popen(
+        list(command),
+        cwd=command[command.index("-C") + 1] if "-C" in command else None,
+        env=dict(environment),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=(os.name == "posix"),
+    )
+    process_start_ns = time.monotonic_ns()
+    started_at = _utc_now()
+    deadline_ns = process_start_ns + max(0, int(timeout * 1_000_000_000))
+    stdout_capture = bytearray()
+    stderr_tail = bytearray()
+    stdout_total_bytes = 0
+    stderr_total_bytes = 0
+    stdout_capture_truncated = False
+    stderr_tail_truncated = False
+    pending = bytearray()
+    pending_last_received_ns: int | None = None
+    dropping_oversized_line = False
+    oversized_lines = 0
+    event_receipts: list[Json] = []
+    omitted_event_receipts = 0
+    mcp_calls: list[Json] = []
+    call_by_id: dict[str, Json] = {}
+    omitted_mcp_call_events = 0
+    turn_terminal: Json | None = None
+    first_agent_message: Json | None = None
+    partial_usage: Json = {}
+    partial_usage_monotonic_ns: int | None = None
+    completed_usage: Json = {}
+    timed_out = False
+    timeout_monotonic_ns: int | None = None
+
+    def safe_text(value: Any, limit: int = 200) -> str:
+        return str(_redact(str(value), secrets))[:limit]
+
+    def observe_line(raw_line: bytes, received_ns: int) -> None:
+        nonlocal omitted_event_receipts, omitted_mcp_call_events
+        nonlocal turn_terminal, first_agent_message
+        nonlocal partial_usage, partial_usage_monotonic_ns, completed_usage
+        if not raw_line.strip():
+            return
+        try:
+            event = json.loads(raw_line.decode("utf-8", errors="replace"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return
+        if not isinstance(event, dict):
+            return
+
+        event_type = event.get("type")
+        item = event.get("item")
+        receipt: Json = {
+            "sequence": len(event_receipts) + omitted_event_receipts,
+            "event_type": safe_text(event_type, 100) if isinstance(event_type, str) else "",
+            "received_monotonic_ns": received_ns,
+            "elapsed_seconds": round((received_ns - process_start_ns) / 1_000_000_000, 9),
+        }
+        if isinstance(item, dict):
+            item_type = item.get("type")
+            if isinstance(item_type, str):
+                receipt["item_type"] = safe_text(item_type, 100)
+            if isinstance(item.get("id"), (str, int)):
+                receipt["item_id"] = safe_text(item["id"])
+            if item_type == "mcp_tool_call":
+                for key in ("server", "tool"):
+                    if isinstance(item.get(key), str):
+                        receipt[key] = safe_text(item[key])
+        if len(event_receipts) < MAX_STREAM_RECEIPTS:
+            event_receipts.append(receipt)
+        else:
+            omitted_event_receipts += 1
+
+        if event_type in {"turn.completed", "turn.failed"} and turn_terminal is None:
+            turn_terminal = {
+                "event_type": safe_text(event_type, 100),
+                "received_monotonic_ns": received_ns,
+                "elapsed_seconds": round((received_ns - process_start_ns) / 1_000_000_000, 9),
+            }
+        if (
+            isinstance(item, dict)
+            and item.get("type") == "agent_message"
+            and first_agent_message is None
+        ):
+            first_agent_message = {
+                "received_monotonic_ns": received_ns,
+                "elapsed_seconds": round((received_ns - process_start_ns) / 1_000_000_000, 9),
+            }
+        usage = event.get("usage")
+        if isinstance(usage, dict):
+            partial_usage = _truncate(_redact(usage, secrets), 2_000)
+            partial_usage_monotonic_ns = received_ns
+            if event_type == "turn.completed":
+                completed_usage = partial_usage
+
+        if not (
+            isinstance(item, dict)
+            and item.get("type") == "mcp_tool_call"
+            and event_type in {"item.started", "item.completed"}
+        ):
+            return
+
+        call_id = str(item.get("id", f"call_{len(mcp_calls)}"))
+        call = call_by_id.get(call_id)
+        if event_type == "item.started":
+            if call is None:
+                if len(mcp_calls) >= MAX_STREAM_CALLS:
+                    omitted_mcp_call_events += 1
+                    return
+                call = {
+                    "id": safe_text(call_id),
+                    "server": safe_text(item.get("server", "")),
+                    "tool": safe_text(item.get("tool", "")),
+                    "start_monotonic_ns": received_ns,
+                    "start_elapsed_seconds": round(
+                        (received_ns - process_start_ns) / 1_000_000_000, 9
+                    ),
+                    "end_monotonic_ns": None,
+                    "end_elapsed_seconds": None,
+                    "duration_seconds": None,
+                    "status_at_exit": "in_progress_at_exit",
+                }
+                mcp_calls.append(call)
+                call_by_id[call_id] = call
+            return
+
+        if call is None:
+            if len(mcp_calls) >= MAX_STREAM_CALLS:
+                omitted_mcp_call_events += 1
+                return
+            call = {
+                "id": safe_text(call_id),
+                "server": safe_text(item.get("server", "")),
+                "tool": safe_text(item.get("tool", "")),
+                "start_monotonic_ns": None,
+                "start_elapsed_seconds": None,
+                "end_monotonic_ns": None,
+                "end_elapsed_seconds": None,
+                "duration_seconds": None,
+                "status_at_exit": "completed_without_start_event",
+            }
+            mcp_calls.append(call)
+            call_by_id[call_id] = call
+        call["end_monotonic_ns"] = received_ns
+        call["end_elapsed_seconds"] = round((received_ns - process_start_ns) / 1_000_000_000, 9)
+        if call["start_monotonic_ns"] is not None:
+            call["duration_seconds"] = round(
+                (received_ns - call["start_monotonic_ns"]) / 1_000_000_000, 9
+            )
+        call["status_at_exit"] = safe_text(item.get("status", "completed"), 100)
+
+    def consume_stdout(chunk: bytes, received_ns: int) -> None:
+        nonlocal stdout_total_bytes, stdout_capture_truncated
+        nonlocal dropping_oversized_line, oversized_lines, pending_last_received_ns
+        stdout_total_bytes += len(chunk)
+        available = MAX_CAPTURED_STDOUT_BYTES - len(stdout_capture)
+        if available > 0:
+            stdout_capture.extend(chunk[:available])
+        if len(chunk) > max(0, available):
+            stdout_capture_truncated = True
+
+        offset = 0
+        if dropping_oversized_line:
+            newline = chunk.find(b"\n")
+            if newline < 0:
+                return
+            dropping_oversized_line = False
+            offset = newline + 1
+
+        while offset < len(chunk):
+            newline = chunk.find(b"\n", offset)
+            if newline < 0:
+                fragment = chunk[offset:]
+                if len(pending) + len(fragment) > MAX_JSONL_LINE_BYTES:
+                    pending.clear()
+                    pending_last_received_ns = None
+                    dropping_oversized_line = True
+                    oversized_lines += 1
+                else:
+                    pending.extend(fragment)
+                    pending_last_received_ns = received_ns
+                return
+
+            fragment = chunk[offset:newline]
+            if len(pending) + len(fragment) > MAX_JSONL_LINE_BYTES:
+                pending.clear()
+                pending_last_received_ns = None
+                oversized_lines += 1
+            else:
+                pending.extend(fragment)
+                pending_last_received_ns = received_ns
+                observe_line(pending, received_ns)
+                pending.clear()
+                pending_last_received_ns = None
+            offset = newline + 1
+
     try:
-        completed = subprocess.run(
-            list(command),
-            cwd=command[command.index("-C") + 1] if "-C" in command else None,
-            env=dict(environment),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-        return completed.returncode, completed.stdout, completed.stderr
-    except subprocess.TimeoutExpired as exc:
-        stdout = (
-            exc.stdout.decode(errors="replace")
-            if isinstance(exc.stdout, bytes)
-            else (exc.stdout or "")
-        )
-        stderr = (
-            exc.stderr.decode(errors="replace")
-            if isinstance(exc.stderr, bytes)
-            else (exc.stderr or "")
-        )
-        return 124, stdout, stderr + "\nbenchmark timeout"
+        with selectors.DefaultSelector() as selector:
+            if process.stdout is not None:
+                selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+            if process.stderr is not None:
+                selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+
+            while selector.get_map():
+                remaining_ns = deadline_ns - time.monotonic_ns()
+                if remaining_ns <= 0:
+                    timed_out = True
+                    timeout_monotonic_ns = time.monotonic_ns()
+                    break
+                ready = selector.select(min(remaining_ns / 1_000_000_000, 0.2))
+                if not ready:
+                    continue
+                for key, _ in ready:
+                    chunk = os.read(key.fileobj.fileno(), 64 * 1024)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        continue
+                    received_ns = time.monotonic_ns()
+                    if key.data == "stdout":
+                        consume_stdout(chunk, received_ns)
+                    else:
+                        stderr_total_bytes += len(chunk)
+                        stderr_tail.extend(chunk)
+                        if len(stderr_tail) > MAX_STDERR_TAIL_CHARS:
+                            del stderr_tail[:-MAX_STDERR_TAIL_CHARS]
+                            stderr_tail_truncated = True
+
+            if not timed_out:
+                remaining_ns = max(0, deadline_ns - time.monotonic_ns())
+                try:
+                    process.wait(timeout=remaining_ns / 1_000_000_000)
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+                    timeout_monotonic_ns = time.monotonic_ns()
+
+        if pending and not dropping_oversized_line:
+            observe_line(pending, pending_last_received_ns or time.monotonic_ns())
+        if timed_out:
+            _terminate_process_tree(process)
+        else:
+            process.wait()
+    except BaseException:
+        if process.poll() is None or os.name == "posix":
+            _terminate_process_tree(process)
+        raise
+    finally:
+        if process.stdout is not None:
+            process.stdout.close()
+        if process.stderr is not None:
+            process.stderr.close()
+
+    process_end_ns = time.monotonic_ns()
+    for call in mcp_calls:
+        if call["end_monotonic_ns"] is None:
+            call["status_at_exit"] = "in_progress_at_timeout" if timed_out else "no_end_event"
+    returncode = 124 if timed_out else int(process.returncode or 0)
+    stderr_tail_omitted_for_redaction = stderr_tail_truncated and bool(secrets)
+    stderr = ""
+    if not stderr_tail_omitted_for_redaction:
+        stderr = _redact(bytes(stderr_tail).decode("utf-8", errors="replace"), secrets)
+        stderr = stderr[-MAX_STDERR_TAIL_CHARS:]
+    if timed_out:
+        stderr += "\nbenchmark timeout"
+    streaming: Json = {
+        "schema": "codex-streaming-events-v1",
+        "clock": "monotonic_ns",
+        "process_started_at": started_at,
+        "process_ended_at": _utc_now(),
+        "process_start_monotonic_ns": process_start_ns,
+        "process_end_monotonic_ns": process_end_ns,
+        "process_elapsed_seconds": round((process_end_ns - process_start_ns) / 1_000_000_000, 9),
+        "timeout_monotonic_ns": timeout_monotonic_ns,
+        "timeout_elapsed_seconds": (
+            round((timeout_monotonic_ns - process_start_ns) / 1_000_000_000, 9)
+            if timeout_monotonic_ns is not None
+            else None
+        ),
+        "turn_terminal": turn_terminal,
+        "first_agent_message": first_agent_message,
+        "partial_usage": partial_usage,
+        "partial_usage_monotonic_ns": partial_usage_monotonic_ns,
+        "completed_usage": completed_usage,
+        "event_receipts": event_receipts,
+        "omitted_event_receipts": omitted_event_receipts,
+        "mcp_calls": mcp_calls,
+        "omitted_mcp_call_events": omitted_mcp_call_events,
+        "stdout_bytes_observed": stdout_total_bytes,
+        "stdout_capture_truncated": stdout_capture_truncated,
+        "oversized_lines": oversized_lines,
+        "stderr_bytes_observed": stderr_total_bytes,
+        "stderr_tail_truncated": stderr_tail_truncated,
+        "stderr_tail_omitted_for_redaction": stderr_tail_omitted_for_redaction,
+    }
+    return StreamingCapture(
+        returncode=returncode,
+        stdout=bytes(stdout_capture).decode("utf-8", errors="replace"),
+        stderr=stderr,
+        streaming=streaming,
+        timed_out=timed_out,
+    )
 
 
 def run_case(
@@ -1189,9 +1552,9 @@ def run_case(
         reasoning_effort=reasoning_effort,
     )
     try:
-        returncode, stdout, stderr = runner(command, _safe_environment(), timeout)
+        runner_result = runner(command, _safe_environment(), timeout)
     except FileNotFoundError as exc:
-        run = ParsedRun(returncode=127, stderr_tail=str(exc))
+        run = ParsedRun(returncode=127, stderr_tail=_redact(str(exc)))
         run.timed_out = False
     except Exception as exc:  # pragma: no cover - defensive runner boundary
         run = ParsedRun(
@@ -1200,8 +1563,41 @@ def run_case(
         )
         run.timed_out = False
     else:
-        run = parse_codex_jsonl(stdout, returncode=returncode, stderr=stderr)
-        run.timed_out = returncode == 124 or "benchmark timeout" in stderr
+        if isinstance(runner_result, StreamingCapture):
+            stdout = runner_result.stdout
+            if runner_result.streaming.get("stdout_capture_truncated") and not stdout.endswith(
+                "\n"
+            ):
+                last_complete_line = stdout.rfind("\n")
+                stdout = stdout[: last_complete_line + 1] if last_complete_line >= 0 else ""
+            run = parse_codex_jsonl(
+                stdout,
+                returncode=runner_result.returncode,
+                stderr=runner_result.stderr,
+            )
+            run.streaming = _redact(runner_result.streaming)
+            terminal = runner_result.streaming.get("turn_terminal")
+            if isinstance(terminal, dict) and terminal.get("event_type") == "turn.completed":
+                run.turn_completed = True
+                completed_usage = runner_result.streaming.get("completed_usage")
+                if not run.usage and isinstance(completed_usage, dict):
+                    run.usage = _truncate(_redact(completed_usage), 2_000)
+            if not run.partial_usage and isinstance(
+                runner_result.streaming.get("partial_usage"), dict
+            ):
+                run.partial_usage = _truncate(
+                    _redact(runner_result.streaming["partial_usage"]), 2_000
+                )
+            run.timed_out = runner_result.timed_out or "benchmark timeout" in runner_result.stderr
+            if runner_result.streaming.get("stdout_capture_truncated"):
+                message = "streaming stdout capture limit reached"
+                if runner_result.stdout and not runner_result.stdout.endswith("\n"):
+                    message += "; trailing partial JSONL record omitted"
+                run.parse_errors.append(message)
+        else:
+            returncode, stdout, stderr = runner_result
+            run = parse_codex_jsonl(stdout, returncode=returncode, stderr=stderr)
+            run.timed_out = returncode == 124 or "benchmark timeout" in stderr
     return CaseResult(case, run, score_case(case, run))
 
 

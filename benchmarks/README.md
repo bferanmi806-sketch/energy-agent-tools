@@ -87,8 +87,21 @@ runner preserves the inconclusive case, stops, and records
 purchase credits, reset usage, or switch models.
 
 The runner accepts explicit `--model` and `--reasoning-effort` options and
-records both overrides. A 2 October probe of `gpt-6-luna` with `max` was
-rejected by the separate CLI for this ChatGPT account; it is inconclusive.
-Native implementation workers support that configuration. Older benchmark
-runs with null model metadata retain that limitation. Model
-settings do not change fixture truth, scoring or the release thresholds.
+records both overrides. The 2 October `gpt-6-luna`/`max` CLI probe was
+rejected for this account. Capacity returned on 3 October: a frozen run at
+source `8917e79` attempted all 19 original cases and recorded six passes,
+three partial results and ten timeout-inconclusive results. The mean heuristic
+score was 0.8517. The requested alias and effort were recorded; the resolved
+backend model family was not independently verified. These are known synthetic
+cases, with no held-out results. The earlier rejection remains historical evidence.
+Older runs with null model metadata retain that limitation. Model settings do
+not change fixture truth, scoring or the release thresholds.
+
+The default subprocess runner now records `codex-streaming-events-v1` timing
+metadata. It records monotonic process and pipe-event receipt times, MCP starts
+and completions when emitted, terminal events, timeout boundaries and partial
+usage when emitted. Times measure when the local runner reads output; they do
+not measure backend emission or provider execution latency. A duration requires
+both MCP events. Missing usage or model identity is not inferred. Capture and
+parse diagnostics are bounded, and POSIX timeouts terminate the child process
+group. Existing benchmark results are not retroactively instrumented or rescored.
