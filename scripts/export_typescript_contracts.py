@@ -13,6 +13,7 @@ from typing import Any
 
 from energy_agent_tools.capabilities import CapabilityRequest
 from energy_agent_tools.hosting import (
+    IdentityResponse,
     _CapabilityExecutionRequest,
     _ExecuteRequest,
     _JobRequest,
@@ -111,6 +112,7 @@ def schemas() -> dict[str, dict[str, Any]]:
         ["id", "intent", "capabilities", "sequence", "pitfalls"],
     )
     return {
+        "IdentityResponse": expand_model(IdentityResponse),
         "SessionCreate": expand_model(_SessionCreate),
         "SearchRequest": expand_model(_SearchRequest),
         "ExecuteRequest": expand_model(_ExecuteRequest),

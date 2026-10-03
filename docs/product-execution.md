@@ -233,3 +233,46 @@ Container, upgrade and Home Assistant checks also pass. The
 [SDK evidence](evidence/typescript-sdk-oct02.json) pins the source and package
 qualification. These checks qualify software contracts, not physical sites or
 the remaining independent evaluation and deployment gates.
+
+## Web and persistent identity foundation, October 3
+
+The first Next.js application starts with Connect Apps, following the confirmed
+system-first journey. It reads structured toolkit metadata, connection health,
+owned sites/assets and skills from the authenticated Python gateway. It uses an
+operator-fixed gateway URL and encrypted, expiring HttpOnly session cookies.
+Browser sign-in, site switching and logout have been exercised against the
+production build and a local gateway with explicitly synthetic sites.
+
+The gateway adds a typed `GET /me` response. It excludes arbitrary asset metadata
+and filters linked account and parent references to the caller's visible scope.
+The TypeScript SDK exposes this identity contract in current source. The earlier
+0.1.0 SDK tarball and v0.3.0 core release do not contain these new routes.
+
+An owner-private SQLite store now persists users, workspaces, hashed API keys,
+sites and assets. Optional host integration checks persisted key revocation on
+every REST and MCP request and intersects workspace scope with operator policy.
+Backup/restore includes the control database. These records are a foundation:
+operator runtime configuration still supplies topology and policy. Workspace
+membership, shared connection ACLs and normal user-facing provisioning remain
+open.
+
+The catalogue currently opens setup requirements rather than creating provider
+accounts. Provider authorization, encrypted connection creation, verification,
+site mapping and runtime refresh are the next integration milestone. Custom MCP,
+job management and activity views explicitly disclose unavailable management
+operations. Generic MCP configuration is shown for the selected site; individual
+agent products have not been independently connected through this web interface.
+
+Targeted verification passes 18 public identity/contract checks, 17 combined
+control-store, hosted-key and recovery checks, and seven production web HTTP and
+security tests. Full mypy passes 52 source files. The current full regression
+suite must be qualified after the final review fixes; the interrupted local run
+is not evidence of a passing full suite. Real physical/private provider evidence,
+held-out agent evaluation, independent contribution/review and sustained operation
+remain open. This milestone does not complete Phase 2 or the full project goal.
+
+The visual reviewer returned `ship` after scoring all five listed catalogue
+fixes resolved. This verdict covers the catalogue foundation and supplied
+direction. The initial QUALITY BAR card was absent; full onboarding was not
+approved by this review. The independent boundary review found no concrete
+exploitable flaw in its assigned control, key, identity, recovery and web paths.

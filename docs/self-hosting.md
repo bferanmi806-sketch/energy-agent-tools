@@ -274,3 +274,57 @@ The MCP transport validates its upstream host against its loopback allowlist.
 The example therefore sends the loopback Host header. Server MCP clients normally
 omit Origin. Browser-origin access requires an explicitly reviewed origin policy;
 do not strip or rewrite arbitrary Origin headers to bypass that check.
+
+## Web identity and persisted workspace keys
+
+Current source adds authenticated `GET /me`, returning only the principal's
+allowed sites and their assets. It sends `Cache-Control: no-store`. The
+TypeScript SDK exposes this as `identity()`. This route postdates v0.3.0.
+
+`ControlStore` persists owner-private users, workspaces, site/asset mappings
+and API-key metadata in `control/control.sqlite3`. It stores SHA-256 digests
+of independently generated 32-byte keys, returns a raw key only at issuance,
+and checks revocation/expiry on each authentication. Schema version 1 is
+transactional; a newer version is refused. Shared membership and ACLs are
+not implemented in this first store.
+
+An operator can pass a borrowed store to `create_host(control_store=store)`,
+or enable `hosting.persistent_keys: true` for the CLI host. The operator owns
+provisioning and closure of the store. Workspace keys are narrowed to the
+intersection of workspace sites, configured principal allowances and the
+runtime ownership map. They cannot create new mounts, widen an operator's
+site policy or use a site-free shared mount. Existing sessions are still
+checked against the key's current permitted sites on every request. The
+`eat_` prefix is reserved for persisted keys while a store is enabled; adding
+a key digest to static principal configuration does not bypass its revocation.
+
+Example operator-side provisioning, with the existing `home` site model:
+
+```python
+from pathlib import Path
+from energy_agent_tools.control_store import ControlStore
+from energy_agent_tools.models import Site
+
+store = ControlStore(Path(".energy-agent/control"))
+store.create_user("alice", "Alice")
+workspace = store.create_workspace("alice", "Home energy")
+store.put_site(
+    "alice", workspace.id, Site(id="home", user_id="alice", name="Home", timezone="Europe/London")
+)
+issued = store.create_key("alice", workspace.id, "Agent access")
+# Deliver issued.token privately once. Public metadata is issued.key.
+# Revoke with store.revoke_key("alice", workspace.id, issued.key.id).
+store.close()
+```
+
+This is a persistence and authentication foundation. Normal-user registration,
+workspace management, dynamic site creation and provider connection forms
+still need the control-plane API and web flow. The web app's current source
+and run instructions are in [apps/web](../apps/web/README.md).
+
+Backup and restore include the control database when it is under the private
+state root's `control/` directory. A restored instance retains key revocations,
+workspace scopes and site/asset mappings. Stop the host before deployment-wide
+backup, as required for the other state databases. Backups containing control
+records require the new source to restore; earlier v0.3.0 tooling does not
+recognize the added database kind. Older archives remain readable.

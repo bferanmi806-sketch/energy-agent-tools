@@ -202,9 +202,14 @@ def main() -> None:
 
         import uvicorn
 
+        from .control_store import ControlStore
         from .hosting import Principal, create_host
 
         options = config.get("hosting", {})
+        persistent_keys = options.get("persistent_keys", False)
+        if not isinstance(persistent_keys, bool):
+            parser.error("hosting.persistent_keys must be a boolean")
+        control_store = ControlStore(args.state_dir / "control") if persistent_keys else None
         principals = {
             item["user_id"]: Principal(
                 item["user_id"],
@@ -227,11 +232,14 @@ def main() -> None:
             session_idle_timeout=options.get("session_idle_timeout", 1800.0),
             max_sessions_global=options.get("max_sessions_global", 1000),
             close_agent_on_shutdown=True,
+            control_store=control_store,
         )
         try:
             uvicorn.run(application, host=args.bind_host, port=args.port, access_log=False)
         finally:
             asyncio.run(agent.close())
+            if control_store is not None:
+                control_store.close()
     elif args.command == "run-skill":
         from .workflows import run_skill
 

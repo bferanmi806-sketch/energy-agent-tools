@@ -1,7 +1,7 @@
 """Safe state backup and restore for self-hosted deployments.
 
-The host's durable state is intentionally small: the workbench database lives
-at the state root and the encrypted connection vault lives below ``vault/``.
+The workbench database lives at the state root, the encrypted connection vault
+lives below ``vault/``, and persistent identity records live below ``control/``.
 This module backs up those databases with SQLite's online backup API and puts
 them in a narrow, checksummed archive.  It does not copy operator configuration
 or environment variables.  A vault key is included only when the caller
@@ -55,6 +55,12 @@ _DATABASES: tuple[tuple[str, str, frozenset[str], str], ...] = (
         "auth.v1",
     ),
     ("jobs/jobs.sqlite3", "jobs", frozenset({"jobs"}), "jobs.v1"),
+    (
+        "control/control.sqlite3",
+        "control",
+        frozenset({"users", "workspaces", "api_keys", "sites", "assets"}),
+        "control.v1",
+    ),
 )
 
 
@@ -248,11 +254,9 @@ def _parse_manifest(value: Any) -> BackupManifest:
         if path == _MANIFEST_NAME or path in seen:
             raise _fail("invalid_manifest", "Backup file paths must be unique.")
         if not isinstance(kind, str) or kind not in {
-            "artifacts",
-            "auth",
+            *(database_kind for _, database_kind, *_ in _DATABASES),
             "vault_key",
             "profile",
-            "jobs",
             "job_payload",
         }:
             raise _fail("invalid_manifest", "Backup file kind is invalid.")
@@ -285,7 +289,7 @@ def _parse_manifest(value: Any) -> BackupManifest:
     has_key = _VAULT_KEY_NAME in seen
     if has_key != value["vault_key_included"]:
         raise _fail("invalid_manifest", "Vault key flag does not match the file list.")
-    if not any(item.kind in {"artifacts", "auth", "jobs"} for item in files):
+    if not any(item.kind in {kind for _, kind, *_ in _DATABASES} for item in files):
         raise _fail("invalid_manifest", "Backup contains no state database.")
     return BackupManifest(
         created_at=created_at,

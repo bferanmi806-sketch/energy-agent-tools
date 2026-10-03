@@ -1,0 +1,43 @@
+{
+  "milestone": "web catalogue and persistent identity foundation",
+  "date": "2026-10-03",
+  "goal_complete": false,
+  "scope": {
+    "catalogue": "authenticated production registry metadata",
+    "identity": "owned sites and allowlisted asset fields",
+    "keys": "owner-private persisted hashes, request-time revocation, policy intersection",
+    "recovery": "control database included in verified snapshot and restore"
+  },
+  "verification": {
+    "public_identity_and_contract_tests": 18,
+    "control_host_and_recovery_tests": 17,
+    "production_web_http_and_security_tests": 7,
+    "web_build_pytest_lever": {
+      "passed": 1,
+      "seconds": 183.16
+    },
+    "mypy_sources_passed": 52,
+    "browser": [
+      "sign in",
+      "owned site switch",
+      "sign out"
+    ],
+    "full_regression": "running; not yet qualified",
+    "visual_review": {
+      "disposition": "ship",
+      "scope": "verdict over five listed catalogue foundation fixes",
+      "fixes_resolved": 5,
+      "missing_input": "initial QUALITY BAR card not supplied; reviewed against supplied direction"
+    },
+    "boundary_review": "No concrete exploitable flaw found in assigned control store, key host, identity, recovery and web authentication paths."
+  },
+  "fixture": "loopback only; fictional key, synthetic sites and meter; actual production registry",
+  "limits": [
+    "provider onboarding is not implemented in this web milestone",
+    "runtime topology and policy remain operator-configured",
+    "workspace membership and shared ACLs remain open",
+    "current SDK identity route absent from earlier 0.1.0 tarball and v0.3.0 release",
+    "no physical/private provider evidence or external agent-client connection claim",
+    "broad held-out evaluation, independent contribution/review and sustained operation remain open"
+  ]
+}

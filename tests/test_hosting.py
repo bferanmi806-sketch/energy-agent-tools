@@ -495,3 +495,43 @@ async def test_owned_host_closes_agent_inside_its_lifespan(tmp_path: Path) -> No
     assert agent._closed
     assert agent.http.is_closed
     await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_identity_lists_only_token_scoped_sites_and_assets(tmp_path: Path) -> None:
+    from energy_agent_tools.models import Asset
+
+    agent = _agent(tmp_path)
+    agent.assets["one-meter"] = Asset(
+        id="one-meter",
+        site_id="one-a",
+        name="Meter",
+        kind="meter",
+        metadata={"api_key": "must-not-reach-identity"},
+        parent_id="two-meter",
+        account_ids=["foreign-account-id"],
+    )
+    agent.assets["two-meter"] = Asset(
+        id="two-meter", site_id="two-a", name="Other meter", kind="meter"
+    )
+    principals = _principals()
+    principals["one"] = Principal("one", {"one-a"}, token_digest("one-token"))
+    host = create_host(agent, principals)
+    try:
+        async with await _client(host) as client:
+            assert (await client.get("/me")).status_code == 401
+            response = await client.get("/me", headers={"Authorization": "Bearer one-token"})
+            assert response.status_code == 200
+            assert response.headers["cache-control"] == "no-store"
+            assert response.json()["user_id"] == "one"
+            assert [s["id"] for s in response.json()["sites"]] == ["one-a"]
+            assert [a["id"] for a in response.json()["assets"]] == ["one-meter"]
+            assert "must-not-reach-identity" not in response.text
+            assert "metadata" not in response.json()["assets"][0]
+            assert response.json()["assets"][0]["parent_id"] is None
+            assert response.json()["assets"][0]["account_ids"] == []
+            foreign = await client.get("/me", headers={"Authorization": "Bearer two-token"})
+            assert [s["id"] for s in foreign.json()["sites"]] == ["two-a"]
+            assert [a["id"] for a in foreign.json()["assets"]] == ["two-meter"]
+    finally:
+        await agent.close()

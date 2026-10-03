@@ -126,3 +126,9 @@ runtime validation.
 The Connect Apps web application and persistent workspace/connection control
 plane remain part of the project plan. This SDK does not qualify physical
 meters, independent agent benchmarks or sustained deployment reliability.
+
+Current development source also exposes `energy.identity()` over authenticated
+`GET /me`. It returns only the token's allowed sites and their assets, so web
+clients can choose a site without asking users to know its identifier. This
+route requires the current gateway and SDK source; it is absent from v0.3.0
+and from the earlier locally qualified 0.1.0 tarball.

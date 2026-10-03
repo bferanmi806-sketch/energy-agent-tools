@@ -45,6 +45,9 @@ async def test_sdk_response_schemas_accept_real_host_and_reject_invalid_energy_s
             base_url="http://local",
             headers={"Authorization": f"Bearer {token}"},
         ) as client:
+            identity = await client.get("/me")
+            assert identity.status_code == 200
+            validators["IdentityResponse"].validate(identity.json())
             created = await client.post("/sessions", json={"site_id": "sdk-site"})
             validators["SessionResponse"].validate(created.json())
             prefix = "/sessions/" + created.json()["session_id"]

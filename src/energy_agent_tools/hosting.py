@@ -37,7 +37,8 @@ from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .capabilities import CapabilityRequest
-from .models import EnergyError, Json, Session
+from .control_store import ControlStore
+from .models import EnergyError, Json, Session, Site
 from .runtime import EnergyAgent
 from .server import create_server
 from .skills import SKILLS, search_skills
@@ -90,6 +91,21 @@ class _RequestModel(BaseModel):
 class _SessionCreate(_RequestModel):
     site_id: StrictStr | None = None
     resume_job_id: StrictStr | None = None
+
+
+class IdentityAsset(_RequestModel):
+    id: StrictStr
+    site_id: StrictStr
+    name: StrictStr
+    kind: StrictStr
+    parent_id: StrictStr | None
+    account_ids: list[StrictStr]
+
+
+class IdentityResponse(_RequestModel):
+    user_id: StrictStr
+    sites: list[Site]
+    assets: list[IdentityAsset]
 
 
 class _JobRequest(_RequestModel):
@@ -298,6 +314,7 @@ class AuthenticatedHost:
         session_idle_timeout: float,
         max_sessions_global: int,
         close_agent_on_shutdown: bool,
+        control_store: ControlStore | None = None,
     ) -> None:
         if max_requests_per_minute <= 0:
             raise ValueError("max_requests_per_minute must be positive.")
@@ -316,6 +333,7 @@ class AuthenticatedHost:
         self.session_idle_timeout = session_idle_timeout
         self.max_sessions_global = max_sessions_global
         self._principals = self._validate_principals(principals)
+        self._control_store = control_store
         self._sessions: dict[str, _StoredSession] = {}
         self._rate_events: dict[str, deque[float]] = {}
         self._mounts: dict[tuple[str, str | None], _MCPMount] = {}
@@ -325,6 +343,7 @@ class AuthenticatedHost:
         self._mcp_lock = asyncio.Lock()
         self._build_mcp_mounts()
         routes = [
+            Route("/me", self._identity, methods=["GET"]),
             Route("/sessions", self._create_session, methods=["POST"]),
             Route("/sessions/{session_id}", self._delete_session, methods=["DELETE"]),
             Route("/sessions/{session_id}/search", self._search, methods=["POST"]),
@@ -560,7 +579,30 @@ class AuthenticatedHost:
         for principal in self._principals.values():
             if hmac.compare_digest(digest, principal.token_digest):
                 matched = principal
-        return matched if matched is not None and self._principal_active(matched) else None
+        if matched is not None and not (
+            self._control_store is not None and token.startswith("eat_")
+        ):
+            return matched if self._principal_active(matched) else None
+        if self._control_store is None:
+            return None
+        identity = self._control_store.authenticate(token)
+        if identity is None:
+            return None
+        policy = self._principals.get(identity.user_id)
+        if policy is None or not self._principal_active(policy):
+            return None
+        sites = {
+            site.id
+            for site in self._control_store.sites(identity.user_id, identity.workspace_id)
+            if site.id in policy.allowed_site_ids
+            and site.id in self.agent.sites
+            and self.agent.sites[site.id].user_id == identity.user_id
+        }
+        # Persisted keys cannot acquire a site-free mount shared by workspaces.
+        # Provisioning and dynamic topology remain operator-controlled here.
+        if not sites:
+            return None
+        return Principal(identity.user_id, sites, digest, token_id=identity.key_id)
 
     def _allow_rate(self, principal: Principal) -> bool:
         now = time.monotonic()
@@ -714,6 +756,42 @@ class AuthenticatedHost:
             else 400
         )
         return _error(exc.code, exc.message, status)
+
+    async def _identity(self, request: Request) -> Response:
+        principal = self._principal_from_request(request)
+        if isinstance(principal, Response):
+            return principal
+        allowed = set(self._available_sites(principal))
+        self.agent._sync_connections(principal.user_id)
+        visible_assets = {
+            asset.id: asset for asset in self.agent.assets.values() if asset.site_id in allowed
+        }
+        result = IdentityResponse(
+            user_id=principal.user_id,
+            sites=[
+                self.agent.sites[site_id]
+                for site_id in sorted(principal.allowed_site_ids)
+                if site_id in allowed
+            ],
+            assets=[
+                IdentityAsset(
+                    id=asset.id,
+                    site_id=asset.site_id,
+                    name=asset.name,
+                    kind=asset.kind,
+                    parent_id=asset.parent_id if asset.parent_id in visible_assets else None,
+                    account_ids=[
+                        account_id
+                        for account_id in asset.account_ids
+                        if (account := self.agent.accounts.get(account_id)) is not None
+                        and account.user_id == principal.user_id
+                        and account.site_id in {None, asset.site_id}
+                    ],
+                )
+                for asset in sorted(visible_assets.values(), key=lambda asset: asset.id)
+            ],
+        )
+        return _json_response(result.model_dump(mode="json"), headers={"Cache-Control": "no-store"})
 
     async def _create_session(self, request: Request) -> Response:
         self.cleanup_sessions()
@@ -916,6 +994,7 @@ def create_host(
     session_idle_timeout: float = 1_800.0,
     max_sessions_global: int = 1_000,
     close_agent_on_shutdown: bool = False,
+    control_store: ControlStore | None = None,
 ) -> AuthenticatedHost:
     """Build an authenticated multi-user ASGI host.
 
@@ -934,6 +1013,7 @@ def create_host(
         session_idle_timeout=session_idle_timeout,
         max_sessions_global=max_sessions_global,
         close_agent_on_shutdown=close_agent_on_shutdown,
+        control_store=control_store,
     )
 
 

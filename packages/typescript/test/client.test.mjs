@@ -47,6 +47,10 @@ test('SDK uses authenticated production REST routes and preserves scoped calcula
   const host = await startHost();
   try {
     const energy = new EnergyAgentTools({ baseUrl: host.baseUrl, token: () => host.token });
+    const identity = await energy.identity();
+    assert.equal(identity.user_id, 'sdk-user');
+    assert.deepEqual(identity.sites.map(site => site.id), ['sdk-site']);
+    assert.deepEqual(identity.assets, []);
     const session = await energy.createSession({ site_id: 'sdk-site' });
     assert.equal(session.siteId, 'sdk-site');
     const search = await session.search({ query: 'fixture calculate value' });
@@ -74,6 +78,7 @@ test('SDK uses authenticated production REST routes and preserves scoped calcula
     assert.ok((await session.artifacts()).artifacts.some(row => row.artifact_id === artifact));
     assert.equal((await session.deleteArtifact(artifact)).deleted, true);
     const foreign = new EnergyAgentTools({ baseUrl: host.baseUrl, token: host.foreignToken });
+    assert.equal((await foreign.identity()).user_id, 'sdk-foreign-user');
     const foreignSession = foreign.session({ sessionId: session.id });
     await assert.rejects(foreignSession.artifacts(), error => error instanceof EnergyHttpError && error.status === 404);
     await assert.rejects(foreignSession.runSkill({ skill_id: 'missing_fixture_skill' }), error => error instanceof EnergyHttpError && error.status === 404);

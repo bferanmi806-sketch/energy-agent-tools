@@ -4,9 +4,11 @@
   "package": {
     "name": "@energy-agent-tools/sdk",
     "file": "energy-agent-tools-sdk-0.1.0.tgz",
-    "sha256": "a18379c2f2ccbad7570c44349e30d22532bf715ab2b81ad3f85e64b5ca0f769c",
-    "bytes": 18082,
-    "published_to_npm": false
+    "sha256": "0e31e87c41519cb628c3aa7721c781c879db4ef3cecd69da88027bc91ea8c677",
+    "bytes": 18817,
+    "published_to_npm": false,
+    "license": "MIT",
+    "license_included": true
   },
   "verification": {
     "node_suite": "11 passed, 0 failed",
@@ -16,7 +18,7 @@
     "strict_typescript": "passed",
     "isolated_consumer_rest_acceptance": "1 passed, installed tarball files match built SDK",
     "isolated_consumer_public_types": "passed, including expected invalid-kind and unknown-data checks",
-    "consumer_log_sha256": "f79b2823f02749ae157a14eda16ca86f459ea1a73f3973d32832e58c5da7a107",
+    "consumer_log_sha256": "c235eeac53696009ad0c0546d1eac605e9d0021cebe71732e8cb4d9760117ec0",
     "generated_contracts": "checked",
     "ruff": "passed",
     "ruff_format": "209 files already formatted",
@@ -60,5 +62,20 @@
     "Connect Apps UI and persistent workspace/connection control plane remain unfinished.",
     "Broad actual agent evaluation, independent review/contribution and sustained operation remain open."
   ],
-  "reproduction": "uv run python scripts/verify_typescript_sdk.py"
+  "reproduction": "uv run python scripts/verify_typescript_sdk.py",
+  "distribution_revision": "fea8aa39d37920861fa67b5fd3d9181212621461",
+  "distribution_ci": {
+    "revision": "fea8aa39d37920861fa67b5fd3d9181212621461",
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37075055615",
+    "status": "success",
+    "python": {
+      "3.12": "637 passed in 201.43s (0:03:21)",
+      "3.13": "637 passed in 178.29s (0:02:58)",
+      "3.11": "637 passed in 188.87s (0:03:08)"
+    },
+    "log_sha256": "f7d42ade4b998b134ebb3ade33d069ab88adc890fe909e1072d2d0c4da25c2f9",
+    "container": "passed",
+    "upgrade": "passed",
+    "home_assistant": "passed"
+  }
 }

@@ -10,6 +10,10 @@ and MCP hosting, Python and TypeScript SDKs, executable workflows, and local tim
 analysis. Results retain their physical unit, measurement kind, source, input
 lineage and warnings. A forecast or simulation never becomes a meter reading.
 
+The first web console is in [apps/web](apps/web/README.md). It requires the
+current-source gateway and provides authenticated catalogue browsing and site
+selection. Provider onboarding through the web remains under development.
+
 ## Start locally
 
 Requires Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).

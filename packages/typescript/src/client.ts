@@ -2,6 +2,7 @@ import { HttpTransport } from "./transport.js";
 import type { HttpTransportOptions } from "./transport.js";
 import { parser } from "./validation.js";
 import {
+  IdentityResponseSchema,
   SessionCreateSchema, SessionResponseSchema, SearchRequestSchema, SearchResponseSchema,
   ExecuteRequestSchema, ExecutionResponseSchema, CapabilityRequestSchema,
   CapabilityExecutionRequestSchema, ResolutionResponseSchema, ConnectionsResponseSchema,
@@ -10,10 +11,12 @@ import {
   SkillExecutionRequestSchema, WorkflowResponseSchema, ToolkitsResponseSchema,
 } from "./contracts.js";
 import type {
+  IdentityResponse,
   SessionCreate, SessionResponse, SearchRequest, SearchResponse, ExecuteRequest, ExecutionResponse, CapabilityRequest, CapabilityExecutionRequest, ResolutionResponse, ConnectionsResponse, ArtifactsResponse, SkillsResponse, JobRequest, JobResponse, DeleteSessionResponse, DeleteArtifactResponse, SkillExecutionRequest, WorkflowResponse, ToolkitsResponse
 } from "./contracts.js";
 
 const parseSessionCreate = parser<SessionCreate>(SessionCreateSchema);
+const parseIdentity = parser<IdentityResponse>(IdentityResponseSchema);
 const parseSession = parser<SessionResponse>(SessionResponseSchema);
 const parseSearchRequest = parser<SearchRequest>(SearchRequestSchema);
 const parseSearch = parser<SearchResponse>(SearchResponseSchema);
@@ -46,6 +49,10 @@ export class EnergyAgentTools {
 
   constructor(options: HttpTransportOptions) {
     this.#transport = new HttpTransport(options);
+  }
+
+  identity(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "me", method: "GET", parse: parseIdentity, ...options });
   }
 
   async createSession(input: SessionCreate = {}, options: RequestOptions = {}) {
