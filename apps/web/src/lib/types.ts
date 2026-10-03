@@ -7,6 +7,7 @@ import type {
   ArtifactsResponse,
   WorkspaceAssetsResponse,
   WorkspaceKeysResponse,
+  WorkspaceMembersResponse,
   WorkspaceOAuthConfigurationsResponse,
   WorkspaceResponse,
   WorkspaceSitesResponse,
@@ -34,6 +35,7 @@ export interface ManagedDashboardData extends DashboardBase {
   sites: WorkspaceSitesResponse["sites"];
   assets: WorkspaceAssetsResponse["assets"];
   keys: WorkspaceKeysResponse["keys"];
+  members: WorkspaceMembersResponse["members"];
   connectionSetups: ConnectionSetupsResponse["setups"];
   toolkits: ToolkitsResponse["toolkits"];
   connections: ConnectionsResponse["connections"];

@@ -56,6 +56,7 @@ export async function loadDashboard(): Promise<DashboardState> {
         workspace.connections(),
         workspace.keys(),
         workspace.authConfigurations(),
+        workspace.members(),
       ]);
 
       return {
@@ -71,13 +72,16 @@ export async function loadDashboard(): Promise<DashboardState> {
           connections: settledValue(results[5]).connections,
           keys: settledValue(results[6]).keys,
           authConfigurations: settledValue(results[7]).configurations,
+          members: settledValue(results[8]).members,
           publicGatewayUrl: config.publicGatewayUrl,
         },
       };
     }
 
-    const ownedSites = identity.sites.filter((site) => site.user_id === identity.user_id);
-    const selectedSite = ownedSites.find((site) => site.id === session.siteId) ?? ownedSites[0];
+    const availableSites = identity.workspace?.mode === "managed"
+      ? identity.sites
+      : identity.sites.filter((site) => site.user_id === identity.user_id);
+    const selectedSite = availableSites.find((site) => site.id === session.siteId) ?? availableSites[0];
     const siteId = selectedSite?.id ?? null;
     const scopedSession = await gateway.createSession({ site_id: siteId });
 

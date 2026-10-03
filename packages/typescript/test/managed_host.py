@@ -51,6 +51,7 @@ def create_app(
     state_dir.mkdir(parents=True, exist_ok=True)
     control = ControlStore(state_dir / "control")
     bootstrap = control.bootstrap_workspace("SDK fixture owner", "SDK fixture workspace")
+    control.create_user("sdk-member", "SDK member")
     write_private_token(token_file, bootstrap.key.token)
 
     if other_token_file is not None:

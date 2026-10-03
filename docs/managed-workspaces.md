@@ -170,6 +170,53 @@ backup/restore. Existing schema 1 vaults migrate when opened. Backup manifests
 record the vault's actual schema version. Restoring pending cleanup requires
 the original vault key and the matching approved provider configuration.
 
-Shared workspace membership, connection ACLs, generic custom OAuth, automatic
-MCP authorization discovery and site deletion remain under development. Current managed workspaces are private
-to one owner.
+ControlStore schema 4 adds workspace membership and explicit connection grants.
+Existing schema 1, 2 and 3 stores migrate when opened. Existing operator workspaces
+keep their operator policy and do not gain managed sharing. Backup manifests
+record the actual control schema; member keys, grants and revocations survive
+restart and restore.
+
+Generic custom OAuth, automatic MCP authorization discovery, owner transfer and
+site deletion remain under development.
+
+## Share selected connections
+
+The workspace owner can enroll an existing instance user through **Sharing**.
+Use the user's public user ID, never their management key. A teammate can obtain
+their user ID from their own bootstrap result using the same instance state
+directory. Bootstrap provisions a separate private workspace and prints that
+user's initial management key; keep that key private to them. This version does
+not send invitations or provide email-based registration.
+
+1. Add the existing user. Membership starts with no site or connection access.
+2. Select the sites and active mapped connections to share, then save permissions.
+3. Create a member agent key for the saved site grants. Copy its one-time token
+   or MCP configuration and provide it to the member through your chosen channel.
+4. The member uses that key to connect their agent or sign into the web app.
+
+The key identifies the member as the actor. The connected account and its
+encrypted credential remain owned by the original owner. Members can discover
+and execute only granted connections at their allowed sites. A newly connected
+account remains private. Membership does not grant connection management,
+membership management, the owner's artifacts, other members' datasets or jobs.
+
+Removing a connection grant prevents later provider requests through existing
+REST and MCP sessions. Permission changes invalidate captured workspace sessions;
+create a fresh REST session or reconnect MCP to use the current grant. Requests
+already dispatched to an external provider may finish. Removing membership
+revokes its keys transactionally. Readding that user does not revive old keys.
+
+Owner management routes are:
+
+| Method | Route | Input |
+| --- | --- | --- |
+| GET | `/workspace/members` | None |
+| POST | `/workspace/members` | `user_id` |
+| PATCH | `/workspace/members/{user_id}` | Explicit `site_ids` and `connection_ids` |
+| DELETE | `/workspace/members/{user_id}` | None |
+| POST | `/workspace/members/{user_id}/keys` | `name` and `site_ids` |
+
+Member grants are limited to 256 sites and 256 connections; a workspace supports
+256 members. Connection grants require active accounts mapped to granted sites.
+Agent key site grants further restrict membership grants. No wildcard shares
+future accounts. The TypeScript workspace client exposes the same operations.

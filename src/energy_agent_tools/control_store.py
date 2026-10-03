@@ -30,6 +30,7 @@ from .control_contracts import (
     WorkspaceSiteRequest,
 )
 from .models import Asset, EnergyError, Site, StrictModel
+from .workspace_access import WorkspaceKeyScope, WorkspaceMember, WorkspaceMemberGrants
 
 __all__ = [
     "BootstrapWorkspace",
@@ -41,7 +42,7 @@ __all__ = [
     "WorkspaceRecord",
 ]
 
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 _LEGACY_ACCESS_JSON = '{"kind":"legacy-agent"}'
 _ISSUABLE_ACCESS_ADAPTER: TypeAdapter[IssuableKeyAccess] = TypeAdapter(IssuableKeyAccess)
 _KEY_ACCESS_ADAPTER: TypeAdapter[KeyAccess] = TypeAdapter(KeyAccess)
@@ -104,6 +105,7 @@ class KeyIdentity(_ControlRecord):
     key_id: str = Field(min_length=1, max_length=_MAX_TEXT_LENGTH)
     access: KeyAccess
     workspace_mode: WorkspaceMode
+    scope: WorkspaceKeyScope | None = None
 
 
 def _error(code: str, message: str) -> EnergyError:
@@ -195,6 +197,31 @@ def _validate_issuable_access(access: IssuableKeyAccess) -> ManageKeyAccess | Ag
     return validated
 
 
+def _validate_member_grants(grants: WorkspaceMemberGrants) -> WorkspaceMemberGrants:
+    if type(grants) is not WorkspaceMemberGrants:
+        _invalid_request()
+    try:
+        return WorkspaceMemberGrants.model_validate_json(grants.model_dump_json())
+    except (ValidationError, TypeError, ValueError):
+        _invalid_request()
+
+
+def _parse_member_grants(site_ids_json: str, connection_ids_json: str) -> WorkspaceMemberGrants:
+    try:
+        return WorkspaceMemberGrants(
+            site_ids=json.loads(site_ids_json),
+            connection_ids=json.loads(connection_ids_json),
+        )
+    except (ValidationError, TypeError, ValueError):
+        raise RuntimeError("Control store contains invalid workspace member grants.") from None
+
+
+def _policy_revision(value: object) -> int:
+    if type(value) is not int or value < 0:
+        raise RuntimeError("Control store contains an invalid workspace policy revision.")
+    return value
+
+
 class ControlStore:
     """Persistent owner-private identities and energy site records."""
 
@@ -222,7 +249,7 @@ class ControlStore:
             version = int(db.execute("PRAGMA user_version").fetchone()[0])
             if version > _SCHEMA_VERSION:
                 raise RuntimeError("Control store schema is newer than this version supports.")
-            if version not in (0, 1, 2, _SCHEMA_VERSION):
+            if version not in (0, 1, 2, 3, _SCHEMA_VERSION):
                 raise RuntimeError("Control store schema version is unsupported.")
 
             db.execute("PRAGMA foreign_keys = ON")
@@ -237,7 +264,7 @@ class ControlStore:
                     db.execute(statement)
                 db.execute("PRAGMA user_version = 1")
                 version = 1
-            elif version not in (1, 2, _SCHEMA_VERSION):
+            elif version not in (1, 2, 3, _SCHEMA_VERSION):
                 raise RuntimeError("Control store schema version is unsupported.")
             if version == 1:
                 db.execute(
@@ -258,7 +285,78 @@ class ControlStore:
                 # A v2 workspace has no managed marker. Keep migration
                 # conservative even if a compatible writer used another default.
                 db.execute("UPDATE workspaces SET mode = 'operator'")
-                db.execute("PRAGMA user_version = 3")
+                version = 3
+            if version == 3:
+                db.execute(
+                    "ALTER TABLE workspaces ADD COLUMN policy_revision INTEGER NOT NULL "
+                    "DEFAULT 0 CHECK(policy_revision >= 0)"
+                )
+                db.execute("ALTER TABLE api_keys RENAME TO api_keys_v3")
+                db.execute(
+                    """CREATE TABLE api_keys (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        workspace_id TEXT NOT NULL,
+                        name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 256),
+                        token_hash TEXT NOT NULL UNIQUE CHECK(length(token_hash) = 64),
+                        token_prefix TEXT NOT NULL CHECK(length(token_prefix) BETWEEN 1 AND 16),
+                        created_at TEXT NOT NULL,
+                        expires_at TEXT,
+                        revoked INTEGER NOT NULL CHECK(revoked IN (0, 1)),
+                        access_json TEXT NOT NULL,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+                    )"""
+                )
+                db.execute(
+                    """INSERT INTO api_keys(
+                        id, user_id, workspace_id, name, token_hash, token_prefix,
+                        created_at, expires_at, revoked, access_json
+                    ) SELECT id, user_id, workspace_id, name, token_hash, token_prefix,
+                             created_at, expires_at, revoked, access_json
+                      FROM api_keys_v3"""
+                )
+                db.execute("DROP TABLE api_keys_v3")
+                db.execute(
+                    "CREATE INDEX api_keys_scope ON api_keys(user_id, workspace_id, created_at, id)"
+                )
+                db.execute(
+                    """CREATE TABLE workspace_members (
+                        workspace_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        site_ids_json TEXT NOT NULL,
+                        connection_ids_json TEXT NOT NULL,
+                        PRIMARY KEY(workspace_id, user_id),
+                        FOREIGN KEY(workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )"""
+                )
+                db.execute(
+                    "CREATE INDEX workspace_members_user ON workspace_members(user_id, workspace_id)"
+                )
+                db.execute(
+                    """CREATE TRIGGER workspace_members_managed_insert
+                       BEFORE INSERT ON workspace_members
+                       WHEN (SELECT mode FROM workspaces WHERE id = NEW.workspace_id) != 'managed'
+                         OR (SELECT user_id FROM workspaces WHERE id = NEW.workspace_id) = NEW.user_id
+                       BEGIN SELECT RAISE(ABORT, 'invalid workspace membership'); END"""
+                )
+                db.execute(
+                    """CREATE TRIGGER workspace_members_managed_update
+                       BEFORE UPDATE OF workspace_id, user_id ON workspace_members
+                       WHEN (SELECT mode FROM workspaces WHERE id = NEW.workspace_id) != 'managed'
+                         OR (SELECT user_id FROM workspaces WHERE id = NEW.workspace_id) = NEW.user_id
+                       BEGIN SELECT RAISE(ABORT, 'invalid workspace membership'); END"""
+                )
+                db.execute(
+                    """CREATE TRIGGER workspace_members_limit_insert
+                       BEFORE INSERT ON workspace_members
+                       WHEN (SELECT COUNT(*) FROM workspace_members
+                             WHERE workspace_id = NEW.workspace_id) >= 256
+                       BEGIN SELECT RAISE(ABORT, 'workspace member limit reached'); END"""
+                )
+                version = 4
+            db.execute(f"PRAGMA user_version = {version}")
             db.commit()
         except BaseException:
             if db.in_transaction:
@@ -304,6 +402,92 @@ class ControlStore:
             is None
         ):
             _not_found()
+
+    @staticmethod
+    def _require_managed_workspace(
+        db: sqlite3.Connection, owner_user_id: str, workspace_id: str
+    ) -> sqlite3.Row:
+        row = db.execute(
+            """SELECT id, user_id, mode, policy_revision FROM workspaces
+               WHERE id = ? AND user_id = ?""",
+            (workspace_id, owner_user_id),
+        ).fetchone()
+        if row is None:
+            _not_found()
+        if _parse_workspace_mode(row["mode"]) != "managed":
+            _not_found()
+        _policy_revision(row["policy_revision"])
+        member_count = db.execute(
+            "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ?", (workspace_id,)
+        ).fetchone()[0]
+        if member_count > 256:
+            raise RuntimeError("Control store contains too many workspace members.")
+        return row
+
+    @staticmethod
+    def _member_grants_belong_to_workspace(
+        db: sqlite3.Connection,
+        owner_user_id: str,
+        workspace_id: str,
+        grants: WorkspaceMemberGrants,
+    ) -> bool:
+        if not grants.site_ids:
+            return True
+        placeholders = ", ".join("?" for _ in grants.site_ids)
+        rows = db.execute(
+            f"""SELECT id FROM sites
+                WHERE user_id = ? AND workspace_id = ? AND id IN ({placeholders})""",
+            (owner_user_id, workspace_id, *grants.site_ids),
+        ).fetchall()
+        return {row["id"] for row in rows} == set(grants.site_ids)
+
+    @staticmethod
+    def _bump_policy_revision(db: sqlite3.Connection, owner_user_id: str, workspace_id: str) -> int:
+        row = db.execute(
+            "SELECT policy_revision FROM workspaces WHERE id = ? AND user_id = ?",
+            (workspace_id, owner_user_id),
+        ).fetchone()
+        if row is None:
+            _not_found()
+        revision = _policy_revision(row["policy_revision"])
+        if revision >= 2**63 - 1:
+            raise RuntimeError("Workspace policy revision cannot be incremented further.")
+        revision += 1
+        db.execute(
+            "UPDATE workspaces SET policy_revision = ? WHERE id = ? AND user_id = ?",
+            (revision, workspace_id, owner_user_id),
+        )
+        return revision
+
+    @staticmethod
+    def _workspace_member(
+        db: sqlite3.Connection,
+        owner_user_id: str,
+        workspace_id: str,
+        member_user_id: str,
+    ) -> WorkspaceMember | None:
+        if member_user_id == owner_user_id:
+            raise RuntimeError("Control store contains an invalid workspace member.")
+        row = db.execute(
+            """SELECT u.name, m.site_ids_json, m.connection_ids_json
+               FROM workspace_members AS m
+               JOIN users AS u ON u.id = m.user_id
+               WHERE m.workspace_id = ? AND m.user_id = ?""",
+            (workspace_id, member_user_id),
+        ).fetchone()
+        if row is None:
+            return None
+        grants = _parse_member_grants(row["site_ids_json"], row["connection_ids_json"])
+        if not ControlStore._member_grants_belong_to_workspace(
+            db, owner_user_id, workspace_id, grants
+        ):
+            raise RuntimeError("Control store contains invalid workspace member grants.")
+        return WorkspaceMember(
+            user_id=member_user_id,
+            workspace_id=workspace_id,
+            name=row["name"],
+            grants=grants,
+        )
 
     @staticmethod
     def _key_record(row: sqlite3.Row) -> KeyRecord:
@@ -490,6 +674,290 @@ class ControlStore:
             self._insert_key(db, issued, token_hash)
         return issued
 
+    def add_member(
+        self, owner_user_id: str, workspace_id: str, member_user_id: str
+    ) -> WorkspaceMember:
+        owner_user_id = _validate_text(owner_user_id)
+        workspace_id = _validate_text(workspace_id)
+        member_user_id = _validate_text(member_user_id)
+        with self._connection(write=True) as db:
+            self._require_managed_workspace(db, owner_user_id, workspace_id)
+            if member_user_id == owner_user_id:
+                _invalid_request()
+            user = db.execute("SELECT name FROM users WHERE id = ?", (member_user_id,)).fetchone()
+            if user is None:
+                _not_found()
+            if (
+                db.execute(
+                    "SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ?",
+                    (workspace_id, member_user_id),
+                ).fetchone()
+                is not None
+            ):
+                _conflict()
+            member_count = db.execute(
+                "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchone()[0]
+            if member_count >= 256:
+                _conflict()
+            db.execute(
+                "UPDATE api_keys SET revoked = 1 WHERE workspace_id = ? AND user_id = ?",
+                (workspace_id, member_user_id),
+            )
+            db.execute(
+                """INSERT INTO workspace_members(
+                    workspace_id, user_id, site_ids_json, connection_ids_json
+                ) VALUES (?, ?, '[]', '[]')""",
+                (workspace_id, member_user_id),
+            )
+            self._bump_policy_revision(db, owner_user_id, workspace_id)
+            return WorkspaceMember(
+                user_id=member_user_id,
+                workspace_id=workspace_id,
+                name=user["name"],
+                grants=WorkspaceMemberGrants(),
+            )
+
+    def members(self, owner_user_id: str, workspace_id: str) -> list[WorkspaceMember]:
+        owner_user_id = _validate_text(owner_user_id)
+        workspace_id = _validate_text(workspace_id)
+        with self._connection() as db:
+            self._require_managed_workspace(db, owner_user_id, workspace_id)
+            rows = db.execute(
+                "SELECT user_id FROM workspace_members WHERE workspace_id = ? ORDER BY user_id",
+                (workspace_id,),
+            ).fetchall()
+            result: list[WorkspaceMember] = []
+            for row in rows:
+                member = self._workspace_member(db, owner_user_id, workspace_id, row["user_id"])
+                if member is None:
+                    raise RuntimeError("Control store contains an invalid workspace member.")
+                result.append(member)
+        return result
+
+    def set_member_grants(
+        self,
+        owner_user_id: str,
+        workspace_id: str,
+        member_user_id: str,
+        grants: WorkspaceMemberGrants,
+    ) -> WorkspaceMember:
+        owner_user_id = _validate_text(owner_user_id)
+        workspace_id = _validate_text(workspace_id)
+        member_user_id = _validate_text(member_user_id)
+        with self._connection(write=True) as db:
+            self._require_managed_workspace(db, owner_user_id, workspace_id)
+            grants = _validate_member_grants(grants)
+            member = self._workspace_member(db, owner_user_id, workspace_id, member_user_id)
+            if member is None:
+                _not_found()
+            if not self._member_grants_belong_to_workspace(db, owner_user_id, workspace_id, grants):
+                _not_found()
+            current_row = db.execute(
+                """SELECT site_ids_json, connection_ids_json FROM workspace_members
+                   WHERE workspace_id = ? AND user_id = ?""",
+                (workspace_id, member_user_id),
+            ).fetchone()
+            if current_row is None:
+                _not_found()
+            if (
+                _parse_member_grants(
+                    current_row["site_ids_json"], current_row["connection_ids_json"]
+                )
+                != grants
+            ):
+                db.execute(
+                    """UPDATE workspace_members
+                       SET site_ids_json = ?, connection_ids_json = ?
+                       WHERE workspace_id = ? AND user_id = ?""",
+                    (
+                        json.dumps(grants.site_ids, separators=(",", ":")),
+                        json.dumps(grants.connection_ids, separators=(",", ":")),
+                        workspace_id,
+                        member_user_id,
+                    ),
+                )
+                self._bump_policy_revision(db, owner_user_id, workspace_id)
+            return WorkspaceMember(
+                user_id=member_user_id,
+                workspace_id=workspace_id,
+                name=member.name,
+                grants=grants,
+            )
+
+    def remove_member(self, owner_user_id: str, workspace_id: str, member_user_id: str) -> None:
+        owner_user_id = _validate_text(owner_user_id)
+        workspace_id = _validate_text(workspace_id)
+        member_user_id = _validate_text(member_user_id)
+        with self._connection(write=True) as db:
+            self._require_managed_workspace(db, owner_user_id, workspace_id)
+            if member_user_id == owner_user_id:
+                _invalid_request()
+            cursor = db.execute(
+                "DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?",
+                (workspace_id, member_user_id),
+            )
+            db.execute(
+                "UPDATE api_keys SET revoked = 1 WHERE workspace_id = ? AND user_id = ?",
+                (workspace_id, member_user_id),
+            )
+            if cursor.rowcount == 0:
+                return
+            self._bump_policy_revision(db, owner_user_id, workspace_id)
+
+    def create_member_key(
+        self,
+        owner_user_id: str,
+        workspace_id: str,
+        member_user_id: str,
+        name: str,
+        *,
+        access: AgentKeyAccess,
+        expires_at: datetime | None = None,
+    ) -> IssuedKey:
+        owner_user_id = _validate_text(owner_user_id)
+        workspace_id = _validate_text(workspace_id)
+        member_user_id = _validate_text(member_user_id)
+        with self._connection(write=True) as db:
+            self._require_managed_workspace(db, owner_user_id, workspace_id)
+            name = _validate_text(name)
+            expiry = _aware_utc(expires_at)
+            if type(access) is not AgentKeyAccess:
+                _invalid_request()
+            validated_access = _validate_issuable_access(access)
+            if not isinstance(validated_access, AgentKeyAccess):
+                _invalid_request()
+            if expiry is not None and expiry <= datetime.now(UTC):
+                _invalid_request()
+            member = self._workspace_member(db, owner_user_id, workspace_id, member_user_id)
+            if member is None:
+                _not_found()
+            if not set(validated_access.site_ids).issubset(member.grants.site_ids):
+                _not_found()
+            if not self._member_grants_belong_to_workspace(
+                db,
+                owner_user_id,
+                workspace_id,
+                WorkspaceMemberGrants(
+                    site_ids=validated_access.site_ids,
+                    connection_ids=member.grants.connection_ids,
+                ),
+            ):
+                _not_found()
+            issued, token_hash = self._new_issued_key(
+                member_user_id, workspace_id, name, expiry, validated_access
+            )
+            self._insert_key(db, issued, token_hash)
+        return issued
+
+    @staticmethod
+    def _scope_for_key(
+        db: sqlite3.Connection, row: sqlite3.Row, access: KeyAccess
+    ) -> WorkspaceKeyScope | None:
+        try:
+            if _parse_workspace_mode(row["mode"]) != "managed":
+                return None
+            if row["revoked"] != 0:
+                return None
+            created_at = _datetime(row["created_at"])
+            if created_at is None:
+                return None
+            expires_at = _datetime(row["expires_at"])
+            if expires_at is not None and expires_at <= datetime.now(UTC):
+                return None
+            revision = _policy_revision(row["policy_revision"])
+            actor_user_id = row["user_id"]
+            owner_user_id = row["owner_user_id"]
+            workspace_id = row["workspace_id"]
+            member_count = db.execute(
+                "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchone()[0]
+            if member_count > 256:
+                return None
+
+            actual_site_rows = db.execute(
+                """SELECT id FROM sites
+                   WHERE user_id = ? AND workspace_id = ? ORDER BY id""",
+                (owner_user_id, workspace_id),
+            ).fetchall()
+            actual_site_ids = {site["id"] for site in actual_site_rows}
+
+            if actor_user_id == owner_user_id:
+                if (
+                    db.execute(
+                        "SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ?",
+                        (workspace_id, owner_user_id),
+                    ).fetchone()
+                    is not None
+                ):
+                    return None
+                if isinstance(access, ManageKeyAccess):
+                    site_ids = actual_site_ids
+                elif isinstance(access, AgentKeyAccess):
+                    site_ids = actual_site_ids.intersection(access.site_ids)
+                else:
+                    return None
+                connection_ids = None
+            else:
+                if not isinstance(access, AgentKeyAccess):
+                    return None
+                member_row = db.execute(
+                    """SELECT m.site_ids_json, m.connection_ids_json
+                       FROM workspace_members AS m
+                       JOIN users AS u ON u.id = m.user_id
+                       WHERE m.workspace_id = ? AND m.user_id = ?""",
+                    (workspace_id, actor_user_id),
+                ).fetchone()
+                if member_row is None:
+                    return None
+                grants = _parse_member_grants(
+                    member_row["site_ids_json"], member_row["connection_ids_json"]
+                )
+                if not ControlStore._member_grants_belong_to_workspace(
+                    db, owner_user_id, workspace_id, grants
+                ):
+                    return None
+                site_ids = actual_site_ids.intersection(grants.site_ids).intersection(
+                    access.site_ids
+                )
+                connection_ids = grants.connection_ids
+
+            return WorkspaceKeyScope(
+                actor_user_id=actor_user_id,
+                resource_owner_id=owner_user_id,
+                workspace_id=workspace_id,
+                key_id=row["id"],
+                revision=revision,
+                site_ids=sorted(site_ids),
+                connection_ids=connection_ids,
+            )
+        except (KeyError, RuntimeError, TypeError, ValueError, ValidationError):
+            return None
+
+    def key_scope(self, key_id: str) -> WorkspaceKeyScope | None:
+        if not isinstance(key_id, str) or not key_id.strip() or len(key_id) > _MAX_TEXT_LENGTH:
+            return None
+        with self._connection() as db:
+            db.execute("BEGIN")
+            row = db.execute(
+                """SELECT k.id, k.user_id, k.workspace_id, k.created_at, k.expires_at,
+                          k.revoked, k.access_json, w.user_id AS owner_user_id,
+                          w.mode, w.policy_revision
+                   FROM api_keys AS k
+                   JOIN workspaces AS w ON w.id = k.workspace_id
+                   WHERE k.id = ?""",
+                (key_id,),
+            ).fetchone()
+            if row is None or row["revoked"] != 0:
+                return None
+            try:
+                access = _parse_access(row["access_json"])
+            except RuntimeError:
+                return None
+            return self._scope_for_key(db, row, access)
+
     def authenticate(self, raw_token: str) -> KeyIdentity | None:
         if (
             not isinstance(raw_token, str)
@@ -500,29 +968,41 @@ class ControlStore:
         token_hash = hashlib.sha256(raw_token.encode("ascii")).hexdigest()
         now = _iso(datetime.now(UTC))
         with self._connection() as db:
+            db.execute("BEGIN")
             row = db.execute(
-                """SELECT k.id, k.user_id, k.workspace_id, k.access_json, w.mode
+                """SELECT k.id, k.user_id, k.workspace_id, k.created_at, k.expires_at,
+                          k.revoked, k.access_json, w.user_id AS owner_user_id,
+                          w.mode, w.policy_revision
                    FROM api_keys AS k
                    JOIN workspaces AS w
-                     ON w.id = k.workspace_id AND w.user_id = k.user_id
+                     ON w.id = k.workspace_id
                    WHERE k.token_hash = ? AND k.revoked = 0
                      AND (k.expires_at IS NULL OR k.expires_at > ?)""",
                 (token_hash, now),
             ).fetchone()
-        if row is None:
-            return None
-        try:
-            access = _parse_access(row["access_json"])
-            workspace_mode = _parse_workspace_mode(row["mode"])
-        except RuntimeError:
-            return None
-        return KeyIdentity(
-            user_id=row["user_id"],
-            workspace_id=row["workspace_id"],
-            key_id=row["id"],
-            access=access,
-            workspace_mode=workspace_mode,
-        )
+            if row is None:
+                return None
+            try:
+                access = _parse_access(row["access_json"])
+                workspace_mode = _parse_workspace_mode(row["mode"])
+            except RuntimeError:
+                return None
+            if workspace_mode == "operator":
+                if row["user_id"] != row["owner_user_id"]:
+                    return None
+                scope = None
+            else:
+                scope = self._scope_for_key(db, row, access)
+                if scope is None:
+                    return None
+            return KeyIdentity(
+                user_id=row["user_id"],
+                workspace_id=row["workspace_id"],
+                key_id=row["id"],
+                access=access,
+                workspace_mode=workspace_mode,
+                scope=scope,
+            )
 
     def keys(self, user_id: str, workspace_id: str) -> list[KeyRecord]:
         user_id = _validate_text(user_id)
@@ -532,8 +1012,8 @@ class ControlStore:
             rows = db.execute(
                 """SELECT id, user_id, workspace_id, name, token_prefix,
                           created_at, expires_at, revoked, access_json
-                   FROM api_keys WHERE user_id = ? AND workspace_id = ? ORDER BY created_at, id""",
-                (user_id, workspace_id),
+                   FROM api_keys WHERE workspace_id = ? ORDER BY created_at, id""",
+                (workspace_id,),
             ).fetchall()
         return [self._key_record(row) for row in rows]
 
@@ -545,8 +1025,8 @@ class ControlStore:
             self._require_workspace(db, user_id, workspace_id)
             cursor = db.execute(
                 """UPDATE api_keys SET revoked = 1
-                   WHERE id = ? AND user_id = ? AND workspace_id = ?""",
-                (key_id, user_id, workspace_id),
+                   WHERE id = ? AND workspace_id = ?""",
+                (key_id, workspace_id),
             )
             if cursor.rowcount == 0:
                 _not_found()

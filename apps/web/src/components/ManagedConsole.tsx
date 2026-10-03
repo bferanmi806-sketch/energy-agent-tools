@@ -10,6 +10,7 @@ import {
   LogOut,
   Search,
   ShieldCheck,
+  Users,
   Waves,
   X,
   type LucideIcon,
@@ -23,8 +24,9 @@ import { HomeAssistantConnect } from "./HomeAssistantConnect";
 import { PendingConnection } from "./PendingConnection";
 import { AgentKeyPanel } from "./AgentKeyPanel";
 import { WorkspaceAssetForm, WorkspaceSiteForm } from "./WorkspaceForms";
+import { WorkspaceSharing } from "./WorkspaceSharing";
 
-type ViewId = "apps" | "connections" | "sites" | "agent";
+type ViewId = "apps" | "connections" | "sites" | "sharing" | "agent";
 
 interface NavigationItem {
   id: ViewId;
@@ -36,6 +38,7 @@ const NAVIGATION: NavigationItem[] = [
   { id: "apps", label: "Connect apps", icon: LayoutGrid },
   { id: "connections", label: "Connections", icon: Activity },
   { id: "sites", label: "Sites & assets", icon: ShieldCheck },
+  { id: "sharing", label: "Sharing", icon: Users },
   { id: "agent", label: "Connect my agent", icon: ArrowRight },
 ];
 
@@ -55,6 +58,10 @@ const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
   agent: {
     title: "Connect your agent",
     description: "Create an agent key with access only to the sites you select.",
+  },
+  sharing: {
+    title: "Shared connections",
+    description: "Give workspace members access to selected sites and active connections.",
   },
 };
 
@@ -253,6 +260,7 @@ export function ManagedConsole({
           ) : null}
           {view === "connections" ? <ConnectionsView data={data} onBrowseApps={() => navigate("apps")} /> : null}
           {view === "sites" ? <SitesView data={data} /> : null}
+          {view === "sharing" ? <WorkspaceSharing members={data.members} sites={data.sites} connections={data.connections} gatewayUrl={data.publicGatewayUrl} /> : null}
           {view === "agent" ? <AgentKeyPanel keys={data.keys} sites={data.sites} gatewayUrl={data.publicGatewayUrl} /> : null}
         </main>
         <footer className="workspace-footer">

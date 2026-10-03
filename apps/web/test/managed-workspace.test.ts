@@ -87,6 +87,7 @@ def create_app(base: Path):
     control = ControlStore(base / "control")
     first = control.bootstrap_workspace("Owner", "Managed home")
     second = control.bootstrap_workspace("Other owner", "Second workspace")
+    control.create_user("web-member", "Web member")
     second_site = control.create_site(second.user.id, second.workspace.id, name="Other site", timezone="UTC")
     for name, token in (("manager.token", first.key.token), ("other-manager.token", second.key.token)):
         path = base / name
@@ -385,6 +386,48 @@ test("production web onboards a zero-site manager through the real managed gatew
     const agentCannotCreateSite = await post("/api/workspace/sites", { name: "Denied site", timezone: "UTC" }, agentCookie);
     assert.equal(agentCannotCreateSite.status, 403);
     assert.ok(!(await agentCannotCreateSite.text()).includes(agentToken));
+
+    const memberFields = { operation: "add", user_id: "web-member" };
+    assert.equal((await post("/api/workspace/members", memberFields)).status, 401);
+    assert.equal((await post("/api/workspace/members", memberFields, cookie, null)).status, 403);
+    assert.equal((await post("/api/workspace/members", { ...memberFields, connection_id: connectionId }, cookie)).status, 400);
+    assert.equal((await post("/api/workspace/members", memberFields, agentCookie)).status, 403);
+    const memberAdded = await post("/api/workspace/members", memberFields, cookie);
+    assert.equal(memberAdded.status, 201);
+    assert.deepEqual((await workspace.members()).members[0]?.grants, { site_ids: [], connection_ids: [] });
+    assert.equal((await post("/api/workspace/members", {
+      operation: "update", user_id: "web-member", site_id: siteId, connection_id: connectionId,
+    }, cookie)).status, 200);
+    const memberIssued = await post("/api/workspace/members", {
+      operation: "key", user_id: "web-member", name: "Shared home", site_id: siteId,
+    }, cookie);
+    assert.equal(memberIssued.status, 201);
+    assert.equal(memberIssued.headers.get("cache-control"), "no-store");
+    const memberResult: unknown = await memberIssued.json();
+    if (!isRecord(memberResult) || typeof memberResult.token !== "string" || !isRecord(memberResult.key)) {
+      assert.fail("The member key response was invalid.");
+    }
+    assert.equal(memberResult.key.user_id, "web-member");
+    const memberToken = memberResult.token;
+    const sharingPage = await fetch(`${webUrl}/?view=sharing`, { headers: { cookie } }).then((response) => response.text());
+    assert.match(sharingPage, /Shared connections/);
+    assert.match(sharingPage, /Web member/);
+    assert.ok(!sharingPage.includes(memberToken) && !sharingPage.includes(managerToken) && !sharingPage.includes(providerKey));
+    const memberLogin = await post("/api/auth", { token: memberToken });
+    assert.equal(memberLogin.status, 303);
+    const memberCookie = memberLogin.headers.get("set-cookie")?.split(";", 1)[0];
+    assert.ok(memberCookie);
+    const memberPage = await fetch(webUrl, { headers: { cookie: memberCookie } });
+    assert.equal(memberPage.status, 200);
+    const memberHtml = await memberPage.text();
+    assert.match(memberHtml, /Octopus/);
+    assert.doesNotMatch(memberHtml, /Gateway unavailable/);
+    assert.ok(!memberHtml.includes(memberToken) && !memberHtml.includes(providerKey));
+    assert.equal((await post("/api/workspace/members", { operation: "remove", user_id: "web-member" }, memberCookie)).status, 403);
+    assert.equal((await post("/api/workspace/members", { operation: "remove", user_id: "web-member" }, cookie)).status, 200);
+    assert.deepEqual((await workspace.members()).members, []);
+    const removedMember = new EnergyAgentTools({ baseUrl: gatewayUrl, token: memberToken });
+    await assert.rejects(removedMember.identity());
 
     const disconnect = await post("/api/workspace/connections/action", { action: "disconnect", connection_id: connectionId }, cookie);
     assert.equal(disconnect.status, 200);

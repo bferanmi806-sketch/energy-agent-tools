@@ -970,6 +970,206 @@ export const WorkspaceRevokedKeyResponseSchema = {
 } as const;
 export type WorkspaceRevokedKeyResponse = FromSchema<typeof WorkspaceRevokedKeyResponseSchema, { keepDefaultedPropertiesOptional: true }>;
 
+export const WorkspaceMemberRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "user_id": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "User Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id"
+  ],
+  "title": "WorkspaceMemberRequest",
+  "type": "object"
+} as const;
+export type WorkspaceMemberRequest = FromSchema<typeof WorkspaceMemberRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceMemberGrantsSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "site_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 256,
+      "title": "Site Ids",
+      "type": "array"
+    },
+    "connection_ids": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 256,
+      "title": "Connection Ids",
+      "type": "array"
+    }
+  },
+  "title": "WorkspaceMemberGrants",
+  "type": "object"
+} as const;
+export type WorkspaceMemberGrants = FromSchema<typeof WorkspaceMemberGrantsSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceMemberResponseSchema = {
+  "type": "object",
+  "properties": {
+    "member": {
+      "additionalProperties": false,
+      "properties": {
+        "user_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "User Id",
+          "type": "string"
+        },
+        "workspace_id": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Workspace Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "const": "member",
+          "default": "member",
+          "title": "Role",
+          "type": "string"
+        },
+        "grants": {
+          "additionalProperties": false,
+          "properties": {
+            "site_ids": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 256,
+              "title": "Site Ids",
+              "type": "array"
+            },
+            "connection_ids": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 256,
+              "title": "Connection Ids",
+              "type": "array"
+            }
+          },
+          "title": "WorkspaceMemberGrants",
+          "type": "object"
+        }
+      },
+      "required": [
+        "user_id",
+        "workspace_id",
+        "name"
+      ],
+      "title": "WorkspaceMember",
+      "type": "object"
+    }
+  },
+  "required": [
+    "member"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceMemberResponse = FromSchema<typeof WorkspaceMemberResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceMembersResponseSchema = {
+  "type": "object",
+  "properties": {
+    "members": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "user_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "const": "member",
+            "default": "member",
+            "title": "Role",
+            "type": "string"
+          },
+          "grants": {
+            "additionalProperties": false,
+            "properties": {
+              "site_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 256,
+                "title": "Site Ids",
+                "type": "array"
+              },
+              "connection_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 256,
+                "title": "Connection Ids",
+                "type": "array"
+              }
+            },
+            "title": "WorkspaceMemberGrants",
+            "type": "object"
+          }
+        },
+        "required": [
+          "user_id",
+          "workspace_id",
+          "name"
+        ],
+        "title": "WorkspaceMember",
+        "type": "object"
+      }
+    }
+  },
+  "required": [
+    "members"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceMembersResponse = FromSchema<typeof WorkspaceMembersResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceMemberRemovedResponseSchema = {
+  "type": "object",
+  "properties": {
+    "removed": {
+      "const": true
+    }
+  },
+  "required": [
+    "removed"
+  ],
+  "additionalProperties": true
+} as const;
+export type WorkspaceMemberRemovedResponse = FromSchema<typeof WorkspaceMemberRemovedResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
 export const WorkspaceOAuthConfigurationsResponseSchema = {
   "additionalProperties": false,
   "properties": {

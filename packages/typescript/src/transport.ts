@@ -1,4 +1,4 @@
-export type HttpMethod = "GET" | "POST" | "DELETE";
+export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 export interface HttpTransportOptions {
   baseUrl: string;
@@ -363,8 +363,11 @@ export class HttpTransport {
   }
 
   async request<T>(request: HttpRequest<T>): Promise<T> {
-    if (request.method !== "GET" && request.method !== "POST" && request.method !== "DELETE") {
-      throw new TypeError("method must be GET, POST, or DELETE.");
+    if (
+      request.method !== "GET" && request.method !== "POST" &&
+      request.method !== "PATCH" && request.method !== "DELETE"
+    ) {
+      throw new TypeError("method must be GET, POST, PATCH, or DELETE.");
     }
     if (typeof request.parse !== "function") throw new TypeError("parse must be a function.");
 

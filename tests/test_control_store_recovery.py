@@ -28,7 +28,7 @@ def test_control_records_and_revocation_survive_backup_restore(tmp_path: Path):
     archive = tmp_path / "backup.tar.gz"
     manifest = create_backup(root, archive)
     assert [item.path for item in manifest.files] == ["control/control.sqlite3"]
-    assert manifest.files[0].schema == "control.v1"
+    assert manifest.files[0].schema == "control.v4"
     assert active.token.encode() not in archive.read_bytes()
     restored_root = tmp_path / "restored"
     restore_backup(archive, restored_root)

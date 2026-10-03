@@ -61,6 +61,7 @@ class EnergyAgent:
         self.calendar_clock = calendar_clock or (lambda: datetime.now(UTC))
         self.events: list[Json] = []
         self.event_sink: Callable[[Json], None] | None = None
+        self.workspace_authorizer: Callable[[Session], None] | None = None
         self.workbench = Workbench(root)
         self.accounts = {a.id: a for a in accounts or []}
         self.sites = {s.id: s for s in sites or []}
@@ -289,7 +290,7 @@ class EnergyAgent:
                     "ok": True,
                 }
             )
-            return self._redact({"ok": True, **result}, self._secrets(session.user_id))
+            return self._redact({"ok": True, **result}, self._session_secrets(session))
         except (EnergyError, JobError) as exc:
             return {"ok": False, "error": {"code": exc.code, "message": exc.message}}
 
@@ -299,12 +300,26 @@ class EnergyAgent:
         return session
 
     def _scope(self, session: Session) -> None:
+        if session.workspace_key_id is not None:
+            if self.workspace_authorizer is None:
+                raise EnergyError("workspace_forbidden", "Workspace authorization is unavailable.")
+            self.workspace_authorizer(session)
         if session.site_id is not None:
             site = self.sites.get(session.site_id)
-            if site is None or site.user_id != session.user_id:
+            if site is None or site.user_id != session.resource_user_id:
                 raise EnergyError("site_forbidden", "Site is outside this user's scope.")
         if session.toolkits is not None and not session.toolkits <= self.registry.toolkits.keys():
             raise EnergyError("unknown_toolkit", "Session includes an unknown toolkit.")
+
+    def _session_secrets(self, session: Session) -> list[str]:
+        values = self._secrets(session.user_id)
+        if session.resource_user_id != session.user_id:
+            values.extend(self._secrets(session.resource_user_id))
+        return values
+
+    @staticmethod
+    def account_granted(session: Session, account: ConnectedAccount) -> bool:
+        return session.connection_grants is None or account.id in session.connection_grants
 
     @staticmethod
     def _tool_visible(session: Session, tool: Tool) -> bool:
@@ -325,7 +340,7 @@ class EnergyAgent:
         )
         for hook in self.schema_hooks:
             data = hook(copy.deepcopy(data))
-        secrets = self._secrets(session.user_id)
+        secrets = self._session_secrets(session)
         return self._redact(data, secrets)
 
     def search(self, session: Session, query: str, limit: int = 5) -> list[Json]:
@@ -403,13 +418,14 @@ class EnergyAgent:
 
     def connections(self, session: Session) -> list[Json]:
         self._scope(session)
-        self._sync_connections(session.user_id, session.workspace_id)
+        self._sync_connections(session.resource_user_id, session.workspace_id)
         visible_toolkits = {item["id"] for item in self.catalogue(session)}
         return [
             a.public()
             for a in self.accounts.values()
-            if a.user_id == session.user_id
+            if a.user_id == session.resource_user_id
             and a.workspace_id == session.workspace_id
+            and self.account_granted(session, a)
             and (session.site_id is None or a.site_id == session.site_id)
             and (session.toolkits is None or a.toolkit in session.toolkits)
             and (session.access_mode == "local" or a.toolkit in visible_toolkits)
@@ -418,14 +434,16 @@ class EnergyAgent:
     def _account(
         self, session: Session, toolkit: str, account_id: str | None = None
     ) -> ConnectedAccount | None:
-        self._sync_connections(session.user_id, session.workspace_id)
+        self._scope(session)
+        self._sync_connections(session.resource_user_id, session.workspace_id)
         selected = account_id or session.account_ids.get(toolkit)
         candidates = [
             a
             for a in self.accounts.values()
             if a.toolkit == toolkit
-            and a.user_id == session.user_id
+            and a.user_id == session.resource_user_id
             and a.workspace_id == session.workspace_id
+            and self.account_granted(session, a)
             and a.enabled
             and a.state == "active"
             and self.oauth_configuration_available(session, a)
@@ -512,11 +530,13 @@ class EnergyAgent:
     ) -> Json:
         execution_id = uuid4().hex
         started = time.monotonic()
-        all_secrets = self._secrets(session.user_id)
+        all_secrets = self._session_secrets(session)
         event: Json = {
             "event": "execution",
             "execution_id": execution_id,
             "user_id": session.user_id,
+            "workspace_id": session.workspace_id,
+            "key_id": session.workspace_key_id,
             "session_id": session.id,
             "tool": name,
             "ok": False,
@@ -551,6 +571,7 @@ class EnergyAgent:
                             "account_resource_forbidden",
                             "Requested resource is outside the mapped connection.",
                         )
+            self._scope(session)
             credential = None
             if account and account.auth.secret_id:
                 if not self.auth_store:
@@ -564,14 +585,15 @@ class EnergyAgent:
                 ):
                     account = (
                         await self.auth_store.refresh_managed(
-                            session.user_id, session.workspace_id, account.id
+                            account.user_id, session.workspace_id, account.id
                         )
                         if session.workspace_id is not None
-                        else await self.auth_store.refresh(session.user_id, account.id)
+                        else await self.auth_store.refresh(account.user_id, account.id)
                     )
                     self.accounts[account.id] = account
+                self._scope(session)
                 credential = self.auth_store.credential(
-                    session.user_id, account.id, session.site_id
+                    account.user_id, account.id, session.site_id
                 )
             if account and account.auth.credential_env:
                 credential = os.environ.get(account.auth.credential_env)
@@ -590,7 +612,7 @@ class EnergyAgent:
                 asset = self.assets.get(asset_id)
                 if (
                     asset is None
-                    or self.sites[asset.site_id].user_id != session.user_id
+                    or self.sites[asset.site_id].user_id != session.resource_user_id
                     or (session.site_id and asset.site_id != session.site_id)
                 ):
                     raise EnergyError("asset_forbidden", "Asset is outside this session scope.")
@@ -615,6 +637,7 @@ class EnergyAgent:
                     else None
                 ),
             )
+            self._scope(session)
             result = await self.registry.handlers[name](args, context)
             if (
                 expected_quantity_shape is not None
@@ -725,7 +748,7 @@ class EnergyAgent:
                         "binding_semantics_changed",
                         "Provider returned a different resolution from the reviewed binding.",
                     )
-            all_secrets = self._secrets(session.user_id)
+            all_secrets = self._session_secrets(session)
             result = EnergyResult.model_validate(
                 self._redact(result.model_dump(mode="json"), all_secrets)
             )

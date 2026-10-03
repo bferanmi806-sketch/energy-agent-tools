@@ -14,6 +14,8 @@ import {
   WorkspaceSitesResponseSchema, WorkspaceAssetRequestSchema, WorkspaceAssetResponseSchema,
   WorkspaceAssetsResponseSchema, WorkspaceMapRequestSchema, WorkspaceAgentKeyRequestSchema,
   WorkspaceIssuedKeyResponseSchema, WorkspaceKeysResponseSchema, WorkspaceRevokedKeyResponseSchema,
+  WorkspaceMemberRequestSchema, WorkspaceMemberGrantsSchema, WorkspaceMemberResponseSchema,
+  WorkspaceMembersResponseSchema, WorkspaceMemberRemovedResponseSchema,
   WorkspaceOAuthConfigurationsResponseSchema, WorkspaceHomeAssistantAuthorizationRequestSchema,
   WorkspaceAuthorizationResponseSchema, WorkspaceOAuthCompleteRequestSchema,
   WorkspaceOAuthCleanupRequestSchema, WorkspaceOAuthCleanupResponseSchema,
@@ -26,6 +28,8 @@ import type {
   WorkspaceAssetRequest, WorkspaceAssetResponse, WorkspaceAssetsResponse, WorkspaceMapRequest,
   WorkspaceAgentKeyRequest, WorkspaceIssuedKeyResponse, WorkspaceKeysResponse,
   WorkspaceRevokedKeyResponse,
+  WorkspaceMemberRequest, WorkspaceMemberGrants, WorkspaceMemberResponse,
+  WorkspaceMembersResponse, WorkspaceMemberRemovedResponse,
   WorkspaceOAuthConfigurationsResponse, WorkspaceHomeAssistantAuthorizationRequest,
   WorkspaceAuthorizationResponse, WorkspaceOAuthCompleteRequest,
   WorkspaceOAuthCleanupRequest, WorkspaceOAuthCleanupResponse,
@@ -68,6 +72,11 @@ const parseWorkspaceAgentKeyRequest = parser<WorkspaceAgentKeyRequest>(Workspace
 const parseWorkspaceIssuedKey = parser<WorkspaceIssuedKeyResponse>(WorkspaceIssuedKeyResponseSchema);
 const parseWorkspaceKeys = parser<WorkspaceKeysResponse>(WorkspaceKeysResponseSchema);
 const parseWorkspaceRevokedKey = parser<WorkspaceRevokedKeyResponse>(WorkspaceRevokedKeyResponseSchema);
+const parseWorkspaceMemberRequest = parser<WorkspaceMemberRequest>(WorkspaceMemberRequestSchema);
+const parseWorkspaceMemberGrants = parser<WorkspaceMemberGrants>(WorkspaceMemberGrantsSchema);
+const parseWorkspaceMember = parser<WorkspaceMemberResponse>(WorkspaceMemberResponseSchema);
+const parseWorkspaceMembers = parser<WorkspaceMembersResponse>(WorkspaceMembersResponseSchema);
+const parseWorkspaceMemberRemoved = parser<WorkspaceMemberRemovedResponse>(WorkspaceMemberRemovedResponseSchema);
 const parseWorkspaceOAuthConfigurations = parser<WorkspaceOAuthConfigurationsResponse>(WorkspaceOAuthConfigurationsResponseSchema);
 const parseWorkspaceAuthorizationRequest = parser<WorkspaceHomeAssistantAuthorizationRequest>(WorkspaceHomeAssistantAuthorizationRequestSchema);
 const parseWorkspaceAuthorization = parser<WorkspaceAuthorizationResponse>(WorkspaceAuthorizationResponseSchema);
@@ -216,6 +225,41 @@ export class EnergyWorkspace {
   revokeKey(keyId: string, options: RequestOptions = {}) {
     return this.#transport.request({ path: `workspace/keys/${identifier(keyId)}`, method: "DELETE",
       parse: parseWorkspaceRevokedKey, ...options });
+  }
+
+  members(options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/members", method: "GET",
+      parse: parseWorkspaceMembers, ...options });
+  }
+
+  addMember(input: WorkspaceMemberRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "workspace/members", method: "POST",
+      body: parseWorkspaceMemberRequest(input), parse: parseWorkspaceMember, ...options });
+  }
+
+  setMemberGrants(memberUserId: string, grants: WorkspaceMemberGrants, options: RequestOptions = {}) {
+    return this.#transport.request({
+      path: `workspace/members/${identifier(memberUserId)}`, method: "PATCH",
+      body: parseWorkspaceMemberGrants(grants), parse: parseWorkspaceMember, ...options,
+    });
+  }
+
+  removeMember(memberUserId: string, options: RequestOptions = {}) {
+    return this.#transport.request({
+      path: `workspace/members/${identifier(memberUserId)}`, method: "DELETE",
+      parse: parseWorkspaceMemberRemoved, ...options,
+    });
+  }
+
+  createMemberAgentKey(
+    memberUserId: string,
+    input: WorkspaceAgentKeyRequest,
+    options: RequestOptions = {},
+  ) {
+    return this.#transport.request({
+      path: `workspace/members/${identifier(memberUserId)}/keys`, method: "POST",
+      body: parseWorkspaceAgentKeyRequest(input), parse: parseWorkspaceIssuedKey, ...options,
+    });
   }
 }
 

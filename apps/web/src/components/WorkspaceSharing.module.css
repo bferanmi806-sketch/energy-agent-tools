@@ -1,0 +1,270 @@
+.layout {
+  width: min(100%, 1260px);
+  display: grid;
+  grid-template-columns: minmax(250px, .72fr) minmax(0, 1.55fr);
+  align-items: start;
+  gap: 30px;
+}
+
+.layout :global(.section-subheading) {
+  display: grid;
+  gap: 8px;
+}
+
+.enrollment {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.enrollment :global(.workspace-form) {
+  margin-top: 17px;
+}
+
+.enrollment :global(.button) {
+  justify-self: start;
+}
+
+
+.membersSection {
+  min-width: 0;
+}
+
+.memberList {
+  margin: 15px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.member {
+  min-width: 0;
+  padding: 17px 4px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.memberHeading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.identity {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.identity strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 660;
+  overflow-wrap: anywhere;
+}
+
+.identity code {
+  color: var(--ink-muted);
+  font-size: 9px;
+  overflow-wrap: anywhere;
+}
+
+.memberStatus {
+  flex: 0 0 auto;
+}
+
+.scopeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.permissionGroup {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.permissionGroup:disabled {
+  opacity: .76;
+}
+
+.permissionGroup legend {
+  margin-bottom: 5px;
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.permissionGroup :global(.check-row) {
+  min-width: 0;
+}
+
+.permissionGroup :global(.check-row) span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.permissionGroup :global(.check-row) small {
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyGrant {
+  margin: 5px 0 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.memberActions {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.memberActions > :global(.inline-actions) {
+  width: 100%;
+}
+
+.memberActions :global(.notice) {
+  max-width: 480px;
+  margin: 0;
+}
+
+.confirmation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--red-800);
+  font-size: 10px;
+}
+
+.confirmation span {
+  flex: 1 1 100%;
+}
+
+.keyForm {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.keyIntro h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 660;
+}
+
+.keyIntro p,
+.keyHint {
+  margin: 4px 0 0;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.keyFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.keyFields input {
+  width: 100%;
+  min-width: 0;
+  min-height: 39px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.keyFields input:focus {
+  border-color: #80a58b;
+  box-shadow: 0 0 0 3px rgba(61, 137, 85, .1);
+  outline: 0;
+}
+
+.keyFields input:disabled {
+  background: var(--surface-soft);
+  color: var(--ink-muted);
+}
+
+.keyHint {
+  margin-top: 0;
+}
+
+.keyForm :global(.notice) {
+  max-width: 480px;
+  margin: 0;
+}
+
+.oneTimeKey {
+  grid-column: 1 / -1;
+  max-width: 840px;
+  margin-top: 0;
+}
+
+.oneTimeKey :global(.field-hint) code {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 26px;
+  }
+
+  .enrollment {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 620px) {
+  .scopeGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .keyFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .keyFields :global(.button) {
+    width: 100%;
+  }
+
+  .memberHeading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .memberActions > :global(.inline-actions) > :global(.button) {
+    flex: 1 1 auto;
+  }
+}

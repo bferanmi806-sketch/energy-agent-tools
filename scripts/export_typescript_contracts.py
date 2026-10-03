@@ -40,6 +40,11 @@ from energy_agent_tools.hosting import (
     _SkillExecutionRequest,
 )
 from energy_agent_tools.models import Asset, EnergyResult, Site, Tool, Toolkit
+from energy_agent_tools.workspace_access import (
+    WorkspaceMember,
+    WorkspaceMemberGrants,
+    WorkspaceMemberRequest,
+)
 
 
 def expand_model(model: Any) -> dict[str, Any]:
@@ -144,6 +149,13 @@ def schemas() -> dict[str, dict[str, Any]]:
         "WorkspaceIssuedKeyResponse": expand_model(IssuedKey),
         "WorkspaceKeysResponse": obj({"keys": array(expand_model(KeyRecord))}, ["keys"]),
         "WorkspaceRevokedKeyResponse": obj({"revoked": {"const": True}}, ["revoked"]),
+        "WorkspaceMemberRequest": expand_model(WorkspaceMemberRequest),
+        "WorkspaceMemberGrants": expand_model(WorkspaceMemberGrants),
+        "WorkspaceMemberResponse": obj({"member": expand_model(WorkspaceMember)}, ["member"]),
+        "WorkspaceMembersResponse": obj(
+            {"members": array(expand_model(WorkspaceMember))}, ["members"]
+        ),
+        "WorkspaceMemberRemovedResponse": obj({"removed": {"const": True}}, ["removed"]),
         "WorkspaceOAuthConfigurationsResponse": expand_model(WorkspaceOAuthConfigurationsResponse),
         "WorkspaceHomeAssistantAuthorizationRequest": expand_model(
             WorkspaceHomeAssistantAuthorizationRequest

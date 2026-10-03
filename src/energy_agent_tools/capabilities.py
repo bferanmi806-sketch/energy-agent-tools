@@ -230,7 +230,7 @@ class CapabilityResolver:
         """Publish reviewed role names only inside their account and asset scope."""
 
         self.agent._scope(session)
-        self.agent._sync_connections(session.user_id, session.workspace_id)
+        self.agent._sync_connections(session.resource_user_id, session.workspace_id)
         capabilities: dict[str, set[str]] = {}
         for binding in self.bindings:
             tool = self.agent.registry.get(binding.tool)
@@ -242,7 +242,8 @@ class CapabilityResolver:
                 account = self.agent.accounts.get(binding.account_id)
                 if (
                     account is None
-                    or account.user_id != session.user_id
+                    or account.user_id != session.resource_user_id
+                    or not self.agent.account_granted(session, account)
                     or account.workspace_id != session.workspace_id
                     or (session.site_id and account.site_id != session.site_id)
                 ):
@@ -252,7 +253,7 @@ class CapabilityResolver:
                     continue
             if binding.asset_id:
                 asset = self.agent.assets[binding.asset_id]
-                if self.agent.sites[asset.site_id].user_id != session.user_id or (
+                if self.agent.sites[asset.site_id].user_id != session.resource_user_id or (
                     session.site_id and asset.site_id != session.site_id
                 ):
                     continue
@@ -261,12 +262,12 @@ class CapabilityResolver:
 
     def resolve(self, session: Session, request: CapabilityRequest) -> Json:
         self.agent._scope(session)
-        self.agent._sync_connections(session.user_id, session.workspace_id)
+        self.agent._sync_connections(session.resource_user_id, session.workspace_id)
         if request.asset_id:
             asset = self.agent.assets.get(request.asset_id)
             if (
                 asset is None
-                or self.agent.sites[asset.site_id].user_id != session.user_id
+                or self.agent.sites[asset.site_id].user_id != session.resource_user_id
                 or (session.site_id and asset.site_id != session.site_id)
             ):
                 raise EnergyError("asset_forbidden", "Asset is outside this session's site scope.")
@@ -283,7 +284,9 @@ class CapabilityResolver:
                 owner_account = self.agent.accounts.get(binding.account_id)
                 if (
                     owner_account is None
-                    or owner_account.user_id != session.user_id
+                    or owner_account.user_id != session.resource_user_id
+                    or owner_account.workspace_id != session.workspace_id
+                    or not self.agent.account_granted(session, owner_account)
                     or (session.site_id and owner_account.site_id != session.site_id)
                 ):
                     continue
@@ -294,7 +297,7 @@ class CapabilityResolver:
                 continue
             if binding.asset_id:
                 binding_asset = self.agent.assets[binding.asset_id]
-                if self.agent.sites[binding_asset.site_id].user_id != session.user_id or (
+                if self.agent.sites[binding_asset.site_id].user_id != session.resource_user_id or (
                     session.site_id and binding_asset.site_id != session.site_id
                 ):
                     continue
@@ -304,8 +307,9 @@ class CapabilityResolver:
                 a
                 for a in self.agent.accounts.values()
                 if a.toolkit == tool.toolkit
-                and a.user_id == session.user_id
+                and a.user_id == session.resource_user_id
                 and a.workspace_id == session.workspace_id
+                and self.agent.account_granted(session, a)
                 and (session.site_id is None or a.site_id == session.site_id)
             ]
             if binding.account_id:
@@ -460,7 +464,7 @@ class CapabilityResolver:
                 "status": "resolved" if unique else "ambiguous" if available else "unavailable",
                 "note": "Reviewed bindings retain provider schemas. Choose explicitly when candidates tie.",
             },
-            self.agent._secrets(session.user_id),
+            self.agent._session_secrets(session),
         )
 
     async def execute(

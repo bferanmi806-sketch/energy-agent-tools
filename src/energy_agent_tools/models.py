@@ -207,6 +207,26 @@ class Session(StrictModel):
     )
     account_ids: dict[str, str] = Field(default_factory=dict)
     managed_oauth_configurations: dict[str, str] = Field(default_factory=dict)
+    resource_owner_id: str | None = Field(default=None, min_length=1, max_length=256)
+    workspace_key_id: str | None = Field(default=None, min_length=1, max_length=256)
+    workspace_policy_revision: int | None = Field(default=None, ge=0)
+    connection_grants: set[str] | None = None
+
+    @model_validator(mode="after")
+    def explicit_workspace_authorization(self) -> Session:
+        scope = (self.resource_owner_id, self.workspace_key_id, self.workspace_policy_revision)
+        if any(value is not None for value in scope):
+            if self.workspace_id is None or any(value is None for value in scope):
+                raise ValueError("Managed authorization requires a complete workspace identity.")
+            if self.user_id != self.resource_owner_id and self.connection_grants is None:
+                raise ValueError("Member sessions require explicit connection grants.")
+        elif self.connection_grants is not None:
+            raise ValueError("Connection grants require managed workspace authorization.")
+        return self
+
+    @property
+    def resource_user_id(self) -> str:
+        return self.resource_owner_id or self.user_id
 
 
 class Toolkit(StrictModel):

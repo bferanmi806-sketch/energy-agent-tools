@@ -5,6 +5,34 @@ record extends the existing backend roadmap; it does not replace unfinished
 gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 [passing CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37032700732).
 
+## Workspace sharing follow-up, October 3
+
+Managed workspaces now enroll existing users and grant selected sites and
+active connections explicitly. The gateway separates member actor identity
+from the owner of the resource. New membership has no access. Members use their
+own agent keys; removing a member revokes those keys transactionally. Live key,
+membership and workspace revision checks deny captured REST/MCP sessions before
+credentials, refresh or provider IO. Separate keys cannot reuse each other's
+MCP sessions. Artifacts, datasets and jobs remain private to their actor.
+
+The SDK and web app expose enrollment, grants, member keys and removal. Primary
+integration passed all 798 Python tests, 15 SDK tests and the production web build, typecheck and 11
+web tests. Desktop and 390-pixel mobile browser acceptance used the real
+gateway and a synthetic Octopus transport. A member logged in with the UI-issued
+key and saw the shared connection without owner controls; UI removal made that
+exact key fail authentication with HTTP 401. Browser inspection also led to a
+local heading-layout correction. The [qualification record](evidence/workspace-sharing-oct03.json)
+preserves the first full-suite failure and final validation state.
+
+Enrollment is by public user ID for existing instance users. It does not send
+email invitations or provision an identity provider. Any membership or grant
+change invalidates captured workspace sessions; REST clients open a new session
+and MCP clients reconnect. A provider request dispatched before revocation may
+finish. These synthetic sharing checks do not qualify physical-site telemetry
+or close the broad evaluation, contribution, sustained-operation and release
+gates. The remaining web work includes complete Skills, custom MCP, logs, jobs,
+account and settings flows.
+
 ## Installed Home Assistant authorization follow-up, October 3
 
 Source `8d25feb` makes installed native authorization part of the default Home
@@ -33,7 +61,7 @@ plane implementation unit.
 
 ## Current audit
 
-Updated through managed workspace source `c31f543`; implementation evidence below
+Updated through the workspace-sharing follow-up above; implementation evidence below
 does not close the separate live, external-review or sustained-operation gates.
 
 | Requirement | Current evidence | Status and next proof |
@@ -51,9 +79,9 @@ does not close the separate live, external-review or sustained-operation gates.
 | External connector authoring | Connector SDK and first-party examples | Partial; an outside authored connector must qualify through documented interfaces. |
 | Deployment/recovery/load/soak and resilience | CI container, restart, state upgrade and backup/restore checks | Partial; representative sustained deployment and 30-day observations remain open. |
 | Coherent new release with reproducible evidence | Published Python v0.3.0 and SDK archive; later web/control-plane source is CI-qualified | Partial; package a matching gateway, SDK and web revision after the next stable product boundary. |
-| First-class TypeScript SDK | REST and official MCP transports, generated contracts, workspace management APIs and 12 acceptance tests | Implemented for current routes; new control-plane APIs need matching SDK coverage and distribution. |
-| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; shared connections, custom MCP, complete managed skills, logs, jobs, account management and settings remain open. |
-| Hosted connection/control plane | Private managed workspaces, bootstrap identities, management/agent keys, encrypted scoped accounts, durable sites/assets, dynamic MCP, migrations and recovery acceptance | Partial; membership, explicit connection sharing ACLs, managed/custom OAuth, events and full observability remain open. |
+| First-class TypeScript SDK | REST and official MCP transports, generated contracts, workspace management APIs and 15 acceptance tests | Implemented for current routes; new control-plane APIs need matching SDK coverage and distribution. |
+| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; explicit shared connections are implemented; custom MCP, complete managed skills, logs, jobs, account management and settings remain open. |
+| Hosted connection/control plane | Private managed workspaces, bootstrap identities, management/agent keys, encrypted scoped accounts, durable sites/assets, dynamic MCP, migrations and recovery acceptance | Partial; membership, explicit connection ACLs and approved Home Assistant OAuth are implemented; generic custom OAuth, events and full observability remain open. |
 | Ecosystem journeys | Existing public, telemetry and engineering connectors with differing qualification | Partial; meters, PV/storage/EV, heat/BMS, industrial/files, engineering engines and reviewed MCP must qualify honestly according to accessible supported scope. |
 | Accurate documentation and evidence | Append-only decisions, archived failures and qualification records | Ongoing; every completion claim needs current source and runnable evidence. |
 

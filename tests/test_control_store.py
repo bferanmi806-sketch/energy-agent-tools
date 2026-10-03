@@ -198,13 +198,13 @@ def test_expiration_and_revocation_are_visible_across_store_instances(tmp_path: 
 def test_newer_database_schema_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "control.sqlite3"
     with sqlite3.connect(path) as db:
-        db.execute("PRAGMA user_version = 4")
+        db.execute("PRAGMA user_version = 5")
 
     with pytest.raises(RuntimeError, match="newer"):
         ControlStore(tmp_path)
 
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 5
 
 
 def _make_v1_store(root: Path) -> dict[str, str]:
@@ -300,6 +300,55 @@ def _make_v2_store(root: Path) -> dict[str, str]:
     return tokens
 
 
+def test_genuine_v3_migration_reopens_with_keys_and_workspace_modes_preserved(
+    tmp_path: Path,
+) -> None:
+    tokens = _make_v2_store(tmp_path)
+    path = tmp_path / "control.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.execute(
+            "ALTER TABLE workspaces ADD COLUMN mode TEXT NOT NULL "
+            "DEFAULT 'operator' CHECK(mode IN ('operator', 'managed'))"
+        )
+        db.execute("UPDATE workspaces SET mode = 'managed' WHERE id = 'alice-home'")
+        original_rows = db.execute("SELECT * FROM api_keys ORDER BY id").fetchall()
+        db.execute("PRAGMA user_version = 3")
+
+    store = ControlStore(tmp_path)
+    identity = store.authenticate(tokens["active"])
+    assert identity is not None
+    assert identity.workspace_mode == "managed"
+    assert identity.scope is not None
+    assert identity.scope.site_ids == ["alice-v2-site"]
+    assert store.workspace("alice", "alice-home").mode == "managed"
+    assert store.workspace("bob", "bob-home").mode == "operator"
+    assert store.authenticate(tokens["revoked"]) is None
+    assert store.authenticate(tokens["expired"]) is None
+
+    with sqlite3.connect(path) as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
+        assert db.execute("SELECT * FROM api_keys ORDER BY id").fetchall() == original_rows
+        foreign_keys = {
+            (row[2], row[3], row[4]) for row in db.execute("PRAGMA foreign_key_list(api_keys)")
+        }
+        assert foreign_keys == {
+            ("users", "user_id", "id"),
+            ("workspaces", "workspace_id", "id"),
+        }
+        assert (
+            db.execute("SELECT policy_revision FROM workspaces WHERE id = 'alice-home'").fetchone()[
+                0
+            ]
+            == 0
+        )
+    store.close()
+
+    reopened = ControlStore(tmp_path)
+    assert reopened.authenticate(tokens["active"]) == identity
+    assert reopened.keys("alice", "alice-home")[0].id == "active-key"
+    reopened.close()
+
+
 def test_genuine_v1_migration_preserves_keys_and_marks_them_legacy(tmp_path: Path) -> None:
     tokens = _make_v1_store(tmp_path)
     path = tmp_path / "control.sqlite3"
@@ -320,7 +369,7 @@ def test_genuine_v1_migration_preserves_keys_and_marks_them_legacy(tmp_path: Pat
     assert all(key.access == LegacyKeyAccess() for key in alice_keys + bob_keys)
 
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
         assert db.execute("SELECT * FROM api_keys ORDER BY id").fetchall() == [
             (*row, '{"kind":"legacy-agent"}') for row in original_rows
         ]
@@ -353,7 +402,7 @@ def test_genuine_v2_migration_preserves_modes_key_roles_and_key_state(tmp_path: 
     }
 
     with sqlite3.connect(path) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
         assert db.execute("SELECT * FROM api_keys ORDER BY id").fetchall() == original_rows
         assert db.execute("SELECT mode FROM workspaces ORDER BY id").fetchall() == [
             ("operator",),
@@ -362,7 +411,7 @@ def test_genuine_v2_migration_preserves_modes_key_roles_and_key_state(tmp_path: 
     store.close()
 
 
-def test_concurrent_v1_store_initialization_converges_on_schema_v3(tmp_path: Path) -> None:
+def test_concurrent_v1_store_initialization_converges_on_schema_v4(tmp_path: Path) -> None:
     tokens = _make_v1_store(tmp_path)
 
     def open_and_close() -> str | None:
@@ -376,9 +425,9 @@ def test_concurrent_v1_store_initialization_converges_on_schema_v3(tmp_path: Pat
 
     assert results == ["legacy-agent"] * 8
     with sqlite3.connect(tmp_path / "control.sqlite3") as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 4
         assert db.execute("PRAGMA table_info(api_keys)").fetchall()[-1][1] == "access_json"
-        assert db.execute("PRAGMA table_info(workspaces)").fetchall()[-1][1] == "mode"
+        assert db.execute("PRAGMA table_info(workspaces)").fetchall()[-1][1] == "policy_revision"
 
 
 def test_access_grants_persist_and_agent_sites_are_owner_workspace_scoped(tmp_path: Path) -> None:

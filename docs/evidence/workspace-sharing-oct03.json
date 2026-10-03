@@ -1,0 +1,77 @@
+{
+  "recorded_at": "2026-10-03",
+  "source_base": "faccc20",
+  "scope": "Managed workspace membership and explicit shared connections through the production gateway, SDK and web application",
+  "validation": {
+    "python_full_suite": {
+      "status": "passed",
+      "passed": 798,
+      "failed": 0,
+      "seconds": 778.49,
+      "source_sha256": "8b79d38111544a87e0de29274ea8624735b2d2628964a7dab15c50af403f8aca",
+      "python_files": 173,
+      "source_unchanged_during_run": true
+    },
+    "previous_full_suite": {
+      "passed": 797,
+      "failed": 1,
+      "failure": "Old backup assertion expected control.v1 rather than the actual control.v4 manifest.",
+      "seconds": 651.89,
+      "source_sha256": "bfe0307f571eb57698c756e3e1a18bb081b08f27d835375690d3504845a5f1a1"
+    },
+    "corrected_backup_acceptance": {
+      "passed": 2
+    },
+    "typescript_sdk": {
+      "passed": 15
+    },
+    "production_web": {
+      "build": "passed",
+      "typecheck": "passed",
+      "tests_passed": 11
+    },
+    "python_static": {
+      "ruff": "passed",
+      "format": "173 files passed",
+      "mypy": "58 source files passed",
+      "generated_contracts": "matched"
+    },
+    "browser": {
+      "provider": "synthetic Octopus transport, no provider socket",
+      "desktop": "passed",
+      "mobile_viewport": {
+        "width": 390,
+        "height": 844,
+        "status": "passed"
+      },
+      "checks": [
+        "Enroll existing user with empty grants",
+        "Choose site before explicit active connection grant",
+        "Save permissions and enable member-key issuance",
+        "Display and dismiss a one-time member key",
+        "Removing a site clears dependent connection drafts",
+        "Member login sees the shared site and one granted connection without owner management controls",
+        "Owner removes membership through explicit UI confirmation",
+        "The exact browser-issued key then fails identity with HTTP 401"
+      ],
+      "resources": "Owned local servers and browser tab stopped; temporary token files removed"
+    }
+  },
+  "authorization": [
+    "Actor identity remains distinct from resource ownership.",
+    "New members have no site or connection access.",
+    "Current membership, key and workspace revision gate existing REST/MCP sessions before credentials, refresh or provider IO.",
+    "Members cannot reuse another key's initialized MCP session.",
+    "Removing and reenrolling a member never revives old keys.",
+    "Artifacts, datasets, jobs, quotas and audit actors retain actor scope.",
+    "Schema 4 migration and encrypted backup/restore preserve keys and memberships."
+  ],
+  "limitations": [
+    "Only existing instance users can be enrolled by public user ID; no email invitations or identity-provider enrollment.",
+    "Membership or grant changes invalidate captured workspace sessions, including the owner's. Clients must open a fresh REST session or reconnect MCP.",
+    "Already dispatched provider requests may finish after revocation.",
+    "Provider traffic in sharing acceptance is synthetic. This record does not qualify physical telemetry or private site credentials.",
+    "Final review was performed by the primary agent; this is not independent human review.",
+    "Skills, custom MCP, complete logs/jobs/account/settings experiences, broad agent evaluation, external contribution, sustained operations and coherent release gates remain open."
+  ]
+}

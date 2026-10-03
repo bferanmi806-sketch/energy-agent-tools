@@ -447,10 +447,10 @@ def create_backup(
                 continue
             target = temp_root / relative
             _copy_sqlite_snapshot(source, target, tables)
-            if kind == "auth":
+            if kind in {"auth", "control"}:
                 with _connect_read_only(target) as database:
-                    auth_version = int(database.execute("PRAGMA user_version").fetchone()[0])
-                schema = f"auth.v{auth_version}" if auth_version else "auth.v1"
+                    database_version = int(database.execute("PRAGMA user_version").fetchone()[0])
+                schema = f"{kind}.v{database_version}" if database_version else f"{kind}.v1"
             entries.append(
                 BackupFile(relative, kind, target.stat().st_size, _sha256(target), schema)
             )

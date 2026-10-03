@@ -76,6 +76,16 @@ withdraw access, and `verifyConnection` or `disconnectConnection` for connection
 lifecycle actions. The host derives workspace ownership from the current key
 on every request. Agent keys cannot use management operations.
 
+Use `members`, `addMember({ user_id })`, `setMemberGrants(userId, grants)`,
+`removeMember(userId)` and `createMemberAgentKey(userId, { name, site_ids })`
+to share selected connections with an existing instance user. New membership
+has empty grants. Set explicit `site_ids` and `connection_ids` before issuing
+a member key. The key belongs to the member; the provider credential stays with
+the owner. Member sessions can execute granted accounts but cannot call workspace
+management routes. Permission changes invalidate captured sessions, so open a
+fresh REST session or reconnect MCP. Removing and readding a member leaves old
+keys revoked. See the [sharing guide](../../docs/managed-workspaces.md#share-selected-connections).
+
 Tokens may be provided by a callback so rotation takes effect on each request.
 `timeoutMs`, `maxResponseBytes` and an injected `fetch` can be configured on the
 client. Individual requests accept an `AbortSignal`. The transport does not

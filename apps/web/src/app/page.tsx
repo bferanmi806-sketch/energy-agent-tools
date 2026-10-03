@@ -89,7 +89,7 @@ export default async function HomePage({
     case "ready": {
       const params = searchParams ? await searchParams : undefined;
       if (state.data.kind === "managed") {
-        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "agent"
+        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent"
           ? params.view
           : "apps";
         const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed"

@@ -11,6 +11,8 @@ export type {
   WorkspaceAssetRequest, WorkspaceAssetResponse, WorkspaceAssetsResponse, WorkspaceMapRequest,
   WorkspaceAgentKeyRequest, WorkspaceIssuedKeyResponse, WorkspaceKeysResponse,
   WorkspaceRevokedKeyResponse,
+  WorkspaceMemberRequest, WorkspaceMemberGrants, WorkspaceMemberResponse,
+  WorkspaceMembersResponse, WorkspaceMemberRemovedResponse,
   WorkspaceOAuthConfigurationsResponse, WorkspaceHomeAssistantAuthorizationRequest,
   WorkspaceOAuthCompleteRequest, WorkspaceAuthorizationResponse,
   WorkspaceOAuthCleanupRequest, WorkspaceOAuthCleanupResponse,
