@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -442,9 +444,14 @@ def test_streaming_runner_records_incremental_events_and_call_timing(tmp_path: P
     assert result.run.partial_usage == {"input_tokens": 7}
 
 
-def test_streaming_timeout_keeps_received_calls_and_kills_child_tree(tmp_path: Path):
+def test_streaming_timeout_keeps_received_calls_and_kills_child_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     fixture = write_fixture(tmp_path / "fixture")
     marker = tmp_path / "orphan-wrote-after-timeout"
+    child_ready_path = tmp_path / "child-ready"
+    parent_ready_path = tmp_path / "parent-ready"
+    release_path = tmp_path / "release-child"
     started = {
         "type": "item.started",
         "item": {
@@ -458,30 +465,95 @@ def test_streaming_timeout_keeps_received_calls_and_kills_child_tree(tmp_path: P
     }
     partial = {"type": "turn.in_progress", "usage": {"input_tokens": 5}}
     child_started = {"type": "fixture.child_started"}
-    child = (
-        f"import pathlib, time; time.sleep(1); pathlib.Path({str(marker)!r}).write_text('orphan')"
+    child = "\n".join(
+        (
+            "import os, pathlib, time",
+            f"pathlib.Path({str(child_ready_path)!r}).write_text(str(os.getpid()))",
+            f"release = pathlib.Path({str(release_path)!r})",
+            "deadline = time.monotonic() + 20",
+            "while not release.exists() and time.monotonic() < deadline:",
+            "    time.sleep(0.01)",
+            f"pathlib.Path({str(marker)!r}).write_text('orphan')",
+        )
     )
     script = "\n".join(
         (
-            "import json, subprocess, sys, time",
+            "import json, pathlib, subprocess, sys, time",
             f"print({json.dumps(json.dumps(started))}, flush=True)",
             f"print({json.dumps(json.dumps(partial))}, flush=True)",
             f"subprocess.Popen([sys.executable, '-c', {child!r}])",
+            f"ready = pathlib.Path({str(child_ready_path)!r})",
+            "deadline = time.monotonic() + 10",
+            "while not ready.exists() and time.monotonic() < deadline: time.sleep(0.01)",
+            "if not ready.exists(): sys.exit(2)",
             f"print({json.dumps(json.dumps(child_started))}, flush=True)",
-            "time.sleep(5)",
+            f"pathlib.Path({str(parent_ready_path)!r}).write_text('event emitted')",
+            "time.sleep(30)",
         )
     )
 
     def runner(command, environment, timeout):
         return _subprocess_runner([sys.executable, "-u", "-c", script], environment, timeout)
 
-    result = run_case(
-        BenchmarkCase(id="timeout", prompt="Join data.", intent="join"),
-        fixture,
-        repo=tmp_path,
-        timeout=0.5,
-        runner=runner,
-    )
+    real_monotonic_ns = time.monotonic_ns
+    expire_at_ns: list[int | None] = [None]
+
+    class ControlledClock:
+        @staticmethod
+        def monotonic_ns() -> int:
+            now = real_monotonic_ns()
+            trigger = expire_at_ns[0]
+            if trigger is not None and now >= trigger:
+                return now + 31_000_000_000
+            return now
+
+    # The test clock expires only after the descendant and its parent have both
+    # acknowledged readiness, leaving the production timeout path unchanged.
+    monkeypatch.setattr(benchmark_harness, "time", ControlledClock)
+    outcome: dict[str, object] = {}
+    errors: list[BaseException] = []
+
+    def evaluate():
+        try:
+            outcome["result"] = run_case(
+                BenchmarkCase(id="timeout", prompt="Join data.", intent="join"),
+                fixture,
+                repo=tmp_path,
+                timeout=30,
+                runner=runner,
+            )
+        except BaseException as exc:  # propagate worker-thread failures to pytest
+            errors.append(exc)
+
+    worker = threading.Thread(target=evaluate, daemon=True)
+    worker.start()
+    try:
+        readiness_deadline = time.monotonic() + 10
+        while not parent_ready_path.exists() and time.monotonic() < readiness_deadline:
+            time.sleep(0.01)
+        assert child_ready_path.is_file(), "descendant did not reach its ready handshake"
+        assert parent_ready_path.is_file(), "parent did not emit its child-started event"
+        child_pid = int(child_ready_path.read_text(encoding="utf-8"))
+        os.kill(child_pid, 0)
+
+        # Give the pipe reader time to record the flushed child-started event,
+        # then advance its clock past the configured deadline.
+        expire_at_ns[0] = time.monotonic_ns() + 1_000_000_000
+        worker.join(timeout=10)
+        assert not worker.is_alive(), "stream runner did not observe the controlled timeout"
+        assert not errors, errors
+        result = outcome["result"]
+    finally:
+        # If an assertion fails, still release an un-killed fixture child and
+        # force the worker through its normal process-group cleanup path.
+        release_path.write_text("release", encoding="utf-8")
+        if worker.is_alive():
+            expire_at_ns[0] = time.monotonic_ns()
+            worker.join(timeout=10)
+
+    assert not worker.is_alive()
+    assert "result" in outcome
+    result = outcome["result"]
     assert result.run.timed_out
     assert result.run.call_count == 1
     assert result.run.tool_calls[0].id == "unfinished-call"
@@ -496,7 +568,9 @@ def test_streaming_timeout_keeps_received_calls_and_kills_child_tree(tmp_path: P
         result.run.streaming["process_end_monotonic_ns"]
         >= result.run.streaming["timeout_monotonic_ns"]
     )
-    time.sleep(1.1)
+    marker_deadline = time.monotonic() + 1
+    while not marker.exists() and time.monotonic() < marker_deadline:
+        time.sleep(0.01)
     assert not marker.exists()
 
 
