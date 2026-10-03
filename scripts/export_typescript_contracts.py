@@ -12,6 +12,10 @@ from pathlib import Path
 from typing import Any
 
 from energy_agent_tools.capabilities import CapabilityRequest
+from energy_agent_tools.connection_contracts import (
+    ConnectionSetupsResponse,
+    OctopusConnectionRequest,
+)
 from energy_agent_tools.hosting import (
     IdentityResponse,
     _CapabilityExecutionRequest,
@@ -113,6 +117,8 @@ def schemas() -> dict[str, dict[str, Any]]:
     )
     return {
         "IdentityResponse": expand_model(IdentityResponse),
+        "ConnectionSetupsResponse": expand_model(ConnectionSetupsResponse),
+        "OctopusConnectionRequest": expand_model(OctopusConnectionRequest),
         "SessionCreate": expand_model(_SessionCreate),
         "SearchRequest": expand_model(_SearchRequest),
         "ExecuteRequest": expand_model(_ExecuteRequest),
@@ -143,6 +149,24 @@ def schemas() -> dict[str, dict[str, Any]]:
                 "note": text,
             },
             ["capability", "candidates", "selected", "status", "note"],
+        ),
+        "ConnectionCreatedResponse": obj(
+            {
+                "ok": {"const": True},
+                "account": connection,
+                "health": obj(
+                    {
+                        "connection_id": text,
+                        "provider": {"const": "octopus"},
+                        "status": {"const": "healthy"},
+                        "checked_at": text,
+                        "probe": {"const": "provider-read"},
+                        "message": text,
+                    },
+                    ["connection_id", "provider", "status", "checked_at", "probe", "message"],
+                ),
+            },
+            ["ok", "account", "health"],
         ),
         "ConnectionsResponse": obj({"connections": array(connection)}, ["connections"]),
         "ArtifactsResponse": obj({"artifacts": array(record)}, ["artifacts"]),

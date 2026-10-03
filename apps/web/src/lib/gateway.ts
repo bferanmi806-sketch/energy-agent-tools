@@ -55,6 +55,7 @@ export async function loadDashboard(): Promise<DashboardState> {
         scopedSession.connections(),
         scopedSession.skills(),
         scopedSession.artifacts(),
+        scopedSession.connectionSetups(),
       ]);
       const toolkits = settledValue(results[0]);
       const connections = settledValue(results[1]);
@@ -65,6 +66,7 @@ export async function loadDashboard(): Promise<DashboardState> {
         data: {
           identity,
           siteId,
+          connectionSetups: settledValue(results[4]).setups,
           toolkits: toolkits.toolkits,
           connections: connections.connections,
           skills: skills.skills,

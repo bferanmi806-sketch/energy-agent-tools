@@ -2,7 +2,7 @@ import { HttpTransport } from "./transport.js";
 import type { HttpTransportOptions } from "./transport.js";
 import { parser } from "./validation.js";
 import {
-  IdentityResponseSchema,
+  IdentityResponseSchema, ConnectionSetupsResponseSchema, OctopusConnectionRequestSchema, ConnectionCreatedResponseSchema,
   SessionCreateSchema, SessionResponseSchema, SearchRequestSchema, SearchResponseSchema,
   ExecuteRequestSchema, ExecutionResponseSchema, CapabilityRequestSchema,
   CapabilityExecutionRequestSchema, ResolutionResponseSchema, ConnectionsResponseSchema,
@@ -11,12 +11,15 @@ import {
   SkillExecutionRequestSchema, WorkflowResponseSchema, ToolkitsResponseSchema,
 } from "./contracts.js";
 import type {
-  IdentityResponse,
+  IdentityResponse, ConnectionSetupsResponse, OctopusConnectionRequest, ConnectionCreatedResponse,
   SessionCreate, SessionResponse, SearchRequest, SearchResponse, ExecuteRequest, ExecutionResponse, CapabilityRequest, CapabilityExecutionRequest, ResolutionResponse, ConnectionsResponse, ArtifactsResponse, SkillsResponse, JobRequest, JobResponse, DeleteSessionResponse, DeleteArtifactResponse, SkillExecutionRequest, WorkflowResponse, ToolkitsResponse
 } from "./contracts.js";
 
 const parseSessionCreate = parser<SessionCreate>(SessionCreateSchema);
 const parseIdentity = parser<IdentityResponse>(IdentityResponseSchema);
+const parseConnectionSetups = parser<ConnectionSetupsResponse>(ConnectionSetupsResponseSchema);
+const parseConnectionCreate = parser<OctopusConnectionRequest>(OctopusConnectionRequestSchema);
+const parseConnectionCreated = parser<ConnectionCreatedResponse>(ConnectionCreatedResponseSchema);
 const parseSession = parser<SessionResponse>(SessionResponseSchema);
 const parseSearchRequest = parser<SearchRequest>(SearchRequestSchema);
 const parseSearch = parser<SearchResponse>(SearchResponseSchema);
@@ -106,6 +109,16 @@ export class EnergySession {
   toolkits(options: RequestOptions = {}) {
     return this.#transport.request({ path: `${this.#path}/toolkits`, method: "GET",
       parse: parseToolkits, ...options });
+  }
+
+  connectionSetups(options: RequestOptions = {}) {
+    return this.#transport.request({ path: `${this.#path}/connection-setup`, method: "GET",
+      parse: parseConnectionSetups, ...options });
+  }
+
+  connectAccount(input: OctopusConnectionRequest, options: RequestOptions = {}) {
+    return this.#transport.request({ path: `${this.#path}/connections`, method: "POST",
+      body: parseConnectionCreate(input), parse: parseConnectionCreated, ...options });
   }
 
   connections(options: RequestOptions = {}) {

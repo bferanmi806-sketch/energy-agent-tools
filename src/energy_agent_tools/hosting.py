@@ -36,7 +36,9 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .auth import AuthStore
 from .capabilities import CapabilityRequest
+from .connection_contracts import ConnectionSetupsResponse, OctopusConnectionRequest, octopus_setup
 from .control_store import ControlStore
 from .models import EnergyError, Json, Session, Site
 from .runtime import EnergyAgent
@@ -354,6 +356,10 @@ class AuthenticatedHost:
             Route("/sessions/{session_id}/skills/run", self._run_skill, methods=["POST"]),
             Route("/sessions/{session_id}/jobs", self._jobs, methods=["POST"]),
             Route("/sessions/{session_id}/connections", self._connections, methods=["GET"]),
+            Route("/sessions/{session_id}/connections", self._connect_account, methods=["POST"]),
+            Route(
+                "/sessions/{session_id}/connection-setup", self._connection_setups, methods=["GET"]
+            ),
             Route("/sessions/{session_id}/toolkits", self._toolkits, methods=["GET"]),
             Route("/sessions/{session_id}/artifacts", self._artifacts, methods=["GET"]),
             Route(
@@ -948,6 +954,55 @@ class AuthenticatedHost:
             return scope
         try:
             return _json_response({"toolkits": self.agent.catalogue(scope[1])})
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _connection_setups(self, request: Request) -> Response:
+        scope = self._session_for(request)
+        if isinstance(scope, Response):
+            return scope
+        session = scope[1]
+        visible = {toolkit["id"] for toolkit in self.agent.catalogue(session)}
+        setups = []
+        if "octopus-energy-account" in visible:
+            setups.append(octopus_setup(enabled=isinstance(self.agent.auth_store, AuthStore)))
+        response = ConnectionSetupsResponse(setups=setups)
+        return _json_response(response.model_dump(mode="json"))
+
+    async def _connect_account(self, request: Request) -> Response:
+        scope = self._session_for(request)
+        if isinstance(scope, Response):
+            return scope
+        session = scope[1]
+        visible = {toolkit["id"] for toolkit in self.agent.catalogue(session)}
+        if "octopus-energy-account" not in visible:
+            return _error("toolkit_forbidden", "Toolkit is outside this session scope.", 403)
+        site = self.agent.sites.get(session.site_id or "")
+        if site is None or site.user_id != session.user_id:
+            return _error("site_forbidden", "Select an owned site before connecting.", 403)
+        store = self.agent.auth_store
+        if not isinstance(store, AuthStore):
+            return _error(
+                "connection_storage_unavailable",
+                "Encrypted connection storage is unavailable.",
+                503,
+            )
+        parsed = await self._parse_json(request, OctopusConnectionRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(OctopusConnectionRequest, parsed)
+        from .connection_onboarding import OctopusConnectionService
+
+        try:
+            result = await OctopusConnectionService(store, self.agent.http).connect(
+                user_id=session.user_id,
+                site=site,
+                credential=data.credential,
+                mpan=data.mpan,
+                serial_number=data.serial_number,
+            )
+            self.agent._sync_connections(session.user_id)
+            return _json_response(result, status_code=201)
         except EnergyError as exc:
             return self._energy_error(exc)
 

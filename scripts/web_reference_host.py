@@ -7,14 +7,20 @@ provider credentials are loaded. Catalogue browsing does not execute providers.
 from __future__ import annotations
 
 import argparse
+import asyncio
+import base64
+import hmac
 import os
 from pathlib import Path
+
+import httpx
+from cryptography.fernet import Fernet
 
 from energy_agent_tools.app import build_agent
 from energy_agent_tools.hosting import Principal, create_host, token_digest
 
 
-def create_app(root: Path):
+def create_app(root: Path, *, octopus_fixture: bool = False):
     token = os.environ.get("ENERGY_WEB_TEST_TOKEN")
     if not token:
         raise ValueError("A temporary acceptance token is required.")
@@ -42,7 +48,42 @@ def create_app(root: Path):
             },
         ],
     }
+    provider_key = os.environ.get("ENERGY_WEB_TEST_OCTOPUS_KEY")
+    if octopus_fixture:
+        if not provider_key:
+            raise ValueError("A fictional Octopus fixture key is required.")
+        root.mkdir(parents=True, exist_ok=True)
+        root.chmod(0o700)
+        key_path = root / "vault.key"
+        if not key_path.exists():
+            key_path.write_bytes(Fernet.generate_key())
+            key_path.chmod(0o600)
+        config["vault"] = {"master_key_file": "vault.key"}
     agent = build_agent(root, config)
+    if octopus_fixture:
+        expected = "Basic " + base64.b64encode(f"{provider_key}:".encode()).decode()
+
+        def fake_provider(request: httpx.Request) -> httpx.Response:
+            if request.url.host != "api.octopus.energy":
+                return httpx.Response(503)
+            if not hmac.compare_digest(request.headers.get("Authorization", ""), expected):
+                return httpx.Response(401)
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "consumption": 1.25,
+                            "interval_start": "2026-09-30T00:00:00Z",
+                            "interval_end": "2026-09-30T00:30:00Z",
+                        }
+                    ],
+                    "next": None,
+                },
+            )
+
+        asyncio.run(agent.http.aclose())
+        agent.http = httpx.AsyncClient(transport=httpx.MockTransport(fake_provider))
     return create_host(
         agent,
         {
@@ -60,8 +101,18 @@ def main():
     parser = argparse.ArgumentParser(description="Synthetic loopback web acceptance gateway")
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--state-dir", type=Path, required=True)
+    parser.add_argument(
+        "--octopus-fixture",
+        action="store_true",
+        help="Use fictional Octopus responses; never qualification of a private account",
+    )
     args = parser.parse_args()
-    uvicorn.run(create_app(args.state_dir), host="127.0.0.1", port=args.port, access_log=False)
+    uvicorn.run(
+        create_app(args.state_dir, octopus_fixture=args.octopus_fixture),
+        host="127.0.0.1",
+        port=args.port,
+        access_log=False,
+    )
 
 
 if __name__ == "__main__":

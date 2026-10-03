@@ -191,15 +191,22 @@ class CapabilityResolver:
         defer_unknown_tools: bool = False,
     ):
         self.agent = agent
-        self.bindings = builtins(agent) + list(bindings or [])
+        self._configured_bindings = builtins(agent) + list(bindings or [])
+        self._defer_unknown_tools = defer_unknown_tools
+        self.refresh_account_bindings()
+
+    def refresh_account_bindings(self) -> None:
+        """Refresh stored account mappings while preserving operator bindings."""
+        agent = self.agent
+        bindings = list(self._configured_bindings)
         for account in agent.accounts.values():
             for raw in account.settings.get("capability_bindings", []):
                 binding = CapabilityBinding.model_validate(raw)
                 binding.account_id = account.id
-                self.bindings.append(binding)
-        if defer_unknown_tools:
-            self.bindings = [b for b in self.bindings if b.tool in agent.registry.tools]
-        for binding in self.bindings:
+                bindings.append(binding)
+        if self._defer_unknown_tools:
+            bindings = [b for b in bindings if b.tool in agent.registry.tools]
+        for binding in bindings:
             tool = agent.registry.get(binding.tool)
             if binding.account_id:
                 bound_account = agent.accounts.get(binding.account_id)
@@ -216,6 +223,8 @@ class CapabilityResolver:
                     raise ValueError(
                         "Capability account must belong to the bound asset's site and accounts."
                     )
+
+        self.bindings = bindings
 
     def scoped_capabilities(self, session: Session) -> dict[str, list[str]]:
         """Publish reviewed role names only inside their account and asset scope."""

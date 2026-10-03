@@ -1,10 +1,9 @@
 import { EnergyAgentTools } from "@energy-agent-tools/sdk";
 import {
-  MAX_FORM_BODY_BYTES,
   SESSION_TTL_MS,
   isAllowedMutationOrigin,
   parseLoginToken,
-  parseUrlEncodedFormBody,
+  readBoundedForm,
   readWebRuntimeConfig,
   resolveWebOrigin,
   sealSession,
@@ -33,45 +32,6 @@ function forbidden(): Response {
       "Content-Type": "text/plain; charset=utf-8",
     },
   });
-}
-
-async function readBoundedForm(request: Request): Promise<URLSearchParams | null> {
-  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
-  if (contentType !== "application/x-www-form-urlencoded") return null;
-
-  const contentLength = request.headers.get("content-length");
-  if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > MAX_FORM_BODY_BYTES)) {
-    return null;
-  }
-
-  if (request.body === null) return new URLSearchParams();
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
-      if (part.value.byteLength > MAX_FORM_BODY_BYTES - total) {
-        await reader.cancel().catch(() => undefined);
-        return null;
-      }
-      chunks.push(part.value.slice());
-      total += part.value.byteLength;
-    }
-  } catch {
-    return null;
-  } finally {
-    reader.releaseLock();
-  }
-
-  const body = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return parseUrlEncodedFormBody(body);
 }
 
 export async function POST(request: Request): Promise<Response> {

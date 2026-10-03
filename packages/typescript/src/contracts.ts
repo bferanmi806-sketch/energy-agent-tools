@@ -133,6 +133,146 @@ export const IdentityResponseSchema = {
 } as const;
 export type IdentityResponse = FromSchema<typeof IdentityResponseSchema, { keepDefaultedPropertiesOptional: true }>;
 
+export const ConnectionSetupsResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "setups": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "toolkit_id": {
+            "title": "Toolkit Id",
+            "type": "string"
+          },
+          "provider": {
+            "const": "octopus",
+            "title": "Provider",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "fields": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "enum": [
+                    "credential",
+                    "mpan",
+                    "serial_number"
+                  ],
+                  "title": "Name",
+                  "type": "string"
+                },
+                "label": {
+                  "title": "Label",
+                  "type": "string"
+                },
+                "secret": {
+                  "title": "Secret",
+                  "type": "boolean"
+                },
+                "min_length": {
+                  "title": "Min Length",
+                  "type": "integer"
+                },
+                "max_length": {
+                  "title": "Max Length",
+                  "type": "integer"
+                },
+                "pattern": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Pattern"
+                }
+              },
+              "required": [
+                "name",
+                "label",
+                "secret",
+                "min_length",
+                "max_length"
+              ],
+              "title": "ConnectionField",
+              "type": "object"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "toolkit_id",
+          "provider",
+          "description",
+          "enabled",
+          "fields"
+        ],
+        "title": "ConnectionSetup",
+        "type": "object"
+      },
+      "title": "Setups",
+      "type": "array"
+    }
+  },
+  "required": [
+    "setups"
+  ],
+  "title": "ConnectionSetupsResponse",
+  "type": "object"
+} as const;
+export type ConnectionSetupsResponse = FromSchema<typeof ConnectionSetupsResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const OctopusConnectionRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "provider": {
+      "const": "octopus",
+      "title": "Provider",
+      "type": "string"
+    },
+    "credential": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "title": "Credential",
+      "type": "string"
+    },
+    "mpan": {
+      "pattern": "^[0-9]{13}$",
+      "title": "Mpan",
+      "type": "string"
+    },
+    "serial_number": {
+      "maxLength": 120,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._~-]+$",
+      "title": "Serial Number",
+      "type": "string"
+    }
+  },
+  "required": [
+    "provider",
+    "credential",
+    "mpan",
+    "serial_number"
+  ],
+  "title": "OctopusConnectionRequest",
+  "type": "object"
+} as const;
+export type OctopusConnectionRequest = FromSchema<typeof OctopusConnectionRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
 export const SessionCreateSchema = {
   "additionalProperties": false,
   "properties": {
@@ -1404,6 +1544,97 @@ export const ResolutionResponseSchema = {
   "additionalProperties": true
 } as const;
 export type ResolutionResponse = FromSchema<typeof ResolutionResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const ConnectionCreatedResponseSchema = {
+  "type": "object",
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "account": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "toolkit": {
+          "type": "string"
+        },
+        "site_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "auth_scheme": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "toolkit",
+        "site_id",
+        "enabled",
+        "auth_scheme",
+        "state",
+        "verified"
+      ],
+      "additionalProperties": true
+    },
+    "health": {
+      "type": "object",
+      "properties": {
+        "connection_id": {
+          "type": "string"
+        },
+        "provider": {
+          "const": "octopus"
+        },
+        "status": {
+          "const": "healthy"
+        },
+        "checked_at": {
+          "type": "string"
+        },
+        "probe": {
+          "const": "provider-read"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "connection_id",
+        "provider",
+        "status",
+        "checked_at",
+        "probe",
+        "message"
+      ],
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "ok",
+    "account",
+    "health"
+  ],
+  "additionalProperties": true
+} as const;
+export type ConnectionCreatedResponse = FromSchema<typeof ConnectionCreatedResponseSchema, { keepDefaultedPropertiesOptional: true }>;
 
 export const ConnectionsResponseSchema = {
   "type": "object",

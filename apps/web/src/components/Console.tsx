@@ -1,6 +1,7 @@
 "use client";
 
 import { GatewayForm } from "./GatewayForm";
+import { ConnectionForm } from "./ConnectionForm";
 
 import {
   Activity,
@@ -157,8 +158,8 @@ function siteName(data: DashboardData, siteId: string | null): string {
   return site?.name ?? `Site ${siteId}`;
 }
 
-export function Console({ data }: { data: DashboardData }) {
-  const [view, setView] = useState<ViewId>("apps");
+export function Console({ data, initialView = "apps" }: { data: DashboardData; initialView?: "apps" | "connections" }) {
+  const [view, setView] = useState<ViewId>(initialView);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [selectedToolkitId, setSelectedToolkitId] = useState<string | null>(null);
@@ -357,6 +358,7 @@ function AppsView({
             <div className="toolkit-list-header" aria-hidden="true"><span>Toolkit</span><span>Runtime</span><span>Registry status</span><span /></div>
             {filteredToolkits.map((toolkit) => {
               const active = selectedToolkitId === toolkit.id;
+              const setup = data.connectionSetups.find(setup=>setup.toolkit_id===toolkit.id) ?? null;
               return (
                 <Fragment key={toolkit.id}>
                 <button
@@ -371,9 +373,9 @@ function AppsView({
                   </span>
                   <span className="runtime-cell">{RUNTIME_LABELS[toolkit.runtime]}</span>
                   <span className={`status-badge ${statusClass(toolkit.status)}`}>{toolkit.status}</span>
-                  <span className="toolkit-action">View setup <ArrowRight size={14} aria-hidden="true" /></span>
+                  <span className="toolkit-action">{setup?.enabled && data.siteId ? "Connect" : "View setup"} <ArrowRight size={14} aria-hidden="true" /></span>
                 </button>
-                {active ? <ToolkitSetup selectedToolkit={toolkit} className="mobile-setup" titleId="mobile-setup-title" /> : null}
+                {active ? <ToolkitSetup selectedToolkit={toolkit} setup={setup} siteName={data.siteId ? siteName(data,data.siteId) : null} className="mobile-setup" titleId="mobile-setup-title" /> : null}
                 </Fragment>
               );
             })}
@@ -389,12 +391,14 @@ function AppsView({
         <p className="catalogue-note"><ShieldCheck size={15} aria-hidden="true" /> Registry metadata comes from the authenticated gateway. Status reflects its catalogue record.</p>
       </div>
 
-      <ToolkitSetup selectedToolkit={selectedToolkit} className="desktop-setup" titleId="desktop-setup-title" />
+      <ToolkitSetup selectedToolkit={selectedToolkit} setup={data.connectionSetups.find(setup=>setup.toolkit_id===selectedToolkit?.id) ?? null} siteName={data.siteId ? siteName(data,data.siteId) : null} className="desktop-setup" titleId="desktop-setup-title" />
     </section>
   );
 }
 
-function ToolkitSetup({ selectedToolkit, className, titleId }: {
+function ToolkitSetup({ selectedToolkit, setup, siteName, className, titleId }: {
+  setup: DashboardData["connectionSetups"][number] | null;
+  siteName: string | null;
   selectedToolkit: DashboardData["toolkits"][number] | null;
   className: string;
   titleId: string;
@@ -407,6 +411,7 @@ function ToolkitSetup({ selectedToolkit, className, titleId }: {
             <div className="setup-panel-topline"><span>Setup detail</span><span className={`status-dot ${statusClass(selectedToolkit.status)}`} aria-hidden="true" /></div>
             <h2 id={titleId}>{selectedToolkit.name}</h2>
             <p className="setup-description">{selectedToolkit.description}</p>
+            {setup ? <ConnectionForm setup={setup} siteName={siteName} /> : null}
             <dl className="metadata-list">
               <div><dt>Toolkit ID</dt><dd><code>{selectedToolkit.id}</code></dd></div>
               <div><dt>Runtime</dt><dd>{RUNTIME_LABELS[selectedToolkit.runtime]}</dd></div>
@@ -420,10 +425,12 @@ function ToolkitSetup({ selectedToolkit, className, titleId }: {
                 <ul className="tag-list">{selectedToolkit.categories.map((value) => <li key={value}>{value}</li>)}</ul>
               ) : <p>No category metadata supplied.</p>}
             </div>
+            {!setup ? (
             <div className="setup-limitation" role="note">
               <p className="note-title">Provider setup</p>
               <p>This interface can inspect registry metadata. Provider credentials and account onboarding are not available here yet.</p>
             </div>
+            ) : null}
             {documentationUrl ? (
               <a className="button button-secondary docs-link" href={documentationUrl} target="_blank" rel="noreferrer">
                 Open provider setup guide <ExternalLink size={15} aria-hidden="true" />
@@ -509,7 +516,7 @@ function SitesView({ data }: { data: DashboardData }) {
           <div className="site-picker-copy"><span className="section-label">Active site</span><strong>{selectedSite?.name ?? "Choose a site"}</strong><span>{selectedSite ? selectedSite.timezone : "No site is selected for this workspace."}</span></div>
           <label className="site-select-label" htmlFor="site-picker-select">Switch site</label>
           <select id="site-picker-select" name="site_id" defaultValue={data.siteId ?? ""}>
-            <option value="">No site selected</option>
+            {data.identity.sites.length === 0 ? <option value="">No sites available</option> : null}
             {data.identity.sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
           </select>
           <button className="button button-primary" type="submit">Use this site <ArrowRight size={15} aria-hidden="true" /></button>

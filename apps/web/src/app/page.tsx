@@ -71,7 +71,7 @@ function Unavailable({ message }: { message: string }) {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ auth_error?: string | string[] }>;
+  searchParams?: Promise<{ auth_error?: string | string[]; view?: string | string[] }>;
 }) {
   let state: DashboardState;
   try {
@@ -85,8 +85,10 @@ export default async function HomePage({
       const params = searchParams ? await searchParams : undefined;
       return <SignIn message={authErrorMessage(params?.auth_error) ?? state.message} />;
     }
-    case "ready":
-      return <Console data={state.data} />;
+    case "ready": {
+      const params = searchParams ? await searchParams : undefined;
+      return <Console data={state.data} initialView={params?.view === "connections" ? "connections" : "apps"} />;
+    }
     case "unavailable":
       return <Unavailable message={state.message} />;
     default: {

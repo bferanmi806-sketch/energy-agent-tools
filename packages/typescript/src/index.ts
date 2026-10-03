@@ -3,7 +3,7 @@ export type { RequestOptions } from "./client.js";
 export { EnergyHttpError, EnergyProtocolError, EnergyTransportError } from "./transport.js";
 export type { HttpTransportOptions } from "./transport.js";
 export type {
-  IdentityResponse,
+  IdentityResponse, ConnectionSetupsResponse, OctopusConnectionRequest, ConnectionCreatedResponse,
   SessionCreate, SearchRequest, ExecuteRequest, CapabilityRequest, CapabilityExecutionRequest,
   Toolkit, ToolkitsResponse, JobRequest, SkillExecutionRequest, WorkflowResponse, EnergyResult, SessionResponse, SearchResponse, ExecutionResponse,
   ResolutionResponse, ConnectionsResponse, ArtifactsResponse, SkillsResponse, JobResponse,

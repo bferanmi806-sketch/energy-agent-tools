@@ -222,6 +222,257 @@ class ConnectionHealth:
         }
 
 
+def provider_settings(provider: ProviderName, metadata: Mapping[str, Any]) -> Json:
+    settings = _json_object(metadata, "metadata")
+    if provider == "octopus":
+        _identifier(settings.get("mpan"), "mpan")
+        _identifier(settings.get("serial_number"), "serial_number")
+        if settings.get("base_url") is not None:
+            raise ValueError("Octopus uses its fixed official API origin")
+    elif provider == "home_assistant":
+        settings["base_url"] = _base_url(settings.get("base_url"), required=True)
+        entity = settings.get("entity_id")
+        if entity is not None:
+            if not isinstance(entity, str) or not entity or any(char in entity for char in "/?#"):
+                raise ValueError("entity_id is invalid")
+    else:
+        settings["base_url"] = _base_url(settings.get("base_url"), required=True)
+        feed_id = settings.get("feed_id")
+        if isinstance(feed_id, bool) or not isinstance(feed_id, (int, str)):
+            raise ValueError("feed_id is required")
+        if not re.fullmatch(r"[1-9][0-9]*", str(feed_id)):
+            raise ValueError("feed_id is invalid")
+        settings["feed_id"] = int(feed_id)
+    return settings
+
+
+def reviewed_provider_bindings(provider: ProviderName, settings: Json) -> list[Json]:
+    """Create mappings only where the operator supplied explicit semantics.
+
+    A Home Assistant ``total_increasing`` sensor is commonly a cumulative
+    counter.  The raw state is therefore never advertised as interval
+    consumption by this onboarding layer.  The user must explicitly say
+    that the entity represents interval energy before a consumption
+    binding is emitted.
+    """
+
+    if provider == "octopus":
+        return [
+            {
+                "capability": "get_energy_consumption",
+                "tool": "octopus_energy.get_consumption",
+                "kind": DataKind.METERED.value,
+                "unit": "kWh",
+                "reviewed": True,
+                "quality": "verified",
+                "version": "1.0.0",
+            }
+        ]
+    role = settings.get("telemetry_role")
+    measurement_kind = settings.get("measurement_kind")
+    unit = settings.get("unit")
+    quantity_shape = settings.get("quantity_shape")
+    entity_or_feed = (
+        settings.get("entity_id") if provider == "home_assistant" else settings.get("feed_id")
+    )
+    if (
+        not isinstance(role, str)
+        or not isinstance(measurement_kind, str)
+        or not isinstance(unit, str)
+    ):
+        return []
+    if entity_or_feed is None:
+        return []
+    if measurement_kind != DataKind.METERED.value:
+        return []
+    if role == "consumption_interval":
+        if (
+            unit != "kWh"
+            or (quantity_shape is not None and quantity_shape != "interval")
+            or (
+                quantity_shape != "interval"
+                and settings.get("measurement_semantics") != "interval_energy"
+            )
+            or settings.get("state_class") in {"total", "total_increasing"}
+        ):
+            return []
+        capability = "get_energy_consumption"
+    elif (
+        role == "current_power" and unit in {"W", "kW", "MW"} and quantity_shape == "instantaneous"
+    ):
+        capability = "get_current_power"
+    elif role == "generation" and (
+        (unit == "kWh" and quantity_shape == "interval")
+        or (unit in {"W", "kW", "MW"} and quantity_shape == "instantaneous")
+    ):
+        capability = "get_generation"
+    elif role in {"export", "export_interval"} and (unit == "kWh" and quantity_shape == "interval"):
+        capability = "get_export"
+    elif role == "storage_state" and (unit in {"%", "kWh"} and quantity_shape == "instantaneous"):
+        capability = "get_storage_state"
+    else:
+        return []
+    if quantity_shape == "instantaneous":
+        tool = (
+            "home_assistant.get_state"
+            if provider == "home_assistant"
+            else "openenergymonitor.get_feed"
+        )
+    else:
+        tool = (
+            "home_assistant.get_history"
+            if provider == "home_assistant"
+            else "openenergymonitor.get_feed"
+        )
+    fixed_key = "entity_id" if provider == "home_assistant" else "feed_id"
+    return [
+        {
+            "capability": capability,
+            "tool": tool,
+            "kind": measurement_kind,
+            "unit": unit,
+            "quantity_shape": quantity_shape,
+            "fixed_arguments": {fixed_key: entity_or_feed},
+            "reviewed": True,
+            "quality": "operator-reviewed",
+            "version": "1.0.0",
+        }
+    ]
+
+
+async def probe_provider(
+    http: httpx.AsyncClient, account: ConnectedAccount, credential: str
+) -> bool:
+    provider = {
+        _OCTOPUS_TOOLKIT: "octopus",
+        _HA_TOOLKIT: "home_assistant",
+        _EMON_TOOLKIT: "emoncms",
+    }.get(account.toolkit)
+    if provider is None:
+        raise _safe_error("unsupported_provider", "This connection provider is unsupported.")
+    settings = account.settings
+    try:
+        if provider == "octopus":
+            base = _OCTOPUS_BASE
+            expected_origin = _OCTOPUS_BASE
+            mpan = _identifier(settings.get("mpan"), "mpan")
+            serial = _identifier(settings.get("serial_number"), "serial_number")
+            endpoint = (
+                f"{base}/electricity-meter-points/{quote(mpan, safe='-._~')}"
+                f"/meters/{quote(serial, safe='-._~')}/consumption/"
+            )
+            response = await http.request(
+                "GET",
+                endpoint,
+                auth=httpx.BasicAuth(credential, ""),
+                follow_redirects=False,
+            )
+        elif provider == "home_assistant":
+            ha_base = _base_url(settings.get("base_url"), required=True)
+            assert ha_base is not None
+            expected_origin = ha_base
+            entity = settings.get("entity_id")
+            if isinstance(entity, str) and entity:
+                path = f"/api/states/{quote(entity, safe='._:-')}"
+            else:
+                path = "/api/config"
+            response = await http.request(
+                "GET",
+                f"{ha_base}{path}",
+                headers={"Authorization": f"Bearer {credential}"},
+                follow_redirects=False,
+            )
+        else:
+            emon_base = _base_url(settings.get("base_url"), required=True)
+            assert emon_base is not None
+            expected_origin = emon_base
+            feed_id = settings.get("feed_id")
+            response = await http.request(
+                "GET",
+                f"{emon_base}/feed/value.json",
+                params={"id": str(feed_id), "apikey": credential},
+                follow_redirects=False,
+            )
+    except httpx.RequestError as exc:
+        raise _safe_error("provider_unavailable", "Provider could not be reached.", True) from exc
+    if 300 <= response.status_code < 400:
+        raise _safe_error("provider_verification_failed", "Provider verification failed.")
+    if response.status_code in {401, 403}:
+        raise _safe_error("provider_verification_failed", "Provider verification failed.")
+    if response.status_code >= 400:
+        raise _safe_error("provider_verification_failed", "Provider verification failed.")
+    if not _same_origin(response.url, expected_origin):
+        raise _safe_error("provider_verification_failed", "Provider verification failed.")
+    if len(response.content) > _MAX_PROBE_BYTES:
+        raise _safe_error("provider_verification_failed", "Provider returned too much data.")
+    try:
+        payload = response.json()
+    except (TypeError, ValueError) as exc:
+        raise _safe_error(
+            "provider_verification_failed", "Provider returned invalid data."
+        ) from exc
+    if provider == "octopus":
+        if not isinstance(payload, Mapping) or not isinstance(payload.get("results"), list):
+            raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+        for row in payload["results"]:
+            if (
+                not isinstance(row, Mapping)
+                or isinstance(row.get("consumption"), bool)
+                or not isinstance(row.get("consumption"), (int, float))
+                or not math.isfinite(row["consumption"])
+            ):
+                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+    if provider == "home_assistant":
+        if not isinstance(payload, Mapping):
+            raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+        entity = settings.get("entity_id")
+        if entity is not None:
+            if payload.get("entity_id") != entity:
+                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+            attributes = payload.get("attributes")
+            if not isinstance(attributes, Mapping):
+                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+            declared_unit = settings.get("unit")
+            actual_unit = attributes.get("unit_of_measurement")
+            if declared_unit is not None and actual_unit != declared_unit:
+                raise _safe_error(
+                    "provider_verification_failed",
+                    "Provider telemetry metadata does not match.",
+                )
+            declared_state_class = settings.get("state_class")
+            actual_state_class = attributes.get("state_class")
+            if declared_state_class is not None and actual_state_class != declared_state_class:
+                raise _safe_error(
+                    "provider_verification_failed",
+                    "Provider telemetry metadata does not match.",
+                )
+            if settings.get("telemetry_role") == "consumption_interval" and actual_state_class in {
+                "total",
+                "total_increasing",
+            }:
+                raise _safe_error(
+                    "provider_verification_failed",
+                    "Provider telemetry metadata does not match.",
+                )
+            if settings.get(
+                "measurement_kind"
+            ) == DataKind.METERED.value and actual_state_class not in {
+                "measurement",
+                "total",
+                "total_increasing",
+            }:
+                raise _safe_error(
+                    "provider_verification_failed",
+                    "Provider telemetry metadata does not match.",
+                )
+    if provider == "emoncms":
+        if isinstance(payload, bool) or not isinstance(payload, (int, float)):
+            raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+        if not math.isfinite(float(payload)):
+            raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
+    return True
+
+
 class LocalProfile:
     """Create and use a persistent local Energy Agent Tools profile.
 
@@ -508,133 +759,6 @@ class LocalProfile:
         self._write_profile()
         return asset
 
-    def _settings(self, provider: ProviderName, metadata: Mapping[str, Any]) -> Json:
-        settings = _json_object(metadata, "metadata")
-        if provider == "octopus":
-            _identifier(settings.get("mpan"), "mpan")
-            _identifier(settings.get("serial_number"), "serial_number")
-            if settings.get("base_url") is not None:
-                raise ValueError("Octopus uses its fixed official API origin")
-        elif provider == "home_assistant":
-            settings["base_url"] = _base_url(settings.get("base_url"), required=True)
-            entity = settings.get("entity_id")
-            if entity is not None:
-                if (
-                    not isinstance(entity, str)
-                    or not entity
-                    or any(char in entity for char in "/?#")
-                ):
-                    raise ValueError("entity_id is invalid")
-        else:
-            settings["base_url"] = _base_url(settings.get("base_url"), required=True)
-            feed_id = settings.get("feed_id")
-            if isinstance(feed_id, bool) or not isinstance(feed_id, (int, str)):
-                raise ValueError("feed_id is required")
-            if not re.fullmatch(r"[1-9][0-9]*", str(feed_id)):
-                raise ValueError("feed_id is invalid")
-            settings["feed_id"] = int(feed_id)
-        return settings
-
-    @staticmethod
-    def _reviewed_bindings(provider: ProviderName, settings: Json) -> list[Json]:
-        """Create mappings only where the operator supplied explicit semantics.
-
-        A Home Assistant ``total_increasing`` sensor is commonly a cumulative
-        counter.  The raw state is therefore never advertised as interval
-        consumption by this onboarding layer.  The user must explicitly say
-        that the entity represents interval energy before a consumption
-        binding is emitted.
-        """
-
-        if provider == "octopus":
-            return [
-                {
-                    "capability": "get_energy_consumption",
-                    "tool": "octopus_energy.get_consumption",
-                    "kind": DataKind.METERED.value,
-                    "unit": "kWh",
-                    "reviewed": True,
-                    "quality": "verified",
-                    "version": "1.0.0",
-                }
-            ]
-        role = settings.get("telemetry_role")
-        measurement_kind = settings.get("measurement_kind")
-        unit = settings.get("unit")
-        quantity_shape = settings.get("quantity_shape")
-        entity_or_feed = (
-            settings.get("entity_id") if provider == "home_assistant" else settings.get("feed_id")
-        )
-        if (
-            not isinstance(role, str)
-            or not isinstance(measurement_kind, str)
-            or not isinstance(unit, str)
-        ):
-            return []
-        if entity_or_feed is None:
-            return []
-        if measurement_kind != DataKind.METERED.value:
-            return []
-        if role == "consumption_interval":
-            if (
-                unit != "kWh"
-                or (quantity_shape is not None and quantity_shape != "interval")
-                or (
-                    quantity_shape != "interval"
-                    and settings.get("measurement_semantics") != "interval_energy"
-                )
-                or settings.get("state_class") in {"total", "total_increasing"}
-            ):
-                return []
-            capability = "get_energy_consumption"
-        elif (
-            role == "current_power"
-            and unit in {"W", "kW", "MW"}
-            and quantity_shape == "instantaneous"
-        ):
-            capability = "get_current_power"
-        elif role == "generation" and (
-            (unit == "kWh" and quantity_shape == "interval")
-            or (unit in {"W", "kW", "MW"} and quantity_shape == "instantaneous")
-        ):
-            capability = "get_generation"
-        elif role in {"export", "export_interval"} and (
-            unit == "kWh" and quantity_shape == "interval"
-        ):
-            capability = "get_export"
-        elif role == "storage_state" and (
-            unit in {"%", "kWh"} and quantity_shape == "instantaneous"
-        ):
-            capability = "get_storage_state"
-        else:
-            return []
-        if quantity_shape == "instantaneous":
-            tool = (
-                "home_assistant.get_state"
-                if provider == "home_assistant"
-                else "openenergymonitor.get_feed"
-            )
-        else:
-            tool = (
-                "home_assistant.get_history"
-                if provider == "home_assistant"
-                else "openenergymonitor.get_feed"
-            )
-        fixed_key = "entity_id" if provider == "home_assistant" else "feed_id"
-        return [
-            {
-                "capability": capability,
-                "tool": tool,
-                "kind": measurement_kind,
-                "unit": unit,
-                "quantity_shape": quantity_shape,
-                "fixed_arguments": {fixed_key: entity_or_feed},
-                "reviewed": True,
-                "quality": "operator-reviewed",
-                "version": "1.0.0",
-            }
-        ]
-
     def configure_connection(
         self,
         provider: str,
@@ -664,8 +788,8 @@ class LocalProfile:
                 )
         if not isinstance(credential, str) or not credential:
             raise ValueError("credential must be a non-empty string")
-        settings = self._settings(selected_provider, metadata or {})
-        bindings = self._reviewed_bindings(selected_provider, settings)
+        settings = provider_settings(selected_provider, metadata or {})
+        bindings = reviewed_provider_bindings(selected_provider, settings)
         if bindings:
             settings["capability_bindings"] = bindings
         default_id = f"{selected_provider}-{site_id or user_id}"
@@ -699,143 +823,6 @@ class LocalProfile:
         self._profile["accounts"].sort(key=lambda item: str(item.get("id", "")))
         self._write_profile()
 
-    async def _probe(self, account: ConnectedAccount, credential: str) -> bool:
-        provider = {
-            _OCTOPUS_TOOLKIT: "octopus",
-            _HA_TOOLKIT: "home_assistant",
-            _EMON_TOOLKIT: "emoncms",
-        }.get(account.toolkit)
-        if provider is None:
-            raise _safe_error("unsupported_provider", "This connection provider is unsupported.")
-        settings = account.settings
-        try:
-            if provider == "octopus":
-                base = _OCTOPUS_BASE
-                expected_origin = _OCTOPUS_BASE
-                mpan = _identifier(settings.get("mpan"), "mpan")
-                serial = _identifier(settings.get("serial_number"), "serial_number")
-                endpoint = (
-                    f"{base}/electricity-meter-points/{quote(mpan, safe='-._~')}"
-                    f"/meters/{quote(serial, safe='-._~')}/consumption/"
-                )
-                response = await self.http.request(
-                    "GET",
-                    endpoint,
-                    auth=httpx.BasicAuth(credential, ""),
-                    follow_redirects=False,
-                )
-            elif provider == "home_assistant":
-                ha_base = _base_url(settings.get("base_url"), required=True)
-                assert ha_base is not None
-                expected_origin = ha_base
-                entity = settings.get("entity_id")
-                if isinstance(entity, str) and entity:
-                    path = f"/api/states/{quote(entity, safe='._:-')}"
-                else:
-                    path = "/api/config"
-                response = await self.http.request(
-                    "GET",
-                    f"{ha_base}{path}",
-                    headers={"Authorization": f"Bearer {credential}"},
-                    follow_redirects=False,
-                )
-            else:
-                emon_base = _base_url(settings.get("base_url"), required=True)
-                assert emon_base is not None
-                expected_origin = emon_base
-                feed_id = settings.get("feed_id")
-                response = await self.http.request(
-                    "GET",
-                    f"{emon_base}/feed/value.json",
-                    params={"id": str(feed_id), "apikey": credential},
-                    follow_redirects=False,
-                )
-        except httpx.RequestError as exc:
-            raise _safe_error(
-                "provider_unavailable", "Provider could not be reached.", True
-            ) from exc
-        if 300 <= response.status_code < 400:
-            raise _safe_error("provider_verification_failed", "Provider verification failed.")
-        if response.status_code in {401, 403}:
-            raise _safe_error("provider_verification_failed", "Provider verification failed.")
-        if response.status_code >= 400:
-            raise _safe_error("provider_verification_failed", "Provider verification failed.")
-        if not _same_origin(response.url, expected_origin):
-            raise _safe_error("provider_verification_failed", "Provider verification failed.")
-        if len(response.content) > _MAX_PROBE_BYTES:
-            raise _safe_error("provider_verification_failed", "Provider returned too much data.")
-        try:
-            payload = response.json()
-        except (TypeError, ValueError) as exc:
-            raise _safe_error(
-                "provider_verification_failed", "Provider returned invalid data."
-            ) from exc
-        if provider == "octopus":
-            if not isinstance(payload, Mapping) or not isinstance(payload.get("results"), list):
-                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
-            for row in payload["results"]:
-                if (
-                    not isinstance(row, Mapping)
-                    or isinstance(row.get("consumption"), bool)
-                    or not isinstance(row.get("consumption"), (int, float))
-                    or not math.isfinite(row["consumption"])
-                ):
-                    raise _safe_error(
-                        "provider_verification_failed", "Provider returned invalid data."
-                    )
-        if provider == "home_assistant":
-            if not isinstance(payload, Mapping):
-                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
-            entity = settings.get("entity_id")
-            if entity is not None:
-                if payload.get("entity_id") != entity:
-                    raise _safe_error(
-                        "provider_verification_failed", "Provider returned invalid data."
-                    )
-                attributes = payload.get("attributes")
-                if not isinstance(attributes, Mapping):
-                    raise _safe_error(
-                        "provider_verification_failed", "Provider returned invalid data."
-                    )
-                declared_unit = settings.get("unit")
-                actual_unit = attributes.get("unit_of_measurement")
-                if declared_unit is not None and actual_unit != declared_unit:
-                    raise _safe_error(
-                        "provider_verification_failed",
-                        "Provider telemetry metadata does not match.",
-                    )
-                declared_state_class = settings.get("state_class")
-                actual_state_class = attributes.get("state_class")
-                if declared_state_class is not None and actual_state_class != declared_state_class:
-                    raise _safe_error(
-                        "provider_verification_failed",
-                        "Provider telemetry metadata does not match.",
-                    )
-                if settings.get(
-                    "telemetry_role"
-                ) == "consumption_interval" and actual_state_class in {"total", "total_increasing"}:
-                    raise _safe_error(
-                        "provider_verification_failed",
-                        "Provider telemetry metadata does not match.",
-                    )
-                if settings.get(
-                    "measurement_kind"
-                ) == DataKind.METERED.value and actual_state_class not in {
-                    "measurement",
-                    "total",
-                    "total_increasing",
-                }:
-                    raise _safe_error(
-                        "provider_verification_failed",
-                        "Provider telemetry metadata does not match.",
-                    )
-        if provider == "emoncms":
-            if isinstance(payload, bool) or not isinstance(payload, (int, float)):
-                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
-            if not math.isfinite(float(payload)):
-                raise _safe_error("provider_verification_failed", "Provider returned invalid data.")
-        return True
-
     async def verify_connection(
         self,
         connection_id: str,
@@ -855,7 +842,7 @@ class LocalProfile:
             verified = await self.auth_store.verify_provider(
                 user_id,
                 connection_id,
-                self._probe,
+                lambda account, credential: probe_provider(self.http, account, credential),
                 site_id,
             )
         except EnergyError:

@@ -1,7 +1,8 @@
-import type { IdentityResponse, ToolkitsResponse, ConnectionsResponse, SkillsResponse, ArtifactsResponse } from "@energy-agent-tools/sdk";
+import type { IdentityResponse, ConnectionSetupsResponse, ToolkitsResponse, ConnectionsResponse, SkillsResponse, ArtifactsResponse } from "@energy-agent-tools/sdk";
 export interface DashboardData {
   identity: IdentityResponse;
   siteId: string | null;
+  connectionSetups: ConnectionSetupsResponse["setups"];
   toolkits: ToolkitsResponse["toolkits"];
   connections: ConnectionsResponse["connections"];
   skills: SkillsResponse["skills"];

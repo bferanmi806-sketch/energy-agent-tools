@@ -341,6 +341,7 @@ class EnergyAgent:
 
     def _sync_connections(self, user_id: str) -> None:
         if self.auth_store:
+            changed = False
             current = self.auth_store.accounts(user_id)
             current_ids = {account.id for account in current}
             for account_id, account in list(self.accounts.items()):
@@ -350,6 +351,7 @@ class EnergyAgent:
                     and account_id not in current_ids
                 ):
                     del self.accounts[account_id]
+                    changed = True
             for account in current:
                 if account.site_id is not None:
                     site = self.sites.get(account.site_id)
@@ -357,7 +359,11 @@ class EnergyAgent:
                         raise EnergyError(
                             "site_forbidden", "Stored connection has an invalid site scope."
                         )
+                if self.accounts.get(account.id) != account:
+                    changed = True
                 self.accounts[account.id] = account
+            if changed:
+                self.resolver.refresh_account_bindings()
 
     def connections(self, session: Session) -> list[Json]:
         self._scope(session)
