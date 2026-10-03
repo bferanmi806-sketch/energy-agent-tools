@@ -17,10 +17,12 @@ import httpx
 from cryptography.fernet import Fernet
 
 from energy_agent_tools.app import build_agent
+from energy_agent_tools.connection_onboarding import OctopusConnectionService
+from energy_agent_tools.control_contracts import AgentKeyAccess
 from energy_agent_tools.hosting import Principal, create_host, token_digest
 
 
-def create_app(root: Path, *, octopus_fixture: bool = False):
+def create_app(root: Path, *, octopus_fixture: bool = False, agent_key: bool = False):
     token = os.environ.get("ENERGY_WEB_TEST_TOKEN")
     if not token:
         raise ValueError("A temporary acceptance token is required.")
@@ -49,7 +51,7 @@ def create_app(root: Path, *, octopus_fixture: bool = False):
         ],
     }
     provider_key = os.environ.get("ENERGY_WEB_TEST_OCTOPUS_KEY")
-    if octopus_fixture:
+    if octopus_fixture or agent_key:
         if not provider_key:
             raise ValueError("A fictional Octopus fixture key is required.")
         root.mkdir(parents=True, exist_ok=True)
@@ -60,7 +62,7 @@ def create_app(root: Path, *, octopus_fixture: bool = False):
             key_path.chmod(0o600)
         config["vault"] = {"master_key_file": "vault.key"}
     agent = build_agent(root, config)
-    if octopus_fixture:
+    if octopus_fixture or agent_key:
         expected = "Basic " + base64.b64encode(f"{provider_key}:".encode()).decode()
 
         def fake_provider(request: httpx.Request) -> httpx.Response:
@@ -84,13 +86,29 @@ def create_app(root: Path, *, octopus_fixture: bool = False):
 
         asyncio.run(agent.http.aclose())
         agent.http = httpx.AsyncClient(transport=httpx.MockTransport(fake_provider))
+    if agent_key:
+        asyncio.run(
+            OctopusConnectionService(agent.auth_store, agent.http).connect(
+                user_id="web-test",
+                site=agent.sites["synthetic-home"],
+                credential=provider_key,
+                mpan="1234567890123",
+                serial_number="TEST123",
+            )
+        )
+        principal = Principal(
+            "web-test",
+            {"synthetic-home"},
+            token_digest(token),
+            key_access=AgentKeyAccess(site_ids=["synthetic-home"]),
+        )
+    else:
+        principal = Principal(
+            "web-test", {"synthetic-home", "synthetic-workshop"}, token_digest(token)
+        )
     return create_host(
         agent,
-        {
-            "web-test": Principal(
-                "web-test", {"synthetic-home", "synthetic-workshop"}, token_digest(token)
-            )
-        },
+        {"web-test": principal},
         close_agent_on_shutdown=True,
         # The scripted acceptance makes many requests in seconds; production keeps 60/min.
         max_requests_per_minute=300,
@@ -108,9 +126,14 @@ def main():
         action="store_true",
         help="Use fictional Octopus responses; never qualification of a private account",
     )
+    parser.add_argument(
+        "--agent-key",
+        action="store_true",
+        help="Use a static home-only read-only agent principal with a fictional Octopus connection",
+    )
     args = parser.parse_args()
     uvicorn.run(
-        create_app(args.state_dir, octopus_fixture=args.octopus_fixture),
+        create_app(args.state_dir, octopus_fixture=args.octopus_fixture, agent_key=args.agent_key),
         host="127.0.0.1",
         port=args.port,
         access_log=False,

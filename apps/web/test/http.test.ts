@@ -33,6 +33,9 @@ async function ready(url: string, child: ChildProcess): Promise<void> {
   }
   throw new Error("Acceptance service startup timed out.");
 }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 test("production web routes authenticate the real gateway and keep keys out of rendered props", { timeout: 120_000 }, async () => {
   const gatewayPort = await port(); const webPort = await port();
@@ -128,5 +131,135 @@ test("production web routes authenticate the real gateway and keep keys out of r
     assert.match(logout.headers.get("set-cookie") ?? "",/Max-Age=0/);
   } finally {
     await Promise.all([stop(web),stop(gateway)]); await rm(state,{recursive:true,force:true});
+  }
+});
+
+test("production web keeps a home-only agent key read-only while allowing connection health checks", { timeout: 120_000 }, async () => {
+  const gatewayPort = await port(); const webPort = await port();
+  const gatewayUrl = `http://127.0.0.1:${gatewayPort}`;
+  const webUrl = `http://127.0.0.1:${webPort}`;
+  const state = await mkdtemp(join(tmpdir(), "energy-web-agent-"));
+  const token = randomBytes(32).toString("hex");
+  const providerKey = randomBytes(32).toString("hex");
+  const children: ChildProcess[] = [];
+  let session: Awaited<ReturnType<EnergyAgentTools["createSession"]>> | null = null;
+  const gateway = spawn(
+    process.env.ENERGY_WEB_TEST_PYTHON ?? join(root, ".venv/bin/python"),
+    [join(root, "scripts/web_reference_host.py"), "--port", String(gatewayPort), "--state-dir", state, "--agent-key"],
+    { cwd:root, env:{...process.env, ENERGY_WEB_TEST_TOKEN:token, ENERGY_WEB_TEST_OCTOPUS_KEY:providerKey}, stdio:"ignore" },
+  );
+  children.push(gateway);
+  const web = spawn(
+    process.execPath,
+    [join(app, "node_modules/next/dist/bin/next"), "start", "--hostname", "127.0.0.1", "--port", String(webPort)],
+    {
+      cwd:app,
+      env:{...process.env, NODE_ENV:"production", ENERGY_GATEWAY_URL:gatewayUrl, ENERGY_WEB_ORIGIN:webUrl, ENERGY_PUBLIC_GATEWAY_URL:gatewayUrl, ENERGY_WEB_SESSION_KEY:randomBytes(32).toString("hex")},
+      stdio:"ignore",
+    },
+  );
+  children.push(web);
+
+  async function post(path: string, fields: Record<string, string>, cookie?: string) {
+    const headers: Record<string, string> = {
+      origin: webUrl,
+      "content-type": "application/x-www-form-urlencoded",
+    };
+    if (cookie !== undefined) headers.cookie = cookie;
+    return fetch(webUrl + path, { method:"POST", headers, body:new URLSearchParams(fields), redirect:"manual" });
+  }
+
+  try {
+    await Promise.all([ready(`${gatewayUrl}/me`, gateway), ready(webUrl, web)]);
+    const login = await post("/api/auth", { token });
+    assert.equal(login.status, 303);
+    const sealed = login.headers.get("set-cookie"); assert.ok(sealed);
+    const cookie = sealed.split(";", 1)[0]; assert.ok(cookie);
+
+    const sdk = new EnergyAgentTools({ baseUrl:gatewayUrl, token });
+    const identity = await sdk.identity();
+    assert.deepEqual(identity.sites.map(site => site.id), ["synthetic-home"]);
+    assert.equal(identity.can_manage_connections, false);
+    session = await sdk.createSession({ site_id:"synthetic-home" });
+    const setups = await session.connectionSetups();
+    assert.equal(setups.setups[0]?.enabled, false);
+    assert.equal(setups.setups[0]?.unavailable_reason, "management_key_required");
+    const accounts = await session.connections();
+    assert.equal(accounts.connections.length, 1);
+    const account = accounts.connections[0]; assert.ok(account);
+    assert.equal(account.state, "active");
+    assert.equal(account.enabled, true);
+
+    const page = await fetch(`${webUrl}/?view=connections`, { headers:{ cookie } });
+    assert.equal(page.status, 200);
+    const html = await page.text();
+    assert.match(html, /Check connection/);
+    assert.doesNotMatch(html, /aria-label="Disconnect connection"/);
+    assert.doesNotMatch(html, /aria-label="Confirm disconnect"/);
+    assert.ok(!html.includes("Synthetic workshop"));
+    assert.ok(!html.includes(token));
+    assert.ok(!html.includes(providerKey));
+
+    const authorization = { authorization:`Bearer ${token}`, "content-type":"application/json" };
+    const deniedConnect = await fetch(`${gatewayUrl}/sessions/${session.id}/connections`, {
+      method:"POST",
+      headers:authorization,
+      body:JSON.stringify({ provider:"octopus", credential:providerKey, mpan:"1234567890123", serial_number:"TEST123" }),
+    });
+    assert.equal(deniedConnect.status, 403);
+    const connectMessage = await deniedConnect.text();
+    assert.match(connectMessage, /workspace management key to connect accounts/);
+    assert.ok(!connectMessage.includes(providerKey));
+
+    const deniedDisconnect = await fetch(`${gatewayUrl}/sessions/${session.id}/connections/${encodeURIComponent(account.id)}/disconnect`, {
+      method:"POST",
+      headers:authorization,
+      body:"{}",
+    });
+    assert.equal(deniedDisconnect.status, 403);
+    const disconnectMessage = await deniedDisconnect.text();
+    assert.match(disconnectMessage, /workspace management key to disconnect accounts/);
+    assert.ok(!disconnectMessage.includes(providerKey));
+
+    const webDeniedConnect = await post(
+      "/api/connections",
+      { provider:"octopus", credential:providerKey, mpan:"1234567890123", serial_number:"TEST123" },
+      cookie,
+    );
+    assert.equal(webDeniedConnect.status, 422);
+    const webConnectMessage = await webDeniedConnect.text();
+    assert.match(webConnectMessage, /connection_failed/);
+    assert.ok(!webConnectMessage.includes(providerKey));
+
+    const webDeniedDisconnect = await post(
+      "/api/connections/action",
+      { connection_id:account.id, action:"disconnect" },
+      cookie,
+    );
+    assert.equal(webDeniedDisconnect.status, 422);
+    const webDisconnectMessage = await webDeniedDisconnect.text();
+    assert.match(webDisconnectMessage, /connection_action_failed/);
+    assert.ok(!webDisconnectMessage.includes(providerKey));
+
+    const unchanged = await session.connections();
+    assert.equal(unchanged.connections.length, 1);
+    assert.equal(unchanged.connections[0]?.state, "active");
+
+    const verified = await post(
+      "/api/connections/action",
+      { connection_id:account.id, action:"verify" },
+      cookie,
+    );
+    assert.equal(verified.status, 200);
+    const health: unknown = await verified.json();
+    if (!isRecord(health)) throw new Error("Health response is invalid.");
+    assert.equal(health.action, "verify");
+    assert.equal(health.status, "healthy");
+    const afterVerification = await session.connections();
+    assert.equal(afterVerification.connections[0]?.state, "active");
+  } finally {
+    if (session) await session.close().catch(() => undefined);
+    await Promise.all(children.map(stop));
+    await rm(state, { recursive:true, force:true });
   }
 });

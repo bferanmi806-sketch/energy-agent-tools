@@ -284,8 +284,9 @@ TypeScript SDK exposes this as `identity()`. This route postdates v0.3.0.
 `ControlStore` persists owner-private users, workspaces, site/asset mappings
 and API-key metadata in `control/control.sqlite3`. It stores SHA-256 digests
 of independently generated 32-byte keys, returns a raw key only at issuance,
-and checks revocation/expiry on each authentication. Schema version 1 is
-transactional; a newer version is refused. Shared membership and ACLs are
+and checks revocation/expiry on each authentication. Schema version 2 migrates
+version 1 keys transactionally to `legacy-agent` access while preserving their
+digests, expiry and revocation. A newer version is refused. Shared membership and ACLs are
 not implemented in this first store.
 
 An operator can pass a borrowed store to `create_host(control_store=store)`,
@@ -298,10 +299,25 @@ checked against the key's current permitted sites on every request. The
 `eat_` prefix is reserved for persisted keys while a store is enabled; adding
 a key digest to static principal configuration does not bypass its revocation.
 
+New keys require explicit access. `AgentKeyAccess(site_ids=[...])` grants one or
+more existing sites in the key's workspace; execution also obeys the operator's
+policy and runtime ownership map. Agent and migrated legacy keys cannot add or
+disconnect provider accounts. They can check connection health. A
+`ManageKeyAccess()` key can manage connections within the same site intersection.
+`GET /me` reports `can_manage_connections`, and connection setup metadata reports
+`management_key_required` for execution keys. An explicit key role never receives
+a site-free session, even when its effective site grant is empty.
+
+These roles do not create a managed multi-tenant deployment. Configured file roots
+and imported MCP servers can contain operator-private resources. The current host
+still requires explicitly admitted operator principals; automatic workspace
+registration remains disabled pending resource authorization for those tools.
+
 Example operator-side provisioning, with the existing `home` site model:
 
 ```python
 from pathlib import Path
+from energy_agent_tools.control_contracts import AgentKeyAccess
 from energy_agent_tools.control_store import ControlStore
 from energy_agent_tools.models import Site
 
@@ -311,7 +327,9 @@ workspace = store.create_workspace("alice", "Home energy")
 store.put_site(
     "alice", workspace.id, Site(id="home", user_id="alice", name="Home", timezone="Europe/London")
 )
-issued = store.create_key("alice", workspace.id, "Agent access")
+issued = store.create_key(
+    "alice", workspace.id, "Agent access", access=AgentKeyAccess(site_ids=["home"])
+)
 # Deliver issued.token privately once. Public metadata is issued.key.
 # Revoke with store.revoke_key("alice", workspace.id, issued.key.id).
 store.close()

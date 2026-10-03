@@ -36,6 +36,23 @@
     "lifecycle-web-check.log": "e4ab2325f1680a9c2ef518af4150f462f654b2720007fb7f1191f6baddaae95d",
     "lifecycle-web-build.log": "432a278427efe4eacfa0a8a308c0520cd93c1dd079eaafacc4a3bbb822095ea1",
     "lifecycle-mypy.log": "8e71d79dbad0b69ea084d2b82ffa1e884da682da321d892911c2549f0a4a4d72",
-    "lifecycle-sdk-tests.log": "3413105f7e0e9aab9c8966d5c240a0d5a1c663e2b4ad65187a801b7a0f99a7c1"
+    "lifecycle-sdk-tests.log": "3413105f7e0e9aab9c8966d5c240a0d5a1c663e2b4ad65187a801b7a0f99a7c1",
+    "lifecycle-ci.log": "51071e674feab7c39aabecbec3c881120b3bf3089b1382e856d6b127b14d99d7"
+  },
+  "published_ci": {
+    "head": "f8de23fd80d0abecc248e530001c6ab670496700",
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37093146521",
+    "status": "success",
+    "python_tests_each": 670,
+    "python_versions": [
+      "3.11",
+      "3.12",
+      "3.13"
+    ],
+    "additional_checks": [
+      "container",
+      "upgrade",
+      "Home Assistant"
+    ]
   }
 }
