@@ -16,7 +16,7 @@ const accessToken = 'fixture-access-token-private';
 const refreshedAccessToken = 'fixture-refreshed-access-token-private';
 const refreshToken = 'fixture-refresh-token-private';
 
-async function startHost() {
+async function startHost({ revocationFailures = 0 } = {}) {
   const allocation = createServer();
   allocation.listen(0, '127.0.0.1');
   await once(allocation, 'listening');
@@ -28,13 +28,17 @@ async function startHost() {
   const stateDirectory = await mkdtemp(join(tmpdir(), 'energy-sdk-managed-oauth-'));
   const tokenFile = join(stateDirectory, 'one-time-management-token');
   const otherTokenFile = join(stateDirectory, 'other-management-token');
-  const child = spawn(python, [
+  const hostArguments = [
     join(root, 'packages/typescript/test/managed_host.py'),
     '--port', String(port),
     '--state-dir', stateDirectory,
     '--token-file', tokenFile,
     '--other-token-file', otherTokenFile,
-  ], {
+  ];
+  if (revocationFailures > 0) {
+    hostArguments.push('--revocation-failures', String(revocationFailures));
+  }
+  const child = spawn(python, hostArguments, {
     cwd: root,
     env: {
       ...process.env,
@@ -248,6 +252,100 @@ test('managed OAuth SDK completes a scoped Home Assistant connection through the
     assert.equal((await host.observations()).state_reads, readsAfterDisconnect);
     assert.equal((await workspace.connections()).connections[0]?.state, 'revoked');
     assert.ok(includesNoCredentials(await workspace.connections()));
+  } finally {
+    await host.close();
+  }
+});
+
+test('managed OAuth SDK retries bounded failed cleanup without publishing or exposing credentials', async () => {
+  const host = await startHost({ revocationFailures: 2 });
+  try {
+    const management = new EnergyAgentTools({ baseUrl: host.baseUrl, token: host.managementToken });
+    const workspace = management.workspace();
+    const otherWorkspace = new EnergyAgentTools({
+      baseUrl: host.baseUrl,
+      token: host.otherManagementToken,
+    }).workspace();
+    const configurationId = 'home-assistant';
+    const cleanupInput = { configuration_id: configurationId };
+    const initialConfigurations = await workspace.authConfigurations();
+    assert.equal(initialConfigurations.configurations[0]?.pending_cleanup, 0);
+    assert.ok(includesNoCredentials(initialConfigurations));
+
+    const site = await workspace.createSite({ name: 'Cleanup test', timezone: 'Europe/London' });
+    const issued = await workspace.createAgentKey({ name: 'Cleanup test agent', site_ids: [site.site.id] });
+    const agentWorkspace = new EnergyAgentTools({ baseUrl: host.baseUrl, token: issued.token }).workspace();
+    const started = await workspace.beginAuthorization({
+      configuration_id: configurationId,
+      entity_id: 'sensor.missing',
+    });
+    const completionInput = {
+      configuration_id: configurationId,
+      state: started.authorization.state,
+      code: authorizationCode,
+    };
+
+    let verificationError;
+    await assert.rejects(workspace.completeAuthorization(completionInput), error => {
+      verificationError = error;
+      return error instanceof EnergyHttpError && error.code === 'provider_verification_failed';
+    });
+    assert.equal(verificationError.status, 400);
+    assert.ok(includesNoCredentials({
+      name: verificationError.name,
+      message: verificationError.message,
+      code: verificationError.code,
+      status: verificationError.status,
+    }));
+    assert.deepEqual(await host.observations(), {
+      auth_code: 1,
+      refresh: 0,
+      state_reads: 1,
+      revocations: 1,
+    });
+    assert.deepEqual((await workspace.connections()).connections, []);
+    const failedConfigurations = await workspace.authConfigurations();
+    assert.equal(failedConfigurations.configurations[0]?.pending_cleanup, 1);
+    assert.ok(includesNoCredentials(failedConfigurations));
+
+    let agentError;
+    await assert.rejects(agentWorkspace.retryAuthorizationCleanup(cleanupInput), error => {
+      agentError = error;
+      return error instanceof EnergyHttpError && error.status === 403;
+    });
+    assert.ok(includesNoCredentials({
+      name: agentError.name,
+      message: agentError.message,
+      code: agentError.code,
+      status: agentError.status,
+    }));
+
+    const foreignConfigurations = await otherWorkspace.authConfigurations();
+    assert.equal(foreignConfigurations.configurations[0]?.pending_cleanup, 0);
+    assert.ok(includesNoCredentials(foreignConfigurations));
+    const foreignRetry = await otherWorkspace.retryAuthorizationCleanup(cleanupInput);
+    assert.deepEqual(foreignRetry.cleanup, { attempted: 0, succeeded: 0, pending: 0 });
+    assert.ok(includesNoCredentials(foreignRetry));
+    assert.equal((await workspace.authConfigurations()).configurations[0]?.pending_cleanup, 1);
+    assert.equal((await host.observations()).revocations, 1);
+
+    const retryAfterProviderFailure = await workspace.retryAuthorizationCleanup(cleanupInput);
+    assert.deepEqual(retryAfterProviderFailure.cleanup, {
+      attempted: 1,
+      succeeded: 0,
+      pending: 1,
+    });
+    assert.ok(includesNoCredentials(retryAfterProviderFailure));
+    assert.equal((await workspace.authConfigurations()).configurations[0]?.pending_cleanup, 1);
+    assert.equal((await host.observations()).revocations, 2);
+
+    const successfulRetry = await workspace.retryAuthorizationCleanup(cleanupInput);
+    assert.deepEqual(successfulRetry.cleanup, { attempted: 1, succeeded: 1, pending: 0 });
+    assert.ok(includesNoCredentials(successfulRetry));
+    assert.equal((await workspace.authConfigurations()).configurations[0]?.pending_cleanup, 0);
+    assert.deepEqual((await workspace.connections()).connections, []);
+    assert.ok(includesNoCredentials(await workspace.connections()));
+    assert.equal((await host.observations()).revocations, 3);
   } finally {
     await host.close();
   }

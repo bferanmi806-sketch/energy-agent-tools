@@ -483,7 +483,7 @@ function ConnectionsView({ data, onBrowseApps }: { data: ManagedDashboardData; o
                 <article className="managed-connection-row managed-inactive-row" key={connection.id}>
                   <div className="managed-record-main">
                     <span className="record-icon"><Activity size={16} aria-hidden="true" /></span>
-                    <div><h3>{connection.toolkit.replaceAll("-", " ")}</h3><code>{connection.id}</code></div>
+                    <div><h3>{connectionDisplayName(connection)}</h3><code>{connection.id}</code></div>
                   </div>
                   <span className={`status-badge ${connectionStatusClass(connection.state)}`}>{connectionLabel(connection.state)}</span>
                 </article>

@@ -26,6 +26,8 @@ from energy_agent_tools.control_store import ControlStore
 from energy_agent_tools.hosting import create_host
 from energy_agent_tools.managed_oauth import HomeAssistantOAuthConfiguration
 
+MAX_REVOCATION_FAILURES = 3
+
 
 def write_private_token(path: Path, token: str) -> None:
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -39,7 +41,13 @@ def create_app(
     other_token_file: Path | None = None,
     *,
     web_origin: str | None = None,
+    revocation_failures: int = 0,
 ):
+    if (
+        type(revocation_failures) is not int
+        or not 0 <= revocation_failures <= MAX_REVOCATION_FAILURES
+    ):
+        raise ValueError(f"revocation_failures must be between 0 and {MAX_REVOCATION_FAILURES}")
     state_dir.mkdir(parents=True, exist_ok=True)
     control = ControlStore(state_dir / "control")
     bootstrap = control.bootstrap_workspace("SDK fixture owner", "SDK fixture workspace")
@@ -68,7 +76,7 @@ def create_app(
     access_token = "fixture-access-token-private"
     refreshed_access_token = "fixture-refreshed-access-token-private"
     refresh_token = "fixture-refresh-token-private"
-    provider_state = {"revoked": False}
+    provider_state = {"revoked": False, "revocation_failures_remaining": revocation_failures}
     observations = {"auth_code": 0, "refresh": 0, "state_reads": 0, "revocations": 0}
     observations_file = state_dir / "observations.json"
 
@@ -121,11 +129,16 @@ def create_app(
             if token not in {access_token, refreshed_access_token, refresh_token}:
                 return httpx.Response(400, json={"error": "invalid_token"}, request=request)
             observations["revocations"] += 1
-            provider_state["revoked"] = True
             save_observations()
+            if provider_state["revocation_failures_remaining"] > 0:
+                provider_state["revocation_failures_remaining"] -= 1
+                return httpx.Response(
+                    503, json={"error": "temporarily_unavailable"}, request=request
+                )
+            provider_state["revoked"] = True
             return httpx.Response(200, request=request)
 
-        if request.url.path == "/api/states/sensor.power" and request.method == "GET":
+        if request.url.path.startswith("/api/states/") and request.method == "GET":
             observations["state_reads"] += 1
             save_observations()
             bearer = request.headers.get("authorization")
@@ -134,6 +147,8 @@ def create_app(
                 f"Bearer {refreshed_access_token}",
             }:
                 return httpx.Response(401, json={"message": "Unauthorized"}, request=request)
+            if request.url.path != "/api/states/sensor.power":
+                return httpx.Response(404, json={"message": "Entity not found."}, request=request)
             return httpx.Response(
                 200,
                 json={
@@ -198,12 +213,23 @@ def main() -> None:
     parser.add_argument("--token-file", type=Path, required=True)
     parser.add_argument("--other-token-file", type=Path)
     parser.add_argument("--web-origin")
+    parser.add_argument(
+        "--revocation-failures",
+        type=int,
+        choices=range(MAX_REVOCATION_FAILURES + 1),
+        default=0,
+        help="Fail this many initial synthetic token revocations with HTTP 503.",
+    )
     args = parser.parse_args()
 
     import uvicorn
 
     host, control, agent, upstream = create_app(
-        args.state_dir, args.token_file, args.other_token_file, web_origin=args.web_origin
+        args.state_dir,
+        args.token_file,
+        args.other_token_file,
+        web_origin=args.web_origin,
+        revocation_failures=args.revocation_failures,
     )
     try:
         uvicorn.run(
