@@ -1,0 +1,116 @@
+{
+  "date": "2026-10-04",
+  "feature": "Explicit authorized execution of saved pending numerical jobs",
+  "base_commit": "4d4531a947a046618f7c7414f80dc3a28f4d1db5",
+  "behavior": [
+    "Gateway submissions and start execute explicitly selected job IDs rather than draining older queued work.",
+    "Start rechecks current actor/workspace/site/mode/toolkit and calculation policy, execution hooks, dependencies and saved argument schema.",
+    "Pending/running repeats do not duplicate a calculation; terminal or interrupted jobs cannot restart.",
+    "Private input reads check ownership, pending state, envelope, operation, size, finite JSON and unsafe input keys, with fixed errors."
+  ],
+  "completed_acceptance": {
+    "manager_tests": {
+      "passed": 30,
+      "seconds": 13.42,
+      "log": "manager-reviewed.log"
+    },
+    "existing_gateway_integration": {
+      "passed": 25,
+      "seconds": 55.9,
+      "log": "integration.log"
+    },
+    "web_tests": {
+      "passed": 11,
+      "log": "web-tests.log"
+    },
+    "builds": [
+      "TypeScript SDK",
+      "production web",
+      "web typecheck"
+    ],
+    "static": [
+      "Ruff check and format",
+      "mypy:61 source files",
+      "generated contracts match"
+    ],
+    "final_python": {
+      "passed": 57,
+      "seconds": 69.65,
+      "log": "final-python.log"
+    },
+    "gateway_start": {
+      "passed": 2,
+      "log": "gateway-reviewed-final.log"
+    },
+    "typescript_sdk": {
+      "passed": 18,
+      "log": "sdk-reviewed-final.log"
+    }
+  },
+  "browser": {
+    "gateway": "Real managed gateway, persistent SQLite job store, encrypted vault and actual numerical subprocess worker",
+    "setup": "Two pending heat-loss jobs were persisted with the original session before a new gateway opened their store.",
+    "journey": [
+      "Signed in through production web UI.",
+      "Clicked Start queued job on one record.",
+      "Observed Running without Start, then refreshed and observed Completed with result controls.",
+      "Neighboring record remained Pending with Start.",
+      "Gateway result confirmed gross_heat_loss_kw0.38."
+    ],
+    "mobile": {
+      "requested_width": 390,
+      "client_width": 390,
+      "scroll_width": 390,
+      "start_controls": 1
+    },
+    "screenshots": [
+      "job-start-desktop-oct04.png",
+      "job-start-mobile-oct04.png"
+    ],
+    "cleanup": "Owned browser tab closed, viewport reset, gateway/web stopped and disposable state/credentials removed."
+  },
+  "workers": [
+    {
+      "model": "gpt-6-luna",
+      "reasoning": "max",
+      "assignment": "Targeted queue and private saved inputs",
+      "owned_paths": [
+        "src/energy_agent_tools/jobs.py",
+        "tests/test_job_targeted_queue.py"
+      ]
+    },
+    {
+      "model": "gpt-6-luna",
+      "reasoning": "max",
+      "assignment": "Pending-only web Start controls",
+      "owned_paths": [
+        "apps/web/src/components/JobsHistory.tsx",
+        "apps/web/src/components/JobsHistory.module.css"
+      ]
+    },
+    {
+      "model": "gpt-6-luna",
+      "reasoning": "max",
+      "assignment": "Gateway/MCP and SDK start acceptance",
+      "owned_paths": [
+        "tests/test_job_start.py",
+        "packages/typescript/test/managed.test.mjs"
+      ]
+    }
+  ],
+  "review": [
+    "Primary owned authorization, runtime queue lifecycle, contracts, gateway, MCP, SDK and web route integration.",
+    "Primary batches accepted IDs within the manager selection bound100.",
+    "Primary reviewed private input finite-value checks and the platform fallback.",
+    "Initial web build found stale compiled SDK types; SDK build followed by serial production web build/check passed.",
+    "Primary strengthened saved-schema denial and no-queue assertions.",
+    "SDK acceptance permits an already completed native calculation to reject start and verifies completed status, avoiding a race with the actual worker.",
+    "Runtime and manager share one selection-bound constant."
+  ],
+  "limits": [
+    "Synthetic inputs qualify actual native calculation and product behavior, not a physical energy installation.",
+    "Unsupported-platform private-file fallback was reviewed in source; Windows execution was not qualified.",
+    "This does not satisfy broad actual-agent evaluation, outside contribution, sustained operations or a coherent final platform release."
+  ],
+  "qualification_status": "Local acceptance passed; published CI pending."
+}

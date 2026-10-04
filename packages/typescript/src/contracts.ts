@@ -691,7 +691,8 @@ export const JobActionQuerySchema = {
         "status",
         "result",
         "cancel",
-        "delete"
+        "delete",
+        "start"
       ],
       "title": "Operation",
       "type": "string"

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Clock3, Download, RefreshCw, Trash2, XCircle } from "lucide-react";
+import { AlertTriangle, Clock3, Download, Play, RefreshCw, Trash2, XCircle } from "lucide-react";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { JobHistoryResponse } from "@energy-agent-tools/sdk";
 import type { JobHistoryState } from "@/lib/types";
@@ -8,7 +8,7 @@ import styles from "./JobsHistory.module.css";
 
 type Job = JobHistoryResponse["jobs"][number];
 type JobStatus = Job["status"];
-type JobAction = "result" | "cancel" | "delete";
+type JobAction = "start" | "result" | "cancel" | "delete";
 
 const UTC_FORMAT = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -128,7 +128,8 @@ function JobActionForm({ job, operation, label, destructive = false }: {
     <form action="/api/jobs/action" method="post" onSubmit={submitAction} aria-busy={pending}>
       <input type="hidden" name="job_id" value={job.job_id} />
       <input type="hidden" name="operation" value={operation} />
-      <button className={`button ${destructive ? styles.deleteButton : "button-secondary"}`} type="submit" disabled={pending}>
+      <button className={`button ${destructive ? styles.deleteButton : operation === "start" ? "button-primary" : "button-secondary"}`} type="submit" disabled={pending}>
+        {operation === "start" ? <Play size={14} aria-hidden="true" /> : null}
         {operation === "result" ? <Download size={14} aria-hidden="true" /> : null}
         {operation === "cancel" ? <XCircle size={14} aria-hidden="true" /> : null}
         {operation === "delete" ? <Trash2 size={14} aria-hidden="true" /> : null}
@@ -152,6 +153,7 @@ function JobActions({ job }: { job: Job }) {
 
   return (
     <div className={styles.actions} role="group" aria-label={`Actions for ${OPERATION_LABELS[job.operation]} job`}>
+      {job.status === "pending" ? <JobActionForm job={job} operation="start" label="Start queued job" /> : null}
       {job.status === "completed" ? <JobActionForm job={job} operation="result" label="Download result" /> : null}
       {isActive ? <JobActionForm job={job} operation="cancel" label="Cancel job" /> : null}
       {isTerminal ? <JobActionForm job={job} operation="delete" label="Delete job" destructive /> : null}
@@ -280,7 +282,7 @@ export function JobsHistory({ jobs, status, siteNames }: {
       <div className={`section-toolbar ${styles.toolbar}`}>
         <div>
           <h2 id={`${id}-heading`}>Job history</h2>
-          <p>Review background simulation status, timing, and input/output sizes. Results contain the job output and download only for completed jobs.</p>
+          <p>Review simulation status, timing, and input/output sizes. Pending jobs restored after a gateway restart wait for an explicit start; interrupted jobs require a new submission.</p>
         </div>
         <span className="count-label">{page ? `${page.jobs.length} ${page.jobs.length === 1 ? "job" : "jobs"}` : "Unavailable"}</span>
       </div>

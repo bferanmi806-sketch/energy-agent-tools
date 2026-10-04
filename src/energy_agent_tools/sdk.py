@@ -84,7 +84,7 @@ class BoundSession:
         ).model_dump(mode="json")
 
     async def job_action(
-        self, job_id: str, operation: Literal["status", "result", "cancel", "delete"]
+        self, job_id: str, operation: Literal["status", "result", "cancel", "delete", "start"]
     ) -> Json:
         query = JobActionQuery(operation=operation)
         self.agent.job_metadata(job_id, self._job_read_scope())

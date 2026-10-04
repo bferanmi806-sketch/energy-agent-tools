@@ -34,8 +34,8 @@ of the web console usable.
 ## Recover results and control work
 
 `POST /jobs/{job_id}` accepts `operation` with one of `status`, `result`,
-`cancel` or `delete`. It derives the originating session and site from stored
-ownership, then checks the current gateway and engine policy. It neither
+`cancel`, `delete` or `start`. It derives the originating session and site from
+stored ownership, then checks the current gateway and engine policy. It neither
 registers nor closes a REST session, preserving that session's artifacts.
 
 ```typescript
@@ -43,8 +43,8 @@ const result = await energy.jobAction(jobId, { operation: "result" });
 if (!result.ok) throw new Error("The job result is unavailable.");
 ```
 
-The web page prepares completed results with a Save JSON link, cancels pending/running jobs and
-deletes terminal jobs. It shows pending action state and a fixed failure
+The web page starts saved pending jobs, prepares completed results with a Save
+JSON link, cancels pending/running jobs and deletes terminal jobs. It shows pending action state and a fixed failure
 message without displaying the gateway's raw response.
 
 Python callers can recover the same current-site job through a new bound
@@ -61,10 +61,20 @@ engine policy. The `list` operation accepts `limit`, `before` and `status`,
 returns safe metadata plus `next_before`, and filters forbidden engine toolkits
 before paging. Fresh MCP sessions can read completed results and control saved
 work without changing their session identifier. History filters apply only
-to `list`; passing them to another operation is rejected. Job recovery associates a
-caller with saved work; it does not rerun an interrupted calculation. A
+to `list`; passing them to another operation is rejected. Job recovery associates
+a caller with saved work; it does not rerun an interrupted calculation. A
 manager restart marks previously running work interrupted. Pending jobs remain
-queued for the next bounded worker run; opening history does not start work.
+queued until explicitly started. Opening history or submitting another job does
+not start older queued work.
+
+`start` rechecks current calculation permissions, toolkit grants, execution hooks,
+dependencies and the saved argument schema. It queues only that job, retaining its
+original ownership. Repeated starts while pending or running do not create another
+calculation. Finished or interrupted jobs reject `start` with `job_not_pending`;
+submit a new job to calculate again. Missing or invalid private input produces a
+fixed `input_unavailable` error. The numerical manager retains its two-worker bound.
+Explicit operator use of the low-level `JobManager.run_pending()` can still drain
+the entire queue; gateway submission and start always select authorized job IDs.
 
 ## Storage and limits
 

@@ -54,7 +54,7 @@ class JobListQuery(_JobModel):
 
 
 class JobActionQuery(_JobModel):
-    operation: Literal["status", "result", "cancel", "delete"]
+    operation: Literal["status", "result", "cancel", "delete", "start"]
 
 
 class JobReadScope(_JobModel):

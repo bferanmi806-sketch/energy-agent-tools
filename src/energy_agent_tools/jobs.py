@@ -114,6 +114,7 @@ _TERMINAL_STATES = {
     JobStatus.INTERRUPTED.value,
 }
 _MAX_SUPPORTED_CONCURRENCY = 2
+MAX_TARGETED_JOB_IDS = 100
 _INPUT_SCHEMA_VERSION = 1
 AccessMode = Literal["local", "hosted"]
 _SECRET_KEYS = {
@@ -629,6 +630,21 @@ class JobManager:
         if row["user_id"] != user_id or row["session_id"] != session_id:
             raise JobAccessDenied()
 
+    @staticmethod
+    def _validate_job_selection(job_ids: frozenset[str] | None) -> frozenset[str] | None:
+        if job_ids is None:
+            return None
+        if (
+            type(job_ids) is not frozenset
+            or len(job_ids) > MAX_TARGETED_JOB_IDS
+            or any(
+                type(job_id) is not str or re.fullmatch(r"[a-f0-9]{32}", job_id) is None
+                for job_id in job_ids
+            )
+        ):
+            raise JobError("invalid_job_selection", "The targeted job selection is invalid.")
+        return job_ids
+
     def submit(
         self,
         user_id: str,
@@ -744,6 +760,88 @@ class JobManager:
         row = self._row(job_id)
         self._authorise(row, user_id, session_id)
         return self._record(row)
+
+    def pending_arguments(self, job_id: str, user_id: str, session_id: str) -> dict[str, Any]:
+        """Read validated arguments for an owned job that remains pending."""
+
+        self._ensure_open()
+        _validate_identity(user_id, "user_id")
+        _validate_identity(session_id, "session_id")
+        row = self._row(job_id)
+        self._authorise(row, user_id, session_id)
+        if row["status"] != JobStatus.PENDING.value:
+            raise JobError("job_not_pending", "Only pending job inputs are available.")
+
+        stored_job_id = str(row["job_id"])
+        unavailable = JobError("input_unavailable", "The pending job input is unavailable.")
+        if re.fullmatch(r"[a-f0-9]{32}", stored_job_id) is None:
+            raise unavailable
+        directory = self.jobs_dir / stored_job_id
+        try:
+            input_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            input_flags |= getattr(os, "O_NONBLOCK", 0)
+            if os.open in os.supports_dir_fd:
+                directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                directory_flags |= getattr(os, "O_NOFOLLOW", 0)
+                directory_fd = os.open(directory, directory_flags)
+                try:
+                    if not stat.S_ISDIR(os.fstat(directory_fd).st_mode):
+                        raise unavailable
+                    input_fd = os.open("input.json", input_flags, dir_fd=directory_fd)
+                finally:
+                    os.close(directory_fd)
+            else:  # pragma: no cover - platform fallback
+                if directory.is_symlink() or not directory.is_dir():
+                    raise unavailable
+                input_path = directory / "input.json"
+                if input_path.is_symlink():
+                    raise unavailable
+                input_fd = os.open(input_path, input_flags)
+        except JobError:
+            raise
+        except (OSError, ValueError, TypeError):
+            raise unavailable from None
+
+        try:
+            with os.fdopen(input_fd, "rb") as source:
+                details = os.fstat(source.fileno())
+                if (
+                    not stat.S_ISREG(details.st_mode)
+                    or details.st_size > self.max_input_bytes_per_job
+                ):
+                    raise unavailable
+                if details.st_size != int(row["input_bytes"]):
+                    raise unavailable
+                encoded = source.read(self.max_input_bytes_per_job + 1)
+                if len(encoded) > self.max_input_bytes_per_job:
+                    raise unavailable
+            envelope = json.loads(encoded.decode("utf-8"))
+            if type(envelope) is not dict or set(envelope) != {
+                "schema_version",
+                "operation",
+                "arguments",
+            }:
+                raise unavailable
+            if (
+                type(envelope["schema_version"]) is not int
+                or envelope["schema_version"] != _INPUT_SCHEMA_VERSION
+            ):
+                raise unavailable
+            operation = SimulationOperation(str(row["operation"]))
+            if type(envelope["operation"]) is not str or envelope["operation"] != operation.value:
+                raise unavailable
+            arguments = envelope["arguments"]
+            if type(arguments) is not dict:
+                raise unavailable
+            try:
+                _canonical_payload(operation, arguments)
+            except (JobError, TypeError, ValueError, RecursionError):
+                raise unavailable from None
+            return arguments
+        except JobError:
+            raise
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, RecursionError):
+            raise unavailable from None
 
     get = status
 
@@ -999,15 +1097,28 @@ class JobManager:
         except (sqlite3.Error, OSError) as exc:
             raise JobError("job_history_unavailable", "Job history is unavailable.") from exc
 
-    def _claim_pending(self, limit: int) -> builtins.list[sqlite3.Row]:
+    def _claim_pending(
+        self, limit: int, job_ids: frozenset[str] | None = None
+    ) -> builtins.list[sqlite3.Row]:
         if limit <= 0:
+            return []
+        if job_ids is not None and not job_ids:
             return []
         now = _utcnow()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            parameters: list[str | int] = [JobStatus.PENDING.value]
+            selection = ""
+            ordering = " ORDER BY created_at"
+            if job_ids is not None:
+                selected_ids = sorted(job_ids)
+                selection = " AND job_id IN (" + ",".join("?" for _ in selected_ids) + ")"
+                parameters.extend(selected_ids)
+                ordering += ", job_id"
+            parameters.append(limit)
             rows = connection.execute(
-                "SELECT * FROM jobs WHERE status = ? ORDER BY created_at LIMIT ?",
-                (JobStatus.PENDING.value, limit),
+                "SELECT * FROM jobs WHERE status = ?" + selection + ordering + " LIMIT ?",
+                parameters,
             ).fetchall()
             for row in rows:
                 connection.execute(
@@ -1344,17 +1455,22 @@ class JobManager:
             if current in _TERMINAL_STATES:
                 self._cleanup_input(row)
 
-    async def run_pending(self) -> builtins.list[JobRecord]:
-        """Run all pending jobs, maintaining the two-process concurrency bound."""
+    async def run_pending(
+        self, *, job_ids: frozenset[str] | None = None
+    ) -> builtins.list[JobRecord]:
+        """Run pending jobs globally or for one bounded, explicit selection."""
 
         self._ensure_open()
+        job_ids = self._validate_job_selection(job_ids)
+        if job_ids is not None and not job_ids:
+            return []
         records: builtins.list[JobRecord] = []
         async with self._run_lock:
             while True:
                 if self._closing:
                     break
                 available = self.max_concurrency - len(self._tasks)
-                for row in self._claim_pending(available):
+                for row in self._claim_pending(available, job_ids):
                     task = asyncio.create_task(self._run_one(row))
                     self._tasks.add(task)
                 if not self._tasks:
@@ -1372,9 +1488,17 @@ class JobManager:
                         # unexpected process API error escapes that boundary.
                         continue
             with self._connect() as connection:
+                parameters = [JobStatus.PENDING.value]
+                selection = ""
+                ordering = " ORDER BY created_at"
+                if job_ids is not None:
+                    selected_ids = sorted(job_ids)
+                    selection = " AND job_id IN (" + ",".join("?" for _ in selected_ids) + ")"
+                    parameters.extend(selected_ids)
+                    ordering += ", job_id"
                 rows = connection.execute(
-                    "SELECT * FROM jobs WHERE status != ? ORDER BY created_at",
-                    (JobStatus.PENDING.value,),
+                    "SELECT * FROM jobs WHERE status != ?" + selection + ordering,
+                    parameters,
                 ).fetchall()
             records = [self._record(row) for row in rows]
         return records

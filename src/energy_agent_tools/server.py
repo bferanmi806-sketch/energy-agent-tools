@@ -229,7 +229,9 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
 
     @server.tool(name="ENERGY_SIMULATION_JOB")
     async def simulation_job(
-        operation: Literal["submit", "list", "status", "result", "cancel", "delete", "resume"],
+        operation: Literal[
+            "submit", "list", "status", "result", "cancel", "delete", "resume", "start"
+        ],
         job_id: str | None = None,
         simulation: Literal[
             "heat_loss", "power_flow", "battery", "solar", "network_power_flow", "network_dispatch"
@@ -251,7 +253,8 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         List discovers safe history across originating sessions under the current actor,
         workspace, site, mode and toolkit grants. Use limit, before and status only for list.
         Result and controls recover the original scope after checking current access.
-        Resume returns owner-verified scope without rerunning work. No executable or path inputs.
+        Start explicitly queues only a saved pending job after current calculation authorization.
+        Interrupted or finished work cannot be restarted. Resume returns scope without rerunning work. No executable or path inputs.
         """
         return await agent.job(
             session,

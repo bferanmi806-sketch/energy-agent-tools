@@ -129,7 +129,7 @@ plane implementation unit.
 
 ## Current audit
 
-Updated through the workspace-sharing follow-up above; implementation evidence below
+Updated through the Jobs and MCP recovery follow-ups; implementation evidence below
 does not close the separate live, external-review or sustained-operation gates.
 
 | Requirement | Current evidence | Status and next proof |
@@ -148,7 +148,7 @@ does not close the separate live, external-review or sustained-operation gates.
 | Deployment/recovery/load/soak and resilience | CI container, restart, state upgrade and backup/restore checks | Partial; representative sustained deployment and 30-day observations remain open. |
 | Coherent new release with reproducible evidence | Published Python v0.3.0 and SDK archive; later web/control-plane source is CI-qualified | Partial; package a matching gateway, SDK and web revision after the next stable product boundary. |
 | First-class TypeScript SDK | REST and official MCP transports, generated contracts, workspace management APIs and 15 acceptance tests | Implemented for current routes; new control-plane APIs need matching SDK coverage and distribution. |
-| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; explicit shared connections are implemented; Skills discovery and durable execution activity are implemented; custom MCP, jobs, complete account management and settings remain open. |
+| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; explicit shared connections are implemented; Skills discovery and durable execution activity are implemented; durable scoped Jobs history and MCP recovery are implemented; custom MCP, complete account management and settings remain open. |
 | Hosted connection/control plane | Private managed workspaces, bootstrap identities, management/agent keys, encrypted scoped accounts, durable sites/assets, dynamic MCP, migrations and recovery acceptance | Partial; membership, explicit connection ACLs and approved Home Assistant OAuth are implemented; generic custom OAuth, events and full observability remain open. |
 | Ecosystem journeys | Existing public, telemetry and engineering connectors with differing qualification | Partial; meters, PV/storage/EV, heat/BMS, industrial/files, engineering engines and reviewed MCP must qualify honestly according to accessible supported scope. |
 | Accurate documentation and evidence | Append-only decisions, archived failures and qualification records | Ongoing; every completion claim needs current source and runnable evidence. |
@@ -539,3 +539,24 @@ Pending work after restart still needs an explicit authorized execution journey.
 Interrupted calculations are not rerun by recovery. Physical-site qualification,
 broad actual-agent evaluation, outside contribution, sustained operations and
 a coherent platform release remain open.
+
+## Explicit queued-job start follow-up, October 4
+
+Saved pending jobs now have an explicit Start action in the gateway, MCP,
+Python and TypeScript SDKs, and web console. Start checks current scope and
+calculation permissions, hooks, dependencies and saved arguments before
+selecting the exact job. New submissions do not drain older queued work.
+Repeated starts do not duplicate work; interrupted and terminal jobs cannot
+restart. The existing two-worker bound remains.
+
+The [qualification record](evidence/job-start-oct04.json) preserves 57 focused
+Python checks, 18 SDK checks, 11 web checks and production build/typecheck.
+The real production browser started one restored job, retrieved its calculated
+0.38 kW result and left its neighbor pending. The 390-pixel mobile page had
+no horizontal overflow. Three Luna workers owned storage, UI and acceptance;
+primary review owned contracts, authorization, integration and browser checks.
+
+These synthetic inputs qualify product behavior and native calculation, not a
+physical energy installation. Custom MCP onboarding, complete account/settings
+flows, generic OAuth/events, broad actual-agent evaluation, outside contribution,
+sustained operations and a coherent platform release remain open.

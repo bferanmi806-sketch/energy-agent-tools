@@ -54,5 +54,42 @@
     "Pending work remains queued after a restart; reading history does not start it.",
     "Recovery does not reexecute interrupted work.",
     "This record does not qualify broad actual-agent evaluation, external contributions, sustained operations or a complete platform release."
-  ]
+  ],
+  "published_ci": {
+    "commit": "4d4531a947a046618f7c7414f80dc3a28f4d1db5",
+    "run_id": 37220179904,
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37220179904",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "container",
+        "conclusion": "success"
+      },
+      {
+        "name": "upgrade",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.12)",
+        "conclusion": "success"
+      },
+      {
+        "name": "home-assistant",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.11)",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.13)",
+        "conclusion": "success"
+      }
+    ],
+    "python_summaries": [
+      "832 passed in 181.40s (0:03:01)",
+      "832 passed in 284.40s (0:04:44)",
+      "832 passed in 273.03s (0:04:33)"
+    ]
+  }
 }

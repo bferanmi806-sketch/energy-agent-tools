@@ -322,3 +322,69 @@ test('managed gateway discovers scoped simulation jobs and acts on completed res
     await host.close();
   }
 });
+
+test('managed SDK requests scoped start after its originating session closes', async () => {
+  const host = await startHost({ withOtherWorkspace: true });
+  try {
+    const management = new EnergyAgentTools({ baseUrl: host.baseUrl, token: host.managementToken });
+    const foreignGateway = new EnergyAgentTools({
+      baseUrl: host.baseUrl,
+      token: host.otherManagementToken,
+    });
+    const workspace = management.workspace();
+    const site = await workspace.createSite({
+      name: 'Job start site',
+      timezone: 'Europe/London',
+    });
+    const issued = await workspace.createAgentKey({
+      name: 'Job start agent',
+      site_ids: [site.site.id],
+    });
+    const agent = new EnergyAgentTools({ baseUrl: host.baseUrl, token: issued.token });
+    const session = await agent.createSession({ site_id: site.site.id });
+    const submitted = await session.job({
+      operation: 'submit',
+      simulation: 'heat_loss',
+      arguments: {
+        indoor_temp_c: 21,
+        outdoor_temp_c: 2,
+        components: [{ name: 'wall', area_m2: 100, u_value_w_m2k: 0.2 }],
+        air_changes_per_hour: 0.4,
+      },
+    });
+    assert.equal(submitted.ok, true, JSON.stringify(submitted.error));
+    await session.close();
+
+    const started = await management.jobAction(submitted.job.job_id, { operation: 'start' });
+    if (started.ok) {
+      assert.equal(started.job.job_id, submitted.job.job_id);
+      assert.equal(started.job.session_id, submitted.job.session_id);
+      assert.ok(['pending', 'running'].includes(started.job.status));
+    } else {
+      assert.deepEqual(started.error, {
+        code: 'job_not_pending',
+        message: 'Only pending jobs can be started.',
+      });
+      const alreadyFinished = await management.jobAction(submitted.job.job_id, { operation: 'status' });
+      assert.equal(alreadyFinished.ok, true);
+      assert.equal(alreadyFinished.job.status, 'completed');
+    }
+    assert.equal(JSON.stringify(started).includes('indoor_temp_c'), false);
+
+    const completed = await waitForCompletedJob(management, submitted.job.job_id);
+    assert.equal(completed.session_id, submitted.job.session_id);
+    const result = await management.jobAction(submitted.job.job_id, { operation: 'result' });
+    assert.equal(result.ok, true, JSON.stringify(result.error));
+    assert.equal(result.result.data.gross_heat_loss_kw, 0.38);
+
+    const history = await management.jobHistory({ limit: 100 });
+    assert.ok(history.jobs.some(job => job.job_id === submitted.job.job_id));
+    assert.deepEqual((await foreignGateway.jobHistory({ limit: 100 })).jobs, []);
+    await assert.rejects(
+      foreignGateway.jobAction(submitted.job.job_id, { operation: 'start' }),
+      hasStatus(403),
+    );
+  } finally {
+    await host.close();
+  }
+});

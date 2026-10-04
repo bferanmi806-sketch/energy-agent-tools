@@ -25,7 +25,7 @@ from .activity import (
 )
 from .execution_log_store import ExecutionLogStore
 from .job_contracts import JobListQuery, JobMetadata, JobMetadataPage, JobReadScope, JobState
-from .jobs import JobError, JobManager, SimulationOperation
+from .jobs import MAX_TARGETED_JOB_IDS, JobError, JobManager, JobStatus, SimulationOperation
 from .models import (
     Action,
     Asset,
@@ -74,6 +74,7 @@ class EnergyAgent:
     ):
         self._jobs: JobManager | None = None
         self._job_task: asyncio.Task[Any] | None = None
+        self._queued_job_ids: set[str] = set()
         self._job_root = root / "jobs"
         self._activity_root = root / "activity"
         self._activity_store: ExecutionLogStore | None = None
@@ -307,6 +308,7 @@ class EnergyAgent:
         if self._closed:
             return
         self._closed = True
+        self._queued_job_ids.clear()
         if self._jobs:
             await self._jobs.aclose()
         if self._job_task:
@@ -317,6 +319,31 @@ class EnergyAgent:
             self._activity_store.close()
         if self.auth_store:
             self.auth_store.close()
+
+    def _simulation_tool(self, session: Session, simulation: str) -> Tool:
+        name = SIMULATION_TOOLS[simulation]
+        self.get_tool(session, name)
+        tool = self.registry.get(name)
+        if not tool.actions <= session.allowed_actions:
+            raise EnergyError("policy_denied", "Simulation is outside the session action policy.")
+        if self.before or self.after:
+            raise EnergyError(
+                "job_hooks_unsupported", "Jobs cannot bypass configured execution hooks."
+            )
+        if any(find_spec(dep) is None for dep in tool.dependencies):
+            raise EnergyError("dependency_missing", "The simulation dependency is unavailable.")
+        return tool
+
+    def _queue_job(self, manager: JobManager, job_id: str) -> None:
+        self._queued_job_ids.add(job_id)
+        if self._job_task is None or self._job_task.done():
+            self._job_task = asyncio.create_task(self._run_queued_jobs(manager))
+
+    async def _run_queued_jobs(self, manager: JobManager) -> None:
+        while self._queued_job_ids and not self._closed:
+            selected = frozenset(sorted(self._queued_job_ids)[:MAX_TARGETED_JOB_IDS])
+            self._queued_job_ids.difference_update(selected)
+            await manager.run_pending(job_ids=selected)
 
     async def job(
         self,
@@ -344,6 +371,7 @@ class EnergyAgent:
                 "cancel",
                 "delete",
                 "resume",
+                "start",
             }:
                 raise EnergyError("invalid_operation", "Unknown job operation.")
             if operation != "submit" and Action.READ not in session.allowed_actions:
@@ -366,23 +394,8 @@ class EnergyAgent:
                         raise EnergyError(
                             "invalid_operation", "Select an available numerical simulation."
                         )
-                    name = tools[simulation]
-                    self.get_tool(session, name)
-                    tool = self.registry.get(name)
-                    if not tool.actions <= session.allowed_actions:
-                        raise EnergyError(
-                            "policy_denied", "Simulation is outside the session action policy."
-                        )
-                    if self.before or self.after:
-                        raise EnergyError(
-                            "job_hooks_unsupported",
-                            "Jobs cannot bypass configured execution hooks.",
-                        )
+                    tool = self._simulation_tool(session, simulation or "")
                     self._validate(tool, arguments or {})
-                    if any(find_spec(dep) is None for dep in tool.dependencies):
-                        raise EnergyError(
-                            "dependency_missing", "The simulation dependency is unavailable."
-                        )
                 if self._jobs is None:
                     self._jobs = JobManager(self._job_root)
                 manager = self._jobs
@@ -403,8 +416,7 @@ class EnergyAgent:
                         access_mode=session.access_mode,
                         workspace_id=session.workspace_id,
                     )
-                    if self._job_task is None or self._job_task.done():
-                        self._job_task = asyncio.create_task(manager.run_pending())
+                    self._queue_job(manager, record.job_id)
                     result = {"job": record.as_dict()}
                 else:
                     if not job_id:
@@ -420,7 +432,20 @@ class EnergyAgent:
                             "workspace_forbidden", "Job belongs to a different workspace."
                         )
                     self.get_tool(session, tools[record.operation.value])
-                    if operation == "resume":
+                    if operation == "start":
+                        tool = self._simulation_tool(session, record.operation.value)
+                        if record.status is JobStatus.PENDING:
+                            saved = manager.pending_arguments(
+                                job_id, session.user_id, scope["session_id"] or ""
+                            )
+                            self._validate(tool, saved)
+                            self._queue_job(manager, job_id)
+                        elif record.status is not JobStatus.RUNNING:
+                            raise EnergyError(
+                                "job_not_pending", "Only pending jobs can be started."
+                            )
+                        result = {"job": record.as_dict()}
+                    elif operation == "resume":
                         result = {"scope": scope}
                     elif operation == "result":
                         result = manager.result(job_id, session.user_id, scope["session_id"] or "")
