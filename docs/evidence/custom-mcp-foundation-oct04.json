@@ -54,8 +54,12 @@
     },
     "package": "Final rebuilt sdist/wheel passed; installed wheel passed owned pinned HTTP smoke, private schema omission and deprecated IPv6 site-local rejection.",
     "ci": {
-      "status": "pending publication qualification",
-      "implementation_commit": null
+      "status": "passed all six jobs",
+      "implementation_commit": "78dcb748bcebc2e312c1cfcf8148932ec609b092",
+      "run_url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37234773751",
+      "python_versions": ["3.11", "3.12", "3.13"],
+      "tests_passed_per_python_version": 899,
+      "jobs": ["home-assistant", "verify (3.11)", "verify (3.12)", "verify (3.13)", "upgrade", "container"]
     }
   },
   "source_files_sha256": {

@@ -166,9 +166,15 @@ Private targets require explicit trusted operator approval through
 `allow_private=True`; that parameter must never be accepted as a hosted user
 permission. Approval objects are process-local and cannot be restored from JSON.
 A durable lifecycle must resolve and approve the target again after restart and
-bind private endpoint permission to the current workspace. That lifecycle and
-bounded provider-payload handling remain follow-up work before arbitrary hosted
-URLs can be onboarded.
+bind private endpoint permission to the current workspace. That lifecycle remains
+follow-up work before arbitrary hosted URLs can be onboarded.
+
+Approved HTTP responses have a fixed 32 MiB byte limit, including streamed SSE
+responses. Oversized declared lengths are rejected before exposing the body;
+streamed bodies are stopped and closed when their cumulative size exceeds the
+limit. The transport requests identity encoding and refuses other content
+encodings before HTTPX decodes them. Providers must return bounded, uncompressed
+responses. A long-lived stream needs to reconnect when it reaches this limit.
 
 Discovery credentials are ephemeral. Registered handlers retain the approved
 transport and reviewed metadata, not the discovery token. Each fresh MCP session
@@ -187,6 +193,11 @@ Remote URLs are not placed in provenance. Trusted managed bindings use the
 existing encrypted credential store and runtime authorization. Generic custom
 MCP OAuth discovery and onboarding remain open; local imports retain their
 operator-owned credential setup.
+
+Managed connections whose authentication scheme is `none` can stage and activate
+with a null encrypted credential payload. They still require the same workspace,
+site, lifecycle and grant checks. No placeholder secret or environment reference
+is needed.
 
 ## Re-review triggers
 

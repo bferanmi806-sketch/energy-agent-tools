@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+import pytest
 from mcp.server.fastmcp import FastMCP
 from test_host_private_tools import (
     _ALTERNATE_ACCOUNT,
@@ -22,8 +25,40 @@ from energy_agent_tools.registry import Registry
 pytest_plugins = ["test_host_private_tools"]
 
 
-async def test_managed_gateway_dispatches_only_owned_pinned_mcp_connection(private_tools):
+@pytest.mark.parametrize("auth_scheme", ["bearer", "none"])
+async def test_managed_gateway_dispatches_only_owned_pinned_mcp_connection(
+    private_tools, auth_scheme
+):
     fixture = private_tools
+    credential = _FIXTURE_CREDENTIAL if auth_scheme == "bearer" else None
+    remote_auth = f"Bearer {credential}" if credential is not None else ""
+    if auth_scheme == "none":
+        fixture.vault.revoke(fixture.owner.user.id, _BOUND_ACCOUNT, fixture.owner_site.id)
+        account, revision = fixture.vault.managed_snapshot(
+            fixture.owner.user.id, fixture.owner.workspace.id, _BOUND_ACCOUNT
+        )
+        verified_at = datetime.now(UTC)
+        pending = account.model_copy(
+            update={
+                "auth": AuthConfig(scheme="none"),
+                "state": "pending_mapping",
+                "site_id": None,
+                "enabled": False,
+                "last_verified_at": verified_at,
+            }
+        )
+        fixture.vault.stage_managed(pending, None, expected_version=revision)
+        _, revision = fixture.vault.managed_snapshot(
+            fixture.owner.user.id, fixture.owner.workspace.id, _BOUND_ACCOUNT
+        )
+        fixture.vault.activate_managed(
+            fixture.owner.user.id,
+            fixture.owner.workspace.id,
+            _BOUND_ACCOUNT,
+            site=fixture.owner_site,
+            expected_version=revision,
+            verified_at=verified_at,
+        )
     server = FastMCP("owned-gateway-mcp")
     remote_calls = []
     authorizations = []
@@ -33,15 +68,15 @@ async def test_managed_gateway_dispatches_only_owned_pinned_mcp_connection(priva
         return {"value": 2.5, "credential_echo": authorizations[-1]}
 
     server.add_tool(read_energy, name="read_energy")
-    async with _serve(server, {f"Bearer {_FIXTURE_CREDENTIAL}"}) as (url, requests):
+    async with _serve(server, {remote_auth}) as (url, requests):
         authorizations = requests
         target = await approve_mcp_target(url, allow_private=True)
         manifest = await inspect_mcp(
             _TOOLKIT_ID,
             remote_url=target.url,
             approved_target=target,
-            discovery_auth=AuthConfig(scheme="bearer"),
-            discovery_credential=_FIXTURE_CREDENTIAL,
+            discovery_auth=AuthConfig(scheme=auth_scheme),
+            discovery_credential=credential,
         )
         replacement = Registry()
         original = fixture.agent.registry
@@ -56,8 +91,8 @@ async def test_managed_gateway_dispatches_only_owned_pinned_mcp_connection(priva
             _TOOLKIT_ID,
             remote_url=target.url,
             approved_target=target,
-            discovery_auth=AuthConfig(scheme="bearer"),
-            discovery_credential=_FIXTURE_CREDENTIAL,
+            discovery_auth=AuthConfig(scheme=auth_scheme),
+            discovery_credential=credential,
             account_scope=ToolAccountScope(
                 workspace_id=fixture.owner.workspace.id,
                 user_id=fixture.owner.user.id,
@@ -98,11 +133,11 @@ async def test_managed_gateway_dispatches_only_owned_pinned_mcp_connection(priva
         assert value["ok"] is True, result
         assert value["result"]["data"] == {
             "value": 2.5,
-            "credential_echo": "Bearer [REDACTED]",
+            "credential_echo": "Bearer [REDACTED]" if credential is not None else "",
         }
         assert _FIXTURE_CREDENTIAL not in response.text
         assert remote_calls == ["owned"] and fixture.handler_calls == []
-        assert requests[-1] == f"Bearer {_FIXTURE_CREDENTIAL}"
+        assert requests[-1] == remote_auth
 
         request_count = len(requests)
         denied, _ = await _mcp_tool(

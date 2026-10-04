@@ -5,6 +5,30 @@ record extends the existing backend roadmap; it does not replace unfinished
 gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 [passing CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37032700732).
 
+## Managed no-auth storage and MCP response limits, October 4
+
+Managed connections that need no authentication now stage an encrypted null
+credential, reopen and activate through the existing revision-checked lifecycle.
+They retain workspace, site and grant checks. The actual managed gateway was
+tested against an owned HTTP MCP server in both bearer and no-auth modes; the
+gateway management credential was not forwarded to the no-auth provider.
+
+Approved HTTP responses now have a fixed cumulative 32 MiB limit. Declared and
+streamed oversized responses are refused and closed, unsupported content encodings
+are rejected before decoding, and later safe requests still work. Primary review
+added regression coverage for arbitrarily long declared length strings.
+
+Two Luna/max workers implemented the independent storage and transport changes.
+Primary owned combined gateway acceptance and final review. All 915 Python tests passed, including the 98 affected checks.
+Static checks, contract export and package builds also passed. An installed wheel also
+passed encrypted restart/activation and real pinned HTTP response rejection.
+The [qualification record](evidence/custom-mcp-lifecycle-bounds-oct04.json)
+tracks the full suite and exact published-source CI separately.
+
+Managed inspection/review routes, persistent definitions and recovery, private
+endpoint workspace policy, health and the web journey remain open. This closes
+two prerequisites, rather than the complete Add Custom MCP product requirement.
+
 ## Connection-owned MCP foundation, October 4
 
 Trusted integrations can now import explicitly selected and reviewed MCP HTTP
@@ -21,11 +45,13 @@ managed-gateway-to-MCP acceptance. The full suite passed 898 tests before the
 final deprecated IPv6 site-local denial regression. All 59 affected checks passed
 with that final fix, as did 18 SDK tests, 11 web tests, static checks and package
 builds. The [qualification record](evidence/custom-mcp-foundation-oct04.json)
-preserves the distinction; final published-source CI qualification is pending.
+preserves the distinction. Published source `78dcb748` passed all six
+[CI jobs](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37234773751),
+including 899 tests on each of Python 3.11, 3.12 and 3.13.
 
 The [MCP guide](mcp-review.md) documents the trusted integration contract. This
 foundation does not complete Add Custom MCP. Managed inspection/review/staging,
-persisted definitions and recovery, auth-none storage, provider-payload limits,
+persisted definitions and recovery,
 private endpoint workspace policy, health and the normal web journey remain open.
 Complete account/settings, generic OAuth/events, actual held-out agent evaluation,
 physical-site evidence, external contribution, sustained operations and a coherent

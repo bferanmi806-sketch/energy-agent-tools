@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-04",
+  "feature": "Managed no-auth storage and bounded MCP responses",
+  "implementation_base": "78dcb748bcebc2e312c1cfcf8148932ec609b092",
+  "scope": "Internal encrypted connection lifecycle and approved HTTP transport; managed Add Custom MCP product journey remains open.",
+  "orchestration": {
+    "worker_model": "GPT-6 Luna",
+    "worker_reasoning": "max",
+    "independent_assignments": [
+      "managed no-auth storage",
+      "bounded approved HTTP responses"
+    ],
+    "primary_ownership": [
+      "combined actual gateway acceptance",
+      "header edge-case review",
+      "integration and publication"
+    ]
+  },
+  "validation": {
+    "focused_python": {
+      "passed": 98,
+      "seconds": 34.12
+    },
+    "full_python": {
+      "passed": 915,
+      "seconds": 655.39,
+      "status": "passed final implementation source"
+    },
+    "static": {
+      "ruff": "passed",
+      "format": "passed, 272 files",
+      "mypy": "passed, 62 source files",
+      "typescript_contract": "unchanged, export check passed",
+      "lock": "check passed",
+      "diff": "check passed"
+    },
+    "package": "sdist and wheel built; installed wheel passed encrypted no-auth restart/activation and owned pinned oversized-response refusal. A real 5000-digit upstream length also produced a fixed safe HTTP protocol error.",
+    "ci": {
+      "status": "pending publication qualification",
+      "implementation_commit": null
+    }
+  },
+  "source_files_sha256": {
+    "src/energy_agent_tools/auth.py": "3b858ada882ff1d0e5fc1cb3d14385e083d760186261451de8a7e2d5e98fbdd6",
+    "src/energy_agent_tools/connectors/mcp_network.py": "65648c43cdf636cbb8fe8d269cebf2a71b5dd58cc17743f7665f2f6d010f41ec",
+    "tests/test_auth_managed_no_auth.py": "ac273f63338405f423ab2edefa492367e6947a909cb263000f7039505f0a469e",
+    "tests/test_mcp_payload_limits.py": "9f3465ad7bceee5c383aede1d1af156d3a5fd50ab2e893c4eb9a6e68cb044691",
+    "tests/test_host_scoped_mcp.py": "70e2f2ba6b6b9c92966c7b06c1bade0141d96be8e87a930ecaa8a49ae6fe9c2c"
+  },
+  "limits": [
+    "The 32 MiB limit applies cumulatively to each approved HTTP response, including SSE; long-lived streams must reconnect.",
+    "Unsupported response content encodings are rejected; providers must support identity encoding.",
+    "No-auth lifecycle and actual hosted gateway acceptance use owned synthetic fixtures, not a physical energy provider.",
+    "Managed inspection/review routes, persistent definitions and recovery, workspace-bound private endpoint policy, health and web onboarding remain open."
+  ],
+  "full_goal_status": "active; product-objective.md still governs completion"
+}

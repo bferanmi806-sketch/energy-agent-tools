@@ -913,7 +913,7 @@ class AuthStore:
     def stage_managed(
         self,
         account: ConnectedAccount,
-        credential: str,
+        credential: str | None,
         *,
         expected_version: int | None = None,
     ) -> ConnectedAccount:
@@ -933,12 +933,20 @@ class AuthStore:
             or account.last_verified_at is None
         ):
             raise ValueError("managed connections must be verified pending mappings")
-        if not isinstance(credential, str) or not credential:
+        if credential is None:
+            if account.auth.scheme != "none":
+                raise ValueError("credential is required for this authentication scheme")
+        elif not isinstance(credential, str) or not credential:
             raise ValueError("credential must be a non-empty string")
         if not account.id or not account.user_id or not account.toolkit:
             raise ValueError("connection id, user_id and toolkit are required")
         expected_version = self._expected_revision(expected_version)
         data = self._account_dump(account)
+        if credential is None:
+            auth_data = data.get("auth")
+            if not isinstance(auth_data, dict):
+                raise _safe_error("connection_corrupt", "Stored connection auth is invalid.")
+            auth_data["secret_id"] = None
         data["enabled"] = False
         data["state"] = "pending_mapping"
         data["last_verified_at"] = _iso(account.last_verified_at)

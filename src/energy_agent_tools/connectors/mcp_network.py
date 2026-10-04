@@ -19,9 +19,13 @@ import httpx
 _MAX_URL_BYTES = 2048
 _MAX_DNS_ADDRESSES = 16
 _DNS_TIMEOUT_SECONDS = 5.0
+MAX_MCP_RESPONSE_BYTES = 32 * 1024 * 1024
 _APPROVAL_SEAL = object()
 _SAFE_REQUEST_EXTENSIONS = frozenset({"timeout", "trace"})
 _SAFE_RESPONSE_EXTENSIONS = frozenset({"http_version", "reason_phrase", "trailers"})
+_RESPONSE_LIMIT_ERROR = "MCP response exceeds the configured byte limit."
+_RESPONSE_ENCODING_ERROR = "MCP response content encoding is unsupported."
+_RESPONSE_LENGTH_ERROR = "MCP response Content-Length is invalid."
 _NEVER_ROUTABLE_NETWORKS = tuple(
     ipaddress.ip_network(value)
     for value in (
@@ -251,6 +255,44 @@ def _map_httpcore_error(exc: Exception, request: httpx.Request) -> httpx.Request
     return None
 
 
+def _response_rejection(response: httpcore.Response) -> str | None:
+    for raw_value in _response_header_values(response, b"content-encoding"):
+        try:
+            encodings = raw_value.decode("ascii").split(",")
+        except UnicodeDecodeError:
+            return _RESPONSE_ENCODING_ERROR
+        if any(value.strip() and value.strip().lower() != "identity" for value in encodings):
+            return _RESPONSE_ENCODING_ERROR
+
+    for raw_value in _response_header_values(response, b"content-length"):
+        try:
+            declared_lengths = raw_value.decode("ascii").split(",")
+        except UnicodeDecodeError:
+            return _RESPONSE_LENGTH_ERROR
+        for declared_length in declared_lengths:
+            value = declared_length.strip()
+            if not value or not value.isdecimal():
+                return _RESPONSE_LENGTH_ERROR
+            normalized = value.lstrip("0") or "0"
+            limit = str(MAX_MCP_RESPONSE_BYTES)
+            if len(normalized) > len(limit) or (
+                len(normalized) == len(limit) and normalized > limit
+            ):
+                return _RESPONSE_LIMIT_ERROR
+    return None
+
+
+def _response_header_values(response: httpcore.Response, name: bytes) -> list[bytes]:
+    return [value for header, value in response.headers if header.lower() == name]
+
+
+async def _close_rejected_response(response: httpcore.Response) -> None:
+    try:
+        await response.aclose()
+    except Exception:
+        pass
+
+
 class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
     def __init__(
         self,
@@ -307,10 +349,19 @@ class _HTTPcoreResponseStream(httpx.AsyncByteStream):
     def __init__(self, response: httpcore.Response, request: httpx.Request) -> None:
         self._response = response
         self._request = request
+        self._received_bytes = 0
+        self._closed = False
 
     async def __aiter__(self) -> AsyncIterator[bytes]:
         try:
             async for chunk in cast(AsyncIterable[bytes], self._response.stream):
+                self._received_bytes += len(chunk)
+                if self._received_bytes > MAX_MCP_RESPONSE_BYTES:
+                    try:
+                        await self.aclose()
+                    except Exception:
+                        pass
+                    raise httpx.RequestError(_RESPONSE_LIMIT_ERROR, request=self._request)
                 yield chunk
         except Exception as exc:
             mapped = _map_httpcore_error(exc, self._request)
@@ -319,6 +370,9 @@ class _HTTPcoreResponseStream(httpx.AsyncByteStream):
             raise mapped from exc
 
     async def aclose(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         try:
             await self._response.aclose()
         except Exception as exc:
@@ -369,6 +423,11 @@ class _ApprovedHTTPTransport(httpx.AsyncBaseTransport):
                 raise
             raise mapped from exc
 
+        rejection = _response_rejection(response)
+        if rejection is not None:
+            await _close_rejected_response(response)
+            raise httpx.RequestError(rejection, request=request)
+
         response_extensions = {
             name: value
             for name, value in response.extensions.items()
@@ -403,6 +462,7 @@ def approved_mcp_client(target: ApprovedMCPTarget, *, timeout: float = 30.0) -> 
         base_url=target.url,
         transport=_ApprovedHTTPTransport(target),
         timeout=float(timeout),
+        headers={"Accept-Encoding": "identity"},
         follow_redirects=False,
         trust_env=False,
     )
