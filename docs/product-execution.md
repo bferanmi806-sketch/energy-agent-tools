@@ -23,7 +23,9 @@ Primary owned combined gateway acceptance and final review. All 915 Python tests
 Static checks, contract export and package builds also passed. An installed wheel also
 passed encrypted restart/activation and real pinned HTTP response rejection.
 The [qualification record](evidence/custom-mcp-lifecycle-bounds-oct04.json)
-tracks the full suite and exact published-source CI separately.
+tracks the full suite and exact published-source CI separately. Source `9af38234`
+passed all six [CI jobs](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37236506645),
+with 915 tests on each of Python 3.11, 3.12 and 3.13.
 
 Managed inspection/review routes, persistent definitions and recovery, private
 endpoint workspace policy, health and the web journey remain open. This closes

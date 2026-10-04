@@ -36,8 +36,23 @@
     },
     "package": "sdist and wheel built; installed wheel passed encrypted no-auth restart/activation and owned pinned oversized-response refusal. A real 5000-digit upstream length also produced a fixed safe HTTP protocol error.",
     "ci": {
-      "status": "pending publication qualification",
-      "implementation_commit": null
+      "status": "passed all six jobs",
+      "implementation_commit": "9af38234dc7973399d1b06e983cc5105d0789af8",
+      "run_url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37236506645",
+      "python_versions": [
+        "3.11",
+        "3.12",
+        "3.13"
+      ],
+      "tests_passed_per_python_version": 915,
+      "jobs": [
+        "home-assistant",
+        "verify (3.11)",
+        "verify (3.12)",
+        "verify (3.13)",
+        "upgrade",
+        "container"
+      ]
     }
   },
   "source_files_sha256": {
