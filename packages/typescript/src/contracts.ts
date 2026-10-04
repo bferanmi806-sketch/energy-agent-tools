@@ -184,6 +184,271 @@ export const IdentityResponseSchema = {
 } as const;
 export type IdentityResponse = FromSchema<typeof IdentityResponseSchema, { keepDefaultedPropertiesOptional: true }>;
 
+export const ExecutionLogResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "entries": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "execution_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Execution Id",
+            "type": "string"
+          },
+          "user_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "session_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "access_mode": {
+            "enum": [
+              "local",
+              "hosted"
+            ],
+            "title": "Access Mode",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "tool": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Tool",
+            "type": "string"
+          },
+          "duration_ms": {
+            "minimum": 0,
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "outcome": {
+            "discriminator": {
+              "mapping": {
+                "failure": "#/$defs/ExecutionFailure",
+                "success": "#/$defs/ExecutionSuccess"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "success",
+                    "title": "Kind",
+                    "type": "string"
+                  },
+                  "data_kind": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "metered",
+                          "calculated",
+                          "estimated",
+                          "simulated",
+                          "forecast"
+                        ],
+                        "title": "DataKind",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null
+                  }
+                },
+                "required": [
+                  "kind"
+                ],
+                "title": "ExecutionSuccess",
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "const": "failure",
+                    "title": "Kind",
+                    "type": "string"
+                  },
+                  "error_code": {
+                    "maxLength": 256,
+                    "minLength": 1,
+                    "title": "Error Code",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "error_code"
+                ],
+                "title": "ExecutionFailure",
+                "type": "object"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "sequence": {
+            "exclusiveMinimum": 0,
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "execution_id",
+          "user_id",
+          "workspace_id",
+          "key_id",
+          "session_id",
+          "site_id",
+          "account_id",
+          "access_mode",
+          "recorded_at",
+          "tool",
+          "duration_ms",
+          "outcome",
+          "sequence"
+        ],
+        "title": "ExecutionLogRecord",
+        "type": "object"
+      },
+      "maxItems": 100,
+      "title": "Entries",
+      "type": "array"
+    },
+    "next_before": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Before"
+    },
+    "retention_limit": {
+      "maximum": 2000,
+      "minimum": 1,
+      "title": "Retention Limit",
+      "type": "integer"
+    },
+    "recording_status": {
+      "enum": [
+        "ok",
+        "unavailable"
+      ],
+      "title": "Recording Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "entries",
+    "next_before",
+    "retention_limit",
+    "recording_status"
+  ],
+  "title": "ExecutionLogPage",
+  "type": "object"
+} as const;
+export type ExecutionLogResponse = FromSchema<typeof ExecutionLogResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const ExecutionLogQuerySchema = {
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 50,
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "before": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Before"
+    }
+  },
+  "title": "ExecutionLogQuery",
+  "type": "object"
+} as const;
+export type ExecutionLogQuery = FromSchema<typeof ExecutionLogQuerySchema, { keepDefaultedPropertiesOptional: true }>;
+
 export const WorkspaceResponseSchema = {
   "type": "object",
   "properties": {

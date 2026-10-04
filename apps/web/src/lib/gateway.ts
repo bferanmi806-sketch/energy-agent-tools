@@ -4,7 +4,7 @@ import { EnergyAgentTools, EnergyHttpError } from "@energy-agent-tools/sdk";
 import { cookies } from "next/headers";
 import { unstable_noStore } from "next/cache";
 import { readWebRuntimeConfig, openSession, SESSION_COOKIE_NAME } from "./security";
-import type { DashboardState } from "./types";
+import type { DashboardState, ExecutionActivityState } from "./types";
 
 const SIGNED_OUT_MESSAGE = "Your gateway session has expired. Sign in again.";
 const UNAVAILABLE_MESSAGE = "The gateway is unavailable. Check the web and gateway configuration.";
@@ -25,7 +25,7 @@ function gatewayClient(baseUrl: string, token: string): EnergyAgentTools {
   });
 }
 
-export async function loadDashboard(): Promise<DashboardState> {
+export async function loadDashboard(activityBefore?: number): Promise<DashboardState> {
   unstable_noStore();
   const cookieJar = await cookies();
   const cookieValue = cookieJar.get(SESSION_COOKIE_NAME)?.value;
@@ -44,6 +44,10 @@ export async function loadDashboard(): Promise<DashboardState> {
   try {
     const gateway = gatewayClient(config.gatewayUrl, session.token);
     const identity = await gateway.identity();
+    const activity: ExecutionActivityState = await gateway.activity(
+      activityBefore === undefined ? {} : { before: activityBefore },
+    ).then((page): ExecutionActivityState => ({ kind: "ready", page }))
+      .catch((): ExecutionActivityState => ({ kind: "unavailable" }));
 
     if (identity.can_manage_workspace === true && identity.workspace?.mode === "managed") {
       const workspace = gateway.workspace();
@@ -65,6 +69,7 @@ export async function loadDashboard(): Promise<DashboardState> {
         data: {
           kind: "managed",
           identity,
+          activity,
           workspace: settledValue(results[0]).workspace,
           sites: settledValue(results[1]).sites,
           assets: settledValue(results[2]).assets,
@@ -104,6 +109,7 @@ export async function loadDashboard(): Promise<DashboardState> {
         data: {
           kind: "operator",
           identity,
+          activity,
           siteId,
           connectionSetups: settledValue(results[4]).setups,
           toolkits: toolkits.toolkits,

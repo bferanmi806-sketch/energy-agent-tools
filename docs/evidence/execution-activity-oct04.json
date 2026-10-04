@@ -1,0 +1,80 @@
+{
+  "recorded_at": "2026-10-04",
+  "source_base": "ad6ce4abb71620e7e8b07483ba65f128b2b78b64",
+  "scope": "Durable bounded execution metadata through runtime, current authenticated REST scope, TypeScript SDK, both web consoles and backup/restore",
+  "python_source_sha256": "38a8be3ce3bb51a0651baa27f263c362c75126b1cbe6e69bd14a904ce4b54136",
+  "python_files": 177,
+  "validation": {
+    "focused_python": {
+      "passed": 35,
+      "seconds": 27.72,
+      "coverage": [
+        "SQLite restart, idempotency, collision, retention, exclusive paging, namespace/site/current connection grants",
+        "large grants, malformed rows, private files, bounded lock failure",
+        "runtime success/failure/cancellation, fixed unknown-tool label, argument/result/message omission",
+        "REST auth, local/hosted separation, management/member privacy, current grants and member revocation",
+        "real metadata backup/restore and generated contract parity"
+      ]
+    },
+    "corrected_dataset_backup_cases": {
+      "passed": 2,
+      "seconds": 24.95
+    },
+    "sdk": {
+      "passed": 16,
+      "seconds": 16.5
+    },
+    "production_web": {
+      "build": "passed",
+      "typecheck": "passed",
+      "tests": 11,
+      "seconds": 24.84
+    },
+    "static": {
+      "ruff": "passed",
+      "format": "256 files passed",
+      "mypy": "60 source files passed",
+      "generated_contracts": "matched"
+    },
+    "local_full_suite": {
+      "status": "failed_before_dataset_expectation_fix",
+      "passed": 813,
+      "failed": 2,
+      "seconds": 1041.35,
+      "failed_tests": [
+        "test_large_dataset_through_gateway_and_backup[sdk]",
+        "test_large_dataset_through_gateway_and_backup[mcp]"
+      ],
+      "reason": "Both cases expected artifacts.sqlite3 alone. Durable history adds activity/activity.sqlite3 to the backup; corrected assertions passed in a separate two-case run. This is not a full passing run for final source."
+    },
+    "browser": {
+      "source": "55 actual production gateway executions in a disposable managed workspace: 54 calculated heat-loss successes and one invalid-argument failure",
+      "desktop_viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "mobile_viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "checks": [
+        "Latest page contains 50 executions with outcomes, actual UTC time, duration and data kind",
+        "Scope disclosure displays public session/workspace/site references",
+        "Older activity link renders the remaining five entries; latest returns current page",
+        "Mobile layout keeps long tool names and failure codes readable",
+        "Real SQLite EXCLUSIVE lock preserves a subsequent successful execution and displays incomplete-history warning",
+        "Corrupt visible outcome returns fixed HTTP 503 and a retryable unavailable-history panel while other dashboard navigation remains usable",
+        "HTTP tests cover zero-site empty history and server-side before-cursor navigation"
+      ],
+      "provider_requests": 0,
+      "owned_resources": "Servers stopped, tab closed, viewport override reset, private state/tokens removed"
+    }
+  },
+  "limits": [
+    "Operational history for EnergyAgent.execute tool runs, not tamper-proof auditing or background job lifecycle history.",
+    "Recording health is sticky for the current process after a failed append; retention and a failed append can make history incomplete.",
+    "Default bounded retention is 2000 per actor/workspace/access mode and 10000 gateway-wide.",
+    "Synthetic fixtures and numerical runs do not qualify physical-site telemetry or close broad actual agent evaluations.",
+    "Custom MCP onboarding, jobs, complete account/settings, outside connector contribution, sustained operations and a coherent release remain open."
+  ]
+}

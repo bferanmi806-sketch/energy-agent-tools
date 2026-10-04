@@ -18,6 +18,14 @@ key and returns no account details or credentials. Operator and member agent
 clients retain their existing scoped `session.skills()` and `session.runSkill()`
 interfaces.
 
+## Review tool runs
+
+Use **Activity log** to inspect your own recent gateway executions. History
+survives restarts and follows current site and shared connection grants. Owners
+cannot use it to read another member's private execution history. See the
+[activity guide](execution-activity.md) for pagination, retention, backup and
+recording-health behavior.
+
 ## Create the workspace
 
 Install the gateway from this checkout. From the repository root, run:

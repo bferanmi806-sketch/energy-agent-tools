@@ -58,6 +58,16 @@ and `deleteArtifact` for the other REST operations. `energy.session` attaches
 to an existing session ID; the host still checks ownership and expiration.
 Calling `session.close()` deletes that session's artifacts on the server.
 
+## Read execution history
+
+`energy.activity({ limit: 50 })` reads durable tool execution metadata for the
+current actor, workspace, allowed sites and connection grants. Pass the returned
+`next_before` as `before` to read older entries. History survives session closure
+and gateway restarts. It contains no tool arguments, results or raw error
+messages. See the [activity guide](../../docs/execution-activity.md) for retention,
+recording health and access boundaries. This route requires matching current
+gateway source.
+
 ## Manage a workspace
 
 For an explicitly [managed workspace](../../docs/managed-workspaces.md), use

@@ -261,6 +261,11 @@ test("production web onboards a zero-site manager through the real managed gatew
     assert.match(skillsHtml, /forecast-bill/);
     assert.match(skillsHtml, /consumption-forecast/);
     assert.ok(!skillsHtml.includes(managerToken));
+    const emptyActivityHtml = await fetch(webUrl + "/?view=activity", { headers: { cookie } }).then(response => response.text());
+    assert.match(emptyActivityHtml, /Execution activity/);
+    assert.match(emptyActivityHtml, /No execution records returned/);
+    assert.ok(!emptyActivityHtml.includes(managerToken));
+
 
 
     const beforeRejected = await workspace.connections();

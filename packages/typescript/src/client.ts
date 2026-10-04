@@ -10,6 +10,7 @@ import {
   ArtifactsResponseSchema, SkillsResponseSchema, JobRequestSchema, JobResponseSchema,
   DeleteSessionResponseSchema, DeleteArtifactResponseSchema,
   SkillExecutionRequestSchema, WorkflowResponseSchema, ToolkitsResponseSchema,
+  ExecutionLogResponseSchema, ExecutionLogQuerySchema,
   WorkspaceResponseSchema, WorkspaceSiteRequestSchema, WorkspaceSiteResponseSchema,
   WorkspaceSitesResponseSchema, WorkspaceAssetRequestSchema, WorkspaceAssetResponseSchema,
   WorkspaceAssetsResponseSchema, WorkspaceMapRequestSchema, WorkspaceAgentKeyRequestSchema,
@@ -24,6 +25,7 @@ import type {
   ConnectionVerificationResponse, ConnectionDisconnectedResponse,
   IdentityResponse, ConnectionSetupsResponse, OctopusConnectionRequest, ConnectionCreatedResponse,
   SessionCreate, SessionResponse, SearchRequest, SearchResponse, ExecuteRequest, ExecutionResponse, CapabilityRequest, CapabilityExecutionRequest, ResolutionResponse, ConnectionsResponse, ArtifactsResponse, SkillsResponse, JobRequest, JobResponse, DeleteSessionResponse, DeleteArtifactResponse, SkillExecutionRequest, WorkflowResponse, ToolkitsResponse,
+  ExecutionLogResponse, ExecutionLogQuery,
   WorkspaceResponse, WorkspaceSiteRequest, WorkspaceSiteResponse, WorkspaceSitesResponse,
   WorkspaceAssetRequest, WorkspaceAssetResponse, WorkspaceAssetsResponse, WorkspaceMapRequest,
   WorkspaceAgentKeyRequest, WorkspaceIssuedKeyResponse, WorkspaceKeysResponse,
@@ -37,6 +39,8 @@ import type {
 
 const parseSessionCreate = parser<SessionCreate>(SessionCreateSchema);
 const parseIdentity = parser<IdentityResponse>(IdentityResponseSchema);
+const parseExecutionLog = parser<ExecutionLogResponse>(ExecutionLogResponseSchema);
+const parseExecutionLogQuery = parser<ExecutionLogQuery>(ExecutionLogQuerySchema);
 const parseConnectionSetups = parser<ConnectionSetupsResponse>(ConnectionSetupsResponseSchema);
 const parseConnectionCreate = parser<OctopusConnectionRequest>(OctopusConnectionRequestSchema);
 const parseConnectionCreated = parser<ConnectionCreatedResponse>(ConnectionCreatedResponseSchema);
@@ -101,6 +105,11 @@ export class EnergyAgentTools {
 
   identity(options: RequestOptions = {}) {
     return this.#transport.request({ path: "me", method: "GET", parse: parseIdentity, ...options });
+  }
+
+  activity(input: ExecutionLogQuery = {}, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "activity", method: "POST",
+      body: parseExecutionLogQuery(input), parse: parseExecutionLog, ...options });
   }
 
   /** Management API for the managed workspace associated with this gateway key. */

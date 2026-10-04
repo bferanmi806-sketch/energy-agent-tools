@@ -50,7 +50,21 @@
   "limits": [
     "Metadata describes supported recipes and does not assert provider availability, successful execution or physical study qualification.",
     "Execution remains through the connected agent and scoped runSkill interface; this catalogue has no web execution form.",
-    "The full 798-test suite and all six CI jobs qualified the prior shared-connection source d9d02dd. This new metadata route was locally qualified with 21 focused Python tests, SDK, web, static and browser checks.",
+    "The full local 798-test suite qualified prior sharing source d9d02dd. All six CI jobs also passed for published Skills source ad6ce4a; local Skills qualification used 21 focused Python tests, SDK, web, static and browser checks.",
     "Custom MCP onboarding, durable execution logs, complete jobs/account/settings, broader actual model evaluation, physical-site qualification, outside connector contribution, sustained deployment observations and coherent release remain open."
-  ]
+  ],
+  "published_ci": {
+    "source": "ad6ce4abb71620e7e8b07483ba65f128b2b78b64",
+    "run_url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37161010509",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      "verify (3.11)",
+      "verify (3.12)",
+      "verify (3.13)",
+      "container",
+      "upgrade",
+      "home-assistant"
+    ]
+  }
 }

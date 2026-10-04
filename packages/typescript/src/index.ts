@@ -7,6 +7,7 @@ export type {
   SessionCreate, SearchRequest, ExecuteRequest, CapabilityRequest, CapabilityExecutionRequest,
   Toolkit, ToolkitsResponse, JobRequest, SkillExecutionRequest, WorkflowResponse, EnergyResult, SessionResponse, SearchResponse, ExecutionResponse,
   ResolutionResponse, ConnectionsResponse, ArtifactsResponse, SkillsResponse, JobResponse,
+  ExecutionLogResponse, ExecutionLogQuery,
   WorkspaceResponse, WorkspaceSiteRequest, WorkspaceSiteResponse, WorkspaceSitesResponse,
   WorkspaceAssetRequest, WorkspaceAssetResponse, WorkspaceAssetsResponse, WorkspaceMapRequest,
   WorkspaceAgentKeyRequest, WorkspaceIssuedKeyResponse, WorkspaceKeysResponse,

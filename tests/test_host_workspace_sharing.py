@@ -340,3 +340,47 @@ async def test_member_datasets_and_jobs_remain_private_to_the_actor(sharing):
     assert result["ok"] is True
     assert result["result"]["data"]["gross_heat_loss_kw"] == pytest.approx(0.38)
     assert not sharing.probes
+
+
+async def test_activity_is_actor_private_and_follows_current_shared_connection_grants(sharing):
+    auth = await grant_and_issue(sharing)
+    session_id = await create_session(sharing, auth)
+    execution = await sharing.client.post(
+        f"/sessions/{session_id}/capability", headers=auth, json={"capability": "get_current_power"}
+    )
+    assert execution.json()["ok"] and len(sharing.probes) == 1
+    activity = await sharing.client.post("/activity", headers=auth, json={})
+    assert activity.status_code == 200
+    entries = activity.json()["entries"]
+    assert len(entries) == 1 and entries[0]["user_id"] == "member"
+    assert entries[0]["account_id"] == "shared" and entries[0]["key_id"]
+    assert "private-fixture-credential" not in activity.text
+    assert '"data"' not in activity.text and '"arguments"' not in activity.text
+    assert len(sharing.probes) == 1  # History retrieval never calls the provider.
+    for owner_auth in [sharing.auth, sharing.foreign_auth]:
+        owner_page = await sharing.client.post("/activity", headers=owner_auth, json={})
+        assert owner_page.status_code == 200 and owner_page.json()["entries"] == []
+    changed = await sharing.client.patch(
+        "/workspace/members/member",
+        headers=sharing.auth,
+        json={"site_ids": [sharing.site.id], "connection_ids": []},
+    )
+    assert changed.status_code == 200
+    narrowed = await sharing.client.post("/activity", headers=auth, json={})
+    assert narrowed.status_code == 200 and narrowed.json()["entries"] == []
+    issued = await sharing.client.post(
+        "/workspace/members/member/keys",
+        headers=sharing.auth,
+        json={"name": "Updated grants", "site_ids": [sharing.site.id]},
+    )
+    assert issued.status_code == 201
+    current_auth = {"Authorization": "Bearer " + issued.json()["token"]}
+    page = await sharing.client.post("/activity", headers=current_auth, json={})
+    assert page.status_code == 200 and page.json()["entries"] == []
+    assert len(sharing.probes) == 1
+    removed = await sharing.client.delete("/workspace/members/member", headers=sharing.auth)
+    assert removed.status_code == 200
+    for revoked_auth in [auth, current_auth]:
+        assert (
+            await sharing.client.post("/activity", headers=revoked_auth, json={})
+        ).status_code == 401

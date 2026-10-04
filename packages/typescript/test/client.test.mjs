@@ -89,3 +89,35 @@ test('SDK uses authenticated production REST routes and preserves scoped calcula
     await assert.rejects(session.artifacts(), error => error instanceof EnergyHttpError && error.status === 404);
   } finally { await host.close(); }
 });
+
+test('SDK reads durable activity through current scope and paginates without exposing execution payloads', async () => {
+  const host = await startHost();
+  try {
+    const energy = new EnergyAgentTools({ baseUrl: host.baseUrl, token: host.token });
+    assert.deepEqual((await energy.activity()).entries, []);
+    const session = await energy.createSession({ site_id: 'sdk-site' });
+    const executions = [];
+    for (let base = 1; base <= 3; base++) {
+      executions.push(await session.execute({ tool: 'FIXTURE_CALCULATE', arguments: { base, multiplier: 3 } }));
+    }
+    await session.close();
+    const first = await energy.activity({ limit: 2 });
+    assert.deepEqual(first.entries.map(entry => entry.execution_id), [executions[2].execution_id, executions[1].execution_id]);
+    assert.equal(first.entries[0].outcome.kind, 'success');
+    assert.equal(first.entries[0].outcome.data_kind, 'calculated');
+    assert.equal(first.entries[0].site_id, 'sdk-site');
+    assert.equal(first.recording_status, 'ok');
+    assert.ok(Number.isFinite(Date.parse(first.entries[0].recorded_at)));
+    assert.ok(first.next_before > 0);
+    const older = await energy.activity({ limit: 2, before: first.next_before });
+    assert.deepEqual(older.entries.map(entry => entry.execution_id), [executions[0].execution_id]);
+    assert.equal(older.next_before, null);
+    const foreign = new EnergyAgentTools({ baseUrl: host.baseUrl, token: host.foreignToken });
+    assert.deepEqual((await foreign.activity()).entries, []);
+    const serialized = JSON.stringify(first);
+    for (const forbidden of ['arguments', 'result', host.token, host.foreignToken]) assert.ok(!serialized.includes(forbidden));
+    assert.throws(() => energy.activity({ user_id: 'sdk-foreign-user' }), EnergyProtocolError);
+    assert.throws(() => energy.activity({ limit: 101 }), EnergyProtocolError);
+    assert.throws(() => energy.activity({ before: true }), EnergyProtocolError);
+  } finally { await host.close(); }
+});

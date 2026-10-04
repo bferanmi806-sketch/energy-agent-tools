@@ -105,7 +105,10 @@ async def test_large_dataset_through_gateway_and_backup(tmp_path, interface):
         assert not invalid["ok"] and invalid["error"]["code"] == "invalid_arguments"
         archive = tmp_path / "backup.tar.gz"
         manifest = create_backup(state, archive)
-        assert {f.path for f in manifest.files} == {"artifacts.sqlite3"}
+        assert {f.path for f in manifest.files} == {
+            "artifacts.sqlite3",
+            "activity/activity.sqlite3",
+        }
         restored = tmp_path / "restored"
         restore_backup(archive, restored)
         restarted = Workbench(restored)

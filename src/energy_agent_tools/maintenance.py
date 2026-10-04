@@ -54,6 +54,7 @@ _DATABASES: tuple[tuple[str, str, frozenset[str], str], ...] = (
         frozenset({"accounts", "oauth_transactions"}),
         "auth.v1",
     ),
+    ("activity/activity.sqlite3", "activity", frozenset({"execution_activity"}), "activity.v1"),
     ("jobs/jobs.sqlite3", "jobs", frozenset({"jobs"}), "jobs.v1"),
     (
         "control/control.sqlite3",

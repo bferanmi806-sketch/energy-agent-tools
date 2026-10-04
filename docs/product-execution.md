@@ -5,6 +5,27 @@ record extends the existing backend roadmap; it does not replace unfinished
 gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 [passing CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37032700732).
 
+## Durable execution activity follow-up, October 4
+
+The gateway now persists a bounded allowlist of execution metadata, including
+success, failure and cancellation outcomes. `POST /activity` derives current
+actor, workspace, hosted mode, site and shared connection filters from the
+bearer principal. The TypeScript SDK and both web consoles expose history and
+exclusive older-page navigation. SQLite state survives restart and normal
+backup/restore. Recording failure preserves the execution result and exposes
+incomplete-history status. The [activity guide](execution-activity.md) documents
+its limits; it is operational history rather than a tamper-proof audit service.
+
+The [qualification record](evidence/execution-activity-oct04.json) preserves
+35 focused Python checks, the corrected dataset backup cases, 16 SDK tests and
+11 production web tests, plus desktop/mobile pagination and real storage-failure
+checks. The first full Python run passed 813 tests and failed the two stale
+backup assertions; the corrected cases passed separately. Full CI qualification
+for the final source is pending. Custom MCP onboarding, jobs, complete account
+and settings flows, broad actual agent evaluation, physical-site evidence,
+external connector contribution, sustained operations and a coherent release
+remain open.
+
 ## Skills catalogue follow-up, October 4
 
 The managed workspace now browses gateway workflow metadata before creating a
@@ -105,7 +126,7 @@ does not close the separate live, external-review or sustained-operation gates.
 | Deployment/recovery/load/soak and resilience | CI container, restart, state upgrade and backup/restore checks | Partial; representative sustained deployment and 30-day observations remain open. |
 | Coherent new release with reproducible evidence | Published Python v0.3.0 and SDK archive; later web/control-plane source is CI-qualified | Partial; package a matching gateway, SDK and web revision after the next stable product boundary. |
 | First-class TypeScript SDK | REST and official MCP transports, generated contracts, workspace management APIs and 15 acceptance tests | Implemented for current routes; new control-plane APIs need matching SDK coverage and distribution. |
-| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; explicit shared connections are implemented; Skills discovery is implemented; custom MCP, logs, jobs, complete account management and settings remain open. |
+| Connect Apps web product | Metadata catalogue, operator console, managed system-first Octopus flow, sites/assets, scoped agent setup and health; production HTTP and desktop/mobile checks | Partial; explicit shared connections are implemented; Skills discovery and durable execution activity are implemented; custom MCP, jobs, complete account management and settings remain open. |
 | Hosted connection/control plane | Private managed workspaces, bootstrap identities, management/agent keys, encrypted scoped accounts, durable sites/assets, dynamic MCP, migrations and recovery acceptance | Partial; membership, explicit connection ACLs and approved Home Assistant OAuth are implemented; generic custom OAuth, events and full observability remain open. |
 | Ecosystem journeys | Existing public, telemetry and engineering connectors with differing qualification | Partial; meters, PV/storage/EV, heat/BMS, industrial/files, engineering engines and reviewed MCP must qualify honestly according to accessible supported scope. |
 | Accurate documentation and evidence | Append-only decisions, archived failures and qualification records | Ongoing; every completion claim needs current source and runnable evidence. |

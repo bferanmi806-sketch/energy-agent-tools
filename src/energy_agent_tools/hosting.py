@@ -45,6 +45,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from .activity import ExecutionLogQuery, ExecutionLogScope
 from .auth import AuthStore
 from .capabilities import CapabilityRequest
 from .connection_contracts import ConnectionSetupsResponse, OctopusConnectionRequest, octopus_setup
@@ -491,6 +492,7 @@ class AuthenticatedHost:
             Route("/workspace/keys", self._workspace_keys, methods=["GET", "POST"]),
             Route("/workspace/keys/{key_id}", self._workspace_revoke_key, methods=["DELETE"]),
             Route("/workspace/toolkits", self._workspace_toolkits, methods=["GET"]),
+            Route("/activity", self._activity, methods=["POST"]),
             Route("/workspace/skills", self._workspace_skills, methods=["GET"]),
             Route("/workspace/connection-setups", self._workspace_setups, methods=["GET"]),
             Route("/workspace/connections", self._workspace_connections, methods=["GET", "POST"]),
@@ -1162,7 +1164,7 @@ class AuthenticatedHost:
             403
             if exc.code.endswith("forbidden")
             else 503
-            if exc.code == "mcp_unavailable"
+            if exc.code in {"mcp_unavailable", "activity_unavailable"}
             else 429
             if exc.code == "mcp_mount_limit"
             else 409
@@ -1218,6 +1220,34 @@ class AuthenticatedHost:
             )
             self._project_workspace(principal.user_id, principal.workspace_id)
             return _json_response({"site": site.model_dump(mode="json")}, status_code=201)
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _activity(self, request: Request) -> Response:
+        principal = self._principal_from_request(request)
+        if isinstance(principal, Response):
+            return principal
+        parsed = await self._parse_json(request, ExecutionLogQuery)
+        if isinstance(parsed, Response):
+            return parsed
+        query = cast(ExecutionLogQuery, parsed)
+        scope = ExecutionLogScope(
+            user_id=principal.user_id,
+            workspace_id=self._runtime_workspace(principal),
+            access_mode="hosted",
+            site_ids=set(self._available_sites(principal)),
+            connection_ids=(
+                set(principal.workspace_scope.connection_ids)
+                if principal.workspace_scope
+                and principal.workspace_scope.connection_ids is not None
+                else None
+            ),
+        )
+        try:
+            page = self.agent.execution_activity(scope, limit=query.limit, before=query.before)
+            return _json_response(
+                page.model_dump(mode="json"), headers={"Cache-Control": "no-store"}
+            )
         except EnergyError as exc:
             return self._energy_error(exc)
 

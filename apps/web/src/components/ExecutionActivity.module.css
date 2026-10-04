@@ -1,0 +1,246 @@
+.toolbar {
+  align-items: flex-start;
+}
+
+.activityList {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.activityItem {
+  min-width: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.entry {
+  min-width: 0;
+  padding: 14px 9px 15px;
+}
+
+.entryHeader {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.entryHeader h3 {
+  min-width: 0;
+  margin: 1px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.outcome {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px 8px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.outcome span {
+  padding: 4px 7px;
+  border-radius: 5px;
+}
+
+.outcomeSuccess span {
+  background: var(--green-100);
+  color: #245d3e;
+}
+
+.outcomeFailure span {
+  background: var(--red-100);
+  color: var(--red-800);
+}
+
+.outcome code {
+  color: var(--red-800);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.entryFields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.3fr) minmax(105px, 0.7fr) minmax(115px, 0.8fr);
+  gap: 12px 18px;
+  margin: 13px 0 0;
+}
+
+.entryFields > div {
+  min-width: 0;
+}
+
+.entryFields dt,
+.scopeGrid dt {
+  margin-bottom: 3px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.entryFields dd,
+.scopeGrid dd {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.entryFields dd svg {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+}
+
+.scopeDetails {
+  margin-top: 11px;
+  color: var(--pine-800);
+  font-size: 11px;
+}
+
+.scopeDetails summary {
+  width: fit-content;
+  cursor: pointer;
+  text-underline-offset: 3px;
+}
+
+.scopeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 11px 0 2px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-soft);
+}
+
+.scopeGrid > div {
+  min-width: 0;
+}
+
+.scopeGrid dd {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.recordingNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0 0 14px;
+  padding: 12px 13px;
+  border: 1px solid #e6d4ae;
+  border-radius: var(--radius-small);
+  background: var(--amber-100);
+  color: var(--amber-800);
+}
+
+.recordingNotice > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.recordingNotice strong {
+  font-size: 11px;
+  font-weight: 670;
+}
+
+.recordingNotice p {
+  margin: 3px 0 0;
+  color: #654a20;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.emptyState {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.emptyState a {
+  margin-top: 14px;
+}
+
+.retention {
+  margin: 14px 0 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 9px;
+  margin-top: 17px;
+}
+
+@media (max-width: 700px) {
+  .toolbar {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .entry {
+    padding: 13px 4px 14px;
+  }
+
+  .entryHeader {
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .outcome {
+    justify-content: flex-start;
+  }
+
+  .entryFields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 11px 13px;
+  }
+
+  .recordedField {
+    grid-column: 1 / -1;
+  }
+
+  .outcome {
+    gap: 4px 6px;
+  }
+
+  .scopeGrid {
+    gap: 9px 12px;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 400px) {
+  .entryHeader {
+    gap: 8px;
+  }
+
+  .outcome {
+    max-width: 100%;
+  }
+
+  .scopeGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -72,24 +72,26 @@ function Unavailable({ message }: { message: string }) {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ auth_error?: string | string[]; oauth?: string | string[]; view?: string | string[] }>;
+  searchParams?: Promise<{ auth_error?: string | string[]; oauth?: string | string[]; view?: string | string[]; activity_before?: string | string[] }>;
 }) {
+  const params = searchParams ? await searchParams : undefined;
+  const cursor = params?.activity_before;
+  const activityBefore = typeof cursor === "string" && /^[1-9][0-9]*$/.test(cursor) && Number.isSafeInteger(Number(cursor))
+    ? Number(cursor) : undefined;
   let state: DashboardState;
   try {
-    state = await loadDashboard();
+    state = await loadDashboard(activityBefore);
   } catch {
     state = { kind: "unavailable", message: "The gateway could not be reached. Check that it is running, then try again." };
   }
 
   switch (state.kind) {
     case "signed-out": {
-      const params = searchParams ? await searchParams : undefined;
       return <SignIn message={authErrorMessage(params?.auth_error) ?? state.message} />;
     }
     case "ready": {
-      const params = searchParams ? await searchParams : undefined;
       if (state.data.kind === "managed") {
-        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills"
+        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills" || params?.view === "activity"
           ? params.view
           : "apps";
         const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed"
@@ -97,7 +99,7 @@ export default async function HomePage({
           : undefined;
         return <ManagedConsole data={state.data} initialView={initialView} {...(authorizationResult ? { authorizationResult } : {})} />;
       }
-      return <Console data={state.data} initialView={params?.view === "connections" || params?.view === "skills" ? params.view : "apps"} />;
+      return <Console data={state.data} initialView={params?.view === "connections" || params?.view === "skills" || params?.view === "activity" ? params.view : "apps"} />;
     }
     case "unavailable":
       return <Unavailable message={state.message} />;

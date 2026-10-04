@@ -92,6 +92,20 @@ test("production web routes authenticate the real gateway and keep keys out of r
     assert.equal(accounts.connections.length,1);
     const execution=await session.capability({capability:"get_energy_consumption"});
     assert.equal(execution.ok,true);
+    const activity = await sdk.activity();
+    assert.equal(activity.entries.length, 1);
+    assert.equal(activity.entries[0]?.outcome.kind, "success");
+    const activityHtml = await fetch(webUrl+"/?view=activity",{headers:{cookie}}).then(r=>r.text());
+    assert.match(activityHtml, /Execution activity/);
+    assert.match(activityHtml, /Succeeded/);
+    assert.ok(activity.entries[0] && activityHtml.includes(activity.entries[0].tool));
+    assert.match(activityHtml, /metered/);
+    assert.ok(!activityHtml.includes(providerKey) && !activityHtml.includes(token));
+    const priorHtml = await fetch(webUrl+"/?view=activity&activity_before="+activity.entries[0]?.sequence,{headers:{cookie}}).then(r=>r.text());
+    assert.match(priorHtml, /No execution records returned/);
+    const invalidCursorHtml = await fetch(webUrl+"/?view=activity&activity_before=not-a-number",{headers:{cookie}}).then(r=>r.text());
+    assert.match(invalidCursorHtml, /Succeeded/);
+
     const connectedHtml=await fetch(webUrl+"/?view=connections",{headers:{cookie}}).then(r=>r.text());
     assert.match(connectedHtml,/Octopus/); assert.match(connectedHtml,/Verified record/);
     assert.ok(!connectedHtml.includes(providerKey)); assert.ok(!connectedHtml.includes(token));

@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import os
+import re
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -15,11 +16,20 @@ from uuid import uuid4
 import httpx
 from jsonschema import Draft202012Validator, FormatChecker
 
+from .activity import (
+    ExecutionEntry,
+    ExecutionFailure,
+    ExecutionLogPage,
+    ExecutionLogScope,
+    ExecutionSuccess,
+)
+from .execution_log_store import ExecutionLogStore
 from .jobs import JobError, JobManager, SimulationOperation
 from .models import (
     Action,
     Asset,
     ConnectedAccount,
+    DataKind,
     EnergyError,
     EnergyResult,
     ExecutionContext,
@@ -55,6 +65,9 @@ class EnergyAgent:
         self._jobs: JobManager | None = None
         self._job_task: asyncio.Task[Any] | None = None
         self._job_root = root / "jobs"
+        self._activity_root = root / "activity"
+        self._activity_store: ExecutionLogStore | None = None
+        self._activity_recording_failed = False
         self.registry = registry
         self.auth_store = auth_store
         self._closed = False
@@ -165,6 +178,60 @@ class EnergyAgent:
             except Exception:
                 pass
 
+    def execution_activity(
+        self, scope: ExecutionLogScope, *, limit: int = 50, before: int | None = None
+    ) -> ExecutionLogPage:
+        if self._closed:
+            raise EnergyError("activity_unavailable", "Execution history is unavailable.")
+        try:
+            if self._activity_store is None:
+                self._activity_store = ExecutionLogStore(self._activity_root)
+            page = self._activity_store.read(scope, limit=limit, before=before)
+        except Exception as exc:
+            raise EnergyError("activity_unavailable", "Execution history is unavailable.") from exc
+        if self._activity_recording_failed:
+            return page.model_copy(update={"recording_status": "unavailable"})
+        return page
+
+    def _record_execution(self, session: Session, event: Json) -> None:
+        # Only this allowlist reaches disk; arguments, results and messages do not.
+        try:
+            safe = self._redact(event, self._session_secrets(session))
+            outcome = (
+                ExecutionSuccess(kind="success", data_kind=DataKind(safe["kind"]))
+                if safe["ok"]
+                else ExecutionFailure(
+                    kind="failure",
+                    error_code=safe["error_code"]
+                    if re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", safe["error_code"])
+                    else "execution_failed",
+                )
+            )
+            entry = ExecutionEntry(
+                execution_id=safe["execution_id"],
+                user_id=session.user_id,
+                workspace_id=session.workspace_id,
+                key_id=session.workspace_key_id,
+                session_id=session.id,
+                site_id=session.site_id,
+                account_id=safe.get("account_id"),
+                access_mode=session.access_mode,
+                recorded_at=datetime.now(UTC),
+                tool=(safe["tool"] if safe["tool"] in self.registry.tools else "unknown_tool"),
+                duration_ms=safe["latency_ms"],
+                outcome=outcome,
+            )
+            if self._activity_store is None:
+                self._activity_store = ExecutionLogStore(self._activity_root)
+            entry = ExecutionEntry.model_validate_json(
+                json.dumps(
+                    self._redact(entry.model_dump(mode="json"), self._session_secrets(session))
+                )
+            )
+            self._activity_store.append(entry)
+        except Exception:
+            self._activity_recording_failed = True
+
     async def close(self) -> None:
         if self._closed:
             return
@@ -175,6 +242,8 @@ class EnergyAgent:
             await asyncio.gather(self._job_task, return_exceptions=True)
         if self._owns_http:
             await self.http.aclose()
+        if self._activity_store:
+            self._activity_store.close()
         if self.auth_store:
             self.auth_store.close()
 
@@ -559,6 +628,7 @@ class EnergyAgent:
                     "Execution hooks changed a fixed capability argument.",
                 )
             account = self._account(session, tool.toolkit, account_id)
+            event["account_id"] = account.id if account else None
             if tool.resource_scope == "account" and account is None:
                 raise EnergyError("connection_required", "An owned connection is required.")
             if account and account.workspace_id is not None:
@@ -791,6 +861,9 @@ class EnergyAgent:
                     "retryable": exc.retryable,
                 },
             }
+        except asyncio.CancelledError:
+            event["error_code"] = "cancelled"
+            raise
         except httpx.TimeoutException:
             event["error_code"] = "timeout"
             return {
@@ -829,7 +902,8 @@ class EnergyAgent:
             if not event["ok"]:
                 event.setdefault("error_code", "execution_failed")
             event["latency_ms"] = round((time.monotonic() - started) * 1000, 3)
-            self._event(event)
+            self._event(self._redact(event, self._session_secrets(session)))
+            self._record_execution(session, event)
 
     async def multi_execute(self, session: Session, calls: list[Json]) -> list[Json]:
         if not 1 <= len(calls) <= 20:

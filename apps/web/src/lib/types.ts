@@ -1,5 +1,6 @@
 import type {
   ConnectionSetupsResponse,
+  ExecutionLogResponse,
   ConnectionsResponse,
   IdentityResponse,
   SkillsResponse,
@@ -13,9 +14,14 @@ import type {
   WorkspaceSitesResponse,
 } from "@energy-agent-tools/sdk";
 
+export type ExecutionActivityState =
+  | { kind: "ready"; page: ExecutionLogResponse }
+  | { kind: "unavailable" };
+
 interface DashboardBase {
   identity: IdentityResponse;
   publicGatewayUrl: string | null;
+  activity: ExecutionActivityState;
 }
 
 export interface OperatorDashboardData extends DashboardBase {

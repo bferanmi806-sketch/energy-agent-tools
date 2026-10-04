@@ -26,9 +26,10 @@ import { PendingConnection } from "./PendingConnection";
 import { AgentKeyPanel } from "./AgentKeyPanel";
 import { WorkspaceAssetForm, WorkspaceSiteForm } from "./WorkspaceForms";
 import { WorkspaceSharing } from "./WorkspaceSharing";
+import { ExecutionActivity } from "./ExecutionActivity";
 import { SkillsCatalogue } from "./SkillsCatalogue";
 
-type ViewId = "apps" | "connections" | "sites" | "sharing" | "agent" | "skills";
+type ViewId = "apps" | "connections" | "sites" | "sharing" | "agent" | "skills" | "activity";
 
 interface NavigationItem {
   id: ViewId;
@@ -43,6 +44,7 @@ const NAVIGATION: NavigationItem[] = [
   { id: "sharing", label: "Sharing", icon: Users },
   { id: "agent", label: "Connect my agent", icon: ArrowRight },
   { id: "skills", label: "Skills", icon: Sparkles },
+  { id: "activity", label: "Activity log", icon: Activity },
 ];
 
 const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
@@ -62,6 +64,7 @@ const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
     title: "Connect your agent",
     description: "Create an agent key with access only to the sites you select.",
   },
+  activity: { title: "Activity log", description: "Review recent tool executions in your current scope." },
   skills: {
     title: "Skills",
     description: "Explore the energy questions your agent can ask and the evidence each workflow needs.",
@@ -268,6 +271,7 @@ export function ManagedConsole({
           {view === "connections" ? <ConnectionsView data={data} onBrowseApps={() => navigate("apps")} /> : null}
           {view === "sites" ? <SitesView data={data} /> : null}
           {view === "sharing" ? <WorkspaceSharing members={data.members} sites={data.sites} connections={data.connections} gatewayUrl={data.publicGatewayUrl} /> : null}
+          {view === "activity" ? <ExecutionActivity activity={data.activity} /> : null}
           {view === "skills" ? <SkillsCatalogue skills={data.skills} /> : null}
           {view === "agent" ? <AgentKeyPanel keys={data.keys} sites={data.sites} gatewayUrl={data.publicGatewayUrl} /> : null}
         </main>

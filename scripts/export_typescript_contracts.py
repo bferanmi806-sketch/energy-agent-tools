@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from energy_agent_tools.activity import ExecutionLogPage, ExecutionLogQuery
 from energy_agent_tools.capabilities import CapabilityRequest
 from energy_agent_tools.connection_contracts import (
     ConnectionSetupsResponse,
@@ -140,6 +141,8 @@ def schemas() -> dict[str, dict[str, Any]]:
     )
     return {
         "IdentityResponse": expand_model(IdentityResponse),
+        "ExecutionLogResponse": expand_model(ExecutionLogPage),
+        "ExecutionLogQuery": expand_model(ExecutionLogQuery),
         "WorkspaceResponse": obj({"workspace": expand_model(WorkspaceDetails)}, ["workspace"]),
         "WorkspaceSiteRequest": expand_model(WorkspaceSiteRequest),
         "WorkspaceSiteResponse": obj({"site": expand_model(Site)}, ["site"]),
