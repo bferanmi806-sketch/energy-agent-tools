@@ -67,7 +67,7 @@ from .control_contracts import (
     WorkspaceSiteRequest,
 )
 from .control_store import ControlStore
-from .job_contracts import JobActionQuery, JobListQuery, JobReadScope
+from .job_contracts import JobActionQuery, JobCursorToken, JobListQuery, JobReadScope, JobState
 from .managed_oauth import HomeAssistantOAuthConfiguration, ManagedHomeAssistantOAuth
 from .models import ConnectedAccount, EnergyError, Json, Session, Site
 from .onboarding import ConnectionHealth, probe_provider
@@ -170,6 +170,9 @@ class _JobRequest(_RequestModel):
     job_id: StrictStr | None = None
     simulation: StrictStr | None = None
     arguments: dict[str, Any] = Field(default_factory=dict)
+    limit: StrictInt = Field(default=50, ge=1, le=100)
+    before: JobCursorToken | None = None
+    status: JobState | None = None
 
 
 class _SearchRequest(_RequestModel):
@@ -1298,7 +1301,6 @@ class AuthenticatedHost:
             session = self.agent.session(
                 principal.user_id,
                 metadata.site_id,
-                id=metadata.session_id,
                 access_mode="hosted",
                 **self._runtime_authorization(principal),
             )

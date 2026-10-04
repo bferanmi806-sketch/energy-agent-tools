@@ -62,3 +62,4 @@ class JobReadScope(_JobModel):
     workspace_id: ScopeIdentifier | None
     access_mode: Literal["local", "hosted"]
     site_ids: set[ScopeIdentifier | None]
+    operations: set[SimulationOperation] | None = None

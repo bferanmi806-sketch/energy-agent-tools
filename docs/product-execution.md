@@ -523,3 +523,19 @@ and sustained operations remain open. See the
 [qualification record](evidence/managed-home-assistant-oct03.json),
 [desktop view](evidence/managed-home-assistant-desktop.jpg) and
 [mobile view](evidence/managed-home-assistant-mobile.jpg).
+
+## MCP job recovery follow-up, October 4
+
+Fresh MCP and Python sessions now discover numerical jobs from earlier sessions,
+page safe metadata and recover results or controls under current authorization.
+Toolkit filtering happens before pagination. Recovery preserves the caller's
+session identity and checks live workspace access. Corrupt metadata produces a
+fixed error without exposing its contents. The [qualification record](evidence/mcp-job-history-oct04.json)
+preserves four real FastMCP dispatch checks, 25 gateway integration checks,
+17 SDK checks and 11 web checks. The worker owned the acceptance test file;
+primary review owned contracts, authorization and integration.
+
+Pending work after restart still needs an explicit authorized execution journey.
+Interrupted calculations are not rerun by recovery. Physical-site qualification,
+broad actual-agent evaluation, outside contribution, sustained operations and
+a coherent platform release remain open.

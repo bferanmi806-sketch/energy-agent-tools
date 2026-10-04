@@ -107,5 +107,41 @@
     "job-product-desktop-oct04.png",
     "job-product-mobile-oct04.png"
   ],
-  "published_ci": "not yet run"
+  "published_ci": {
+    "commit": "e82ec3984d59f46b09072cac59ac1d45b6dea0cc",
+    "run_id": 37218539422,
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37218539422",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "upgrade",
+        "conclusion": "success"
+      },
+      {
+        "name": "home-assistant",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.12)",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.11)",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.13)",
+        "conclusion": "success"
+      },
+      {
+        "name": "container",
+        "conclusion": "success"
+      }
+    ],
+    "python_summaries": [
+      "828 passed in 284.46s (0:04:44)",
+      "828 passed in 274.44s (0:04:34)",
+      "828 passed in 269.05s (0:04:29)"
+    ]
+  }
 }

@@ -24,7 +24,7 @@ from .activity import (
     ExecutionSuccess,
 )
 from .execution_log_store import ExecutionLogStore
-from .job_contracts import JobListQuery, JobMetadata, JobMetadataPage, JobReadScope
+from .job_contracts import JobListQuery, JobMetadata, JobMetadataPage, JobReadScope, JobState
 from .jobs import JobError, JobManager, SimulationOperation
 from .models import (
     Action,
@@ -42,6 +42,15 @@ from .models import (
 from .registry import Registry
 from .resilience import ReadTransport
 from .workbench import Workbench
+
+SIMULATION_TOOLS = {
+    "heat_loss": "engineering.calculate_heat_loss",
+    "power_flow": "engineering.run_power_flow",
+    "battery": "engineering.schedule_battery_charging",
+    "solar": "engineering.estimate_solar_generation",
+    "network_power_flow": "pypsa.power_flow",
+    "network_dispatch": "pypsa.optimize_dispatch",
+}
 
 BeforeHook = Callable[[Tool, Json, Session], Json]
 AfterHook = Callable[[Tool, EnergyResult, Session], EnergyResult]
@@ -194,6 +203,26 @@ class EnergyAgent:
             return page.model_copy(update={"recording_status": "unavailable"})
         return page
 
+    def job_read_scope(self, session: Session) -> JobReadScope:
+        self._scope(session)
+        if Action.READ not in session.allowed_actions:
+            raise EnergyError("policy_denied", "Reading job state requires read permission.")
+        operations = None
+        if session.toolkits is not None:
+            operations = {
+                SimulationOperation(operation)
+                for operation, name in SIMULATION_TOOLS.items()
+                if (tool := self.registry.tools.get(name)) is not None
+                and tool.toolkit in session.toolkits
+            }
+        return JobReadScope(
+            user_id=session.user_id,
+            workspace_id=session.workspace_id,
+            access_mode=session.access_mode,
+            site_ids={session.site_id},
+            operations=operations,
+        )
+
     def job_history(
         self, scope: JobReadScope, query: JobListQuery, *, adopt_managed_legacy: bool = False
     ) -> JobMetadataPage:
@@ -297,16 +326,12 @@ class EnergyAgent:
         job_id: str | None = None,
         simulation: str | None = None,
         arguments: Json | None = None,
+        limit: int = 50,
+        before: str | None = None,
+        status: JobState | None = None,
     ) -> Json:
         """Use bounded numerical jobs under the current gateway scope and policy."""
-        tools = {
-            "heat_loss": "engineering.calculate_heat_loss",
-            "power_flow": "engineering.run_power_flow",
-            "battery": "engineering.schedule_battery_charging",
-            "solar": "engineering.estimate_solar_generation",
-            "network_power_flow": "pypsa.power_flow",
-            "network_dispatch": "pypsa.optimize_dispatch",
-        }
+        tools = SIMULATION_TOOLS
         try:
             self._scope(session)
             if self._closed:
@@ -323,89 +348,92 @@ class EnergyAgent:
                 raise EnergyError("invalid_operation", "Unknown job operation.")
             if operation != "submit" and Action.READ not in session.allowed_actions:
                 raise EnergyError("policy_denied", "Reading job state requires read permission.")
-            if operation == "submit":
-                if simulation not in tools:
-                    raise EnergyError(
-                        "invalid_operation", "Select an available numerical simulation."
-                    )
-                name = tools[simulation]
-                self.get_tool(session, name)
-                tool = self.registry.get(name)
-                if not tool.actions <= session.allowed_actions:
-                    raise EnergyError(
-                        "policy_denied", "Simulation is outside the session action policy."
-                    )
-                if self.before or self.after:
-                    raise EnergyError(
-                        "job_hooks_unsupported", "Jobs cannot bypass configured execution hooks."
-                    )
-                self._validate(tool, arguments or {})
-                if any(find_spec(dep) is None for dep in tool.dependencies):
-                    raise EnergyError(
-                        "dependency_missing", "The simulation dependency is unavailable."
-                    )
-            if self._jobs is None:
-                self._jobs = JobManager(self._job_root)
-            manager = self._jobs
-            if (
-                session.workspace_id is not None
-                and session.site_id is not None
-                and session.access_mode == "hosted"
-                and self.workspace_authorizer is not None
-            ):
-                manager.adopt_legacy_hosted_workspace(session.site_id, session.workspace_id)
-            if operation == "submit":
-                record = manager.submit(
-                    session.user_id,
-                    session.id,
-                    SimulationOperation(simulation or ""),
-                    arguments or {},
-                    site_id=session.site_id,
-                    access_mode=session.access_mode,
-                    workspace_id=session.workspace_id,
-                )
-                if self._job_task is None or self._job_task.done():
-                    self._job_task = asyncio.create_task(manager.run_pending())
-                result: Json = {"job": record.as_dict()}
-            elif operation == "list":
-                result = {
-                    "jobs": [
-                        item.as_dict()
-                        for item in manager.list(session.user_id, session.id)
-                        if item.site_id == session.site_id
-                        and item.workspace_id == session.workspace_id
-                        and item.access_mode == session.access_mode
-                        and (
-                            session.toolkits is None
-                            or self.registry.get(tools[item.operation.value]).toolkit
-                            in session.toolkits
-                        )
-                    ]
-                }
+            if operation != "list" and (limit != 50 or before is not None or status is not None):
+                raise EnergyError("invalid_arguments", "History filters apply only to job listing.")
+            if operation == "list":
+                from pydantic import ValidationError
+
+                try:
+                    query = JobListQuery(limit=limit, before=before, status=status)
+                except ValidationError as exc:
+                    raise EnergyError("invalid_arguments", "Job history query is invalid.") from exc
+                result: Json = self.job_history(
+                    self.job_read_scope(session), query, adopt_managed_legacy=True
+                ).model_dump(mode="json")
             else:
-                if not job_id:
-                    raise EnergyError("job_required", "Provide a job identifier.")
-                scope = manager.resume_scope(
-                    job_id, session.user_id, access_mode=session.access_mode
-                )
-                if scope["site_id"] != session.site_id:
-                    raise EnergyError("site_forbidden", "Job belongs to a different site.")
-                record = manager.status(job_id, session.user_id, scope["session_id"] or "")
-                if record.workspace_id != session.workspace_id:
-                    raise EnergyError(
-                        "workspace_forbidden", "Job belongs to a different workspace."
+                if operation == "submit":
+                    if simulation not in tools:
+                        raise EnergyError(
+                            "invalid_operation", "Select an available numerical simulation."
+                        )
+                    name = tools[simulation]
+                    self.get_tool(session, name)
+                    tool = self.registry.get(name)
+                    if not tool.actions <= session.allowed_actions:
+                        raise EnergyError(
+                            "policy_denied", "Simulation is outside the session action policy."
+                        )
+                    if self.before or self.after:
+                        raise EnergyError(
+                            "job_hooks_unsupported",
+                            "Jobs cannot bypass configured execution hooks.",
+                        )
+                    self._validate(tool, arguments or {})
+                    if any(find_spec(dep) is None for dep in tool.dependencies):
+                        raise EnergyError(
+                            "dependency_missing", "The simulation dependency is unavailable."
+                        )
+                if self._jobs is None:
+                    self._jobs = JobManager(self._job_root)
+                manager = self._jobs
+                if (
+                    session.workspace_id is not None
+                    and session.site_id is not None
+                    and session.access_mode == "hosted"
+                    and self.workspace_authorizer is not None
+                ):
+                    manager.adopt_legacy_hosted_workspace(session.site_id, session.workspace_id)
+                if operation == "submit":
+                    record = manager.submit(
+                        session.user_id,
+                        session.id,
+                        SimulationOperation(simulation or ""),
+                        arguments or {},
+                        site_id=session.site_id,
+                        access_mode=session.access_mode,
+                        workspace_id=session.workspace_id,
                     )
-                self.get_tool(session, tools[record.operation.value])
-                if operation == "resume":
-                    result = {"scope": scope}
-                elif operation == "result":
-                    result = manager.result(job_id, session.user_id, session.id)
-                elif operation == "delete":
-                    manager.delete(job_id, session.user_id, session.id)
-                    result = {"deleted": True}
+                    if self._job_task is None or self._job_task.done():
+                        self._job_task = asyncio.create_task(manager.run_pending())
+                    result = {"job": record.as_dict()}
                 else:
-                    method = manager.cancel if operation == "cancel" else manager.status
-                    result = {"job": method(job_id, session.user_id, session.id).as_dict()}
+                    if not job_id:
+                        raise EnergyError("job_required", "Provide a job identifier.")
+                    scope = manager.resume_scope(
+                        job_id, session.user_id, access_mode=session.access_mode
+                    )
+                    if scope["site_id"] != session.site_id:
+                        raise EnergyError("site_forbidden", "Job belongs to a different site.")
+                    record = manager.status(job_id, session.user_id, scope["session_id"] or "")
+                    if record.workspace_id != session.workspace_id:
+                        raise EnergyError(
+                            "workspace_forbidden", "Job belongs to a different workspace."
+                        )
+                    self.get_tool(session, tools[record.operation.value])
+                    if operation == "resume":
+                        result = {"scope": scope}
+                    elif operation == "result":
+                        result = manager.result(job_id, session.user_id, scope["session_id"] or "")
+                    elif operation == "delete":
+                        manager.delete(job_id, session.user_id, scope["session_id"] or "")
+                        result = {"deleted": True}
+                    else:
+                        method = manager.cancel if operation == "cancel" else manager.status
+                        result = {
+                            "job": method(
+                                job_id, session.user_id, scope["session_id"] or ""
+                            ).as_dict()
+                        }
             self._event(
                 {
                     "event": "job",

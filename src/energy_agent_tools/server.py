@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
+from .job_contracts import JobCursorToken, JobState
 from .models import DataKind, EnergyError, Json, Session
 from .providers import format_tools
 from .runtime import EnergyAgent
@@ -235,6 +236,9 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         ]
         | None = None,
         arguments: Json | None = None,
+        limit: Annotated[int, Field(strict=True, ge=1, le=100)] = 50,
+        before: JobCursorToken | None = None,
+        status: JobState | None = None,
     ) -> Json:
         """Submit bounded local numerical jobs and inspect, cancel or delete scoped results.
 
@@ -244,11 +248,20 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         pypsa.power_flow; network_dispatch uses pypsa.optimize_dispatch. Submit the arguments
         from that tool's schema. For provider reads and artifact
         analysis, use ENERGY_EXECUTE_CAPABILITY or ENERGY_MULTI_EXECUTE_TOOL.
-        Jobs preserve the user, site and session; resume returns owner-verified scope
-        for restoring a session after a host restart. No executable or path inputs.
+        List discovers safe history across originating sessions under the current actor,
+        workspace, site, mode and toolkit grants. Use limit, before and status only for list.
+        Result and controls recover the original scope after checking current access.
+        Resume returns owner-verified scope without rerunning work. No executable or path inputs.
         """
         return await agent.job(
-            session, operation, job_id=job_id, simulation=simulation, arguments=arguments
+            session,
+            operation,
+            job_id=job_id,
+            simulation=simulation,
+            arguments=arguments,
+            limit=limit,
+            before=before,
+            status=status,
         )
 
     return server

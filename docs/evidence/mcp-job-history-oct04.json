@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-04",
+  "feature": "MCP and native job history across originating sessions",
+  "base_commit": "e82ec3984d59f46b09072cac59ac1d45b6dea0cc",
+  "behavior": [
+    "Fresh MCP sessions discover safe job metadata and recover results or controls under current actor, workspace, site, mode and toolkit grants.",
+    "Toolkit filtering precedes cursor pagination.",
+    "Recovery preserves the current session identifier and original persisted job ownership.",
+    "Invalid list filters reject controls without changing results.",
+    "History metadata corruption returns a fixed error without raw values or paths.",
+    "Live workspace revocation denies captured MCP sessions."
+  ],
+  "acceptance": {
+    "mcp_dispatch": {
+      "passed": 4,
+      "seconds": 29.13,
+      "log": "mcp-followup-worker-reviewed.log"
+    },
+    "gateway_integration": {
+      "passed": 25,
+      "seconds": 77.91,
+      "log": "mcp-followup-integration-final.log"
+    },
+    "typescript_sdk": {
+      "passed": 17,
+      "log": "mcp-followup-sdk.log"
+    },
+    "web": {
+      "passed": 11,
+      "log": "mcp-followup-web.log"
+    },
+    "static": [
+      "Ruff check and format",
+      "mypy: 61 source files",
+      "generated TypeScript contracts match",
+      "git diff --check"
+    ]
+  },
+  "worker": {
+    "model": "gpt-6-luna",
+    "reasoning": "max",
+    "owned_paths": [
+      "tests/test_mcp_job_history.py"
+    ],
+    "assignment": "Real FastMCP dispatch, cross-session boundaries, toolkit pagination, revocation, corruption and filter guard acceptance"
+  },
+  "review": [
+    "Primary owned runtime authorization, shared request contracts, storage filters and SDK integration.",
+    "Primary checked worker assertions, added session-identity preservation, and reran final acceptance.",
+    "History uses the existing fixed-error boundary including store initialization."
+  ],
+  "limits": [
+    "No physical energy system was used.",
+    "Pending work remains queued after a restart; reading history does not start it.",
+    "Recovery does not reexecute interrupted work.",
+    "This record does not qualify broad actual-agent evaluation, external contributions, sustained operations or a complete platform release."
+  ]
+}

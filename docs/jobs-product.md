@@ -55,8 +55,13 @@ page = session.job_history(status="completed", limit=50)
 result = await session.job_action(job_id, "result")
 ```
 
-The existing session-bound `job()` API continues to submit numerical work and
-supports its original session-specific commands. Job recovery associates a
+`ENERGY_SIMULATION_JOB` and the bound `job()` API submit numerical work and
+recover earlier jobs through the current actor, workspace, site, mode and
+engine policy. The `list` operation accepts `limit`, `before` and `status`,
+returns safe metadata plus `next_before`, and filters forbidden engine toolkits
+before paging. Fresh MCP sessions can read completed results and control saved
+work without changing their session identifier. History filters apply only
+to `list`; passing them to another operation is rejected. Job recovery associates a
 caller with saved work; it does not rerun an interrupted calculation. A
 manager restart marks previously running work interrupted. Pending jobs remain
 queued for the next bounded worker run; opening history does not start work.

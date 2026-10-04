@@ -909,6 +909,10 @@ class JobManager:
             or row["workspace_id"] != scope.workspace_id
             or row["access_mode"] != scope.access_mode
             or row["site_id"] not in scope.site_ids
+            or (
+                scope.operations is not None
+                and row["operation"] not in {item.value for item in scope.operations}
+            )
         ):
             raise JobAccessDenied()
         try:
@@ -926,6 +930,13 @@ class JobManager:
         self._ensure_open()
         clauses = ["user_id = ?", "workspace_id IS ?", "access_mode = ?"]
         parameters: list[str | int | None] = [scope.user_id, scope.workspace_id, scope.access_mode]
+        if scope.operations is not None:
+            operations = sorted(item.value for item in scope.operations)
+            if operations:
+                clauses.append("operation IN (" + ",".join("?" for _ in operations) + ")")
+                parameters.extend(operations)
+            else:
+                clauses.append("0")
         if query.status is not None:
             clauses.append("status = ?")
             parameters.append(query.status)

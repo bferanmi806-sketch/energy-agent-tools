@@ -9,7 +9,7 @@ from .activity import ExecutionLogQuery, ExecutionLogScope
 from .app import build_agent, configure_mcp
 from .capabilities import CapabilityRequest
 from .job_contracts import JobActionQuery, JobListQuery, JobReadScope, JobState
-from .models import Action, EnergyError, Json, Session
+from .models import Json, Session
 from .runtime import EnergyAgent
 from .server import create_server, provider_tools
 
@@ -74,15 +74,7 @@ class BoundSession:
         ).model_dump(mode="json")
 
     def _job_read_scope(self) -> JobReadScope:
-        self.agent._scope(self.context)
-        if Action.READ not in self.context.allowed_actions:
-            raise EnergyError("policy_denied", "Reading job state requires read permission.")
-        return JobReadScope(
-            user_id=self.context.user_id,
-            workspace_id=self.context.workspace_id,
-            access_mode=self.context.access_mode,
-            site_ids={self.context.site_id},
-        )
+        return self.agent.job_read_scope(self.context)
 
     def job_history(
         self, *, limit: int = 50, before: str | None = None, status: JobState | None = None
@@ -95,9 +87,8 @@ class BoundSession:
         self, job_id: str, operation: Literal["status", "result", "cancel", "delete"]
     ) -> Json:
         query = JobActionQuery(operation=operation)
-        metadata = self.agent.job_metadata(job_id, self._job_read_scope())
-        recovered = self.context.model_copy(update={"id": metadata.session_id})
-        return await self.agent.job(recovered, query.operation, job_id=job_id)
+        self.agent.job_metadata(job_id, self._job_read_scope())
+        return await self.agent.job(self.context, query.operation, job_id=job_id)
 
     async def job(self, operation: str, **kwargs: Any) -> Json:
         return await self.agent.job(self.context, operation, **kwargs)
