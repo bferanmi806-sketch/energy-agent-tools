@@ -50,7 +50,7 @@ from energy_agent_tools.workspace_access import (
 
 
 def expand_model(model: Any) -> dict[str, Any]:
-    schema = model.model_json_schema()
+    schema = model.model_json_schema(mode="serialization" if model is Tool else "validation")
     definitions = schema.get("$defs", {})
 
     def expand(value: Any) -> Any:

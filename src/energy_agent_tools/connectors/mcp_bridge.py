@@ -21,7 +21,7 @@ import os
 import re
 from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -43,9 +43,11 @@ from ..models import (
     Json,
     Session,
     Tool,
+    ToolAccountScope,
     Toolkit,
 )
 from ..registry import Registry
+from .mcp_network import ApprovedMCPTarget, approved_mcp_client
 
 __all__ = [
     "MCPImportError",
@@ -103,6 +105,7 @@ class _Transport:
     headers: Mapping[str, str] | None = None
     timeout: float = 30.0
     sse_read_timeout: float = 300.0
+    approved_target: ApprovedMCPTarget | None = None
 
 
 @dataclass(frozen=True)
@@ -122,6 +125,16 @@ class _ImportedToolMetadata:
     quality: str
     credential_env: str | None
     reviewed: bool
+
+
+@dataclass(frozen=True)
+class _PreparedMCPTool:
+    raw_name: str
+    namespaced_name: str
+    description: str
+    input_schema: Json
+    schema_hash: str
+    metadata: _ImportedToolMetadata
 
 
 def _validated_version(value: str | None) -> str:
@@ -370,6 +383,202 @@ def _reviewed_metadata(
     )
 
 
+def _validated_selected_tools(
+    selected_tools: frozenset[str] | None, *, required: bool
+) -> frozenset[str] | None:
+    if selected_tools is None:
+        if required:
+            raise MCPImportError(
+                "mcp_selection_invalid", "Account-scoped MCP imports require selected tools."
+            )
+        return None
+    if (
+        type(selected_tools) is not frozenset
+        or not 1 <= len(selected_tools) <= 100
+        or any(
+            type(name) is not str or not name or name != name.strip() or len(name) > 256
+            for name in selected_tools
+        )
+    ):
+        raise MCPImportError("mcp_selection_invalid", "Selected MCP tools are invalid.")
+    return selected_tools
+
+
+def _validated_account_scope(value: ToolAccountScope | None) -> ToolAccountScope | None:
+    if value is None or isinstance(value, ToolAccountScope):
+        return value
+    try:
+        return ToolAccountScope.model_validate(value)
+    except (TypeError, ValueError) as exc:
+        raise MCPImportError("mcp_account_scope_invalid", "MCP account scope is invalid.") from exc
+
+
+def _validate_account_auth(auth: AuthConfig) -> None:
+    forbidden_headers = {
+        "host",
+        "connection",
+        "content-length",
+        "transfer-encoding",
+        "proxy-authorization",
+        "proxy-connection",
+        "upgrade",
+        "keep-alive",
+        "te",
+        "trailer",
+        "accept-encoding",
+    }
+    if (
+        auth.credential_env is not None
+        or not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}", auth.header)
+        or auth.header.lower() in forbidden_headers
+    ):
+        raise MCPImportError(
+            "mcp_account_profile_invalid", "MCP connection auth must use a safe credential header."
+        )
+
+
+def _account_import_transport(
+    *,
+    command: str | Sequence[str] | None,
+    args: Sequence[str] | None,
+    stdio_command: str | Sequence[str] | None,
+    stdio_args: Sequence[str] | None,
+    url: str | None,
+    remote_url: str | None,
+    cwd: str | Path | None,
+    env: Mapping[str, str] | None,
+    headers: Mapping[str, str] | None,
+    credential_env: str | None,
+    discovery_auth: AuthConfig | Json | None,
+    discovery_credential: str | None,
+    expected_schema_digest: str | None,
+    auth_required: bool | None,
+    approved_target: ApprovedMCPTarget | None,
+) -> None:
+    if discovery_credential is not None and type(discovery_credential) is not str:
+        raise MCPImportError("credential_invalid", "MCP discovery credential is invalid.")
+    selected_command = stdio_command if stdio_command is not None else command
+    if (
+        selected_command is not None
+        or args is not None
+        or stdio_args is not None
+        or cwd is not None
+        or env is not None
+        or headers is not None
+        or credential_env is not None
+        or (url is None) == (remote_url is None)
+        or expected_schema_digest is None
+        or auth_required is False
+        or not isinstance(approved_target, ApprovedMCPTarget)
+    ):
+        raise MCPImportError(
+            "mcp_account_profile_invalid",
+            "Account-scoped MCP imports require reviewed remote HTTP configuration.",
+        )
+    if discovery_auth is not None:
+        try:
+            auth = (
+                discovery_auth
+                if isinstance(discovery_auth, AuthConfig)
+                else AuthConfig.model_validate(discovery_auth)
+            )
+        except (TypeError, ValueError) as exc:
+            raise MCPImportError(
+                "mcp_account_profile_invalid", "Account-scoped MCP discovery auth is invalid."
+            ) from exc
+        _validate_account_auth(auth)
+    endpoint = remote_url if remote_url is not None else url
+    if discovery_credential and endpoint and discovery_credential in endpoint:
+        raise MCPImportError(
+            "mcp_account_profile_invalid",
+            "MCP discovery credentials cannot be part of the retained endpoint.",
+        )
+
+
+def _discovery_context(
+    toolkit_id: str,
+    discovery_auth: AuthConfig | Json | None,
+    discovery_credential: str | None,
+) -> ExecutionContext | None:
+    if discovery_credential is not None and type(discovery_credential) is not str:
+        raise MCPImportError("credential_invalid", "MCP discovery credential is invalid.")
+    if discovery_auth is None and discovery_credential is None:
+        return None
+    if discovery_auth is None:
+        auth = AuthConfig(scheme="bearer")
+    else:
+        try:
+            auth = (
+                discovery_auth
+                if isinstance(discovery_auth, AuthConfig)
+                else AuthConfig.model_validate(discovery_auth)
+            )
+        except (TypeError, ValueError) as exc:
+            raise MCPImportError("credential_invalid", "MCP discovery auth is invalid.") from exc
+    secret = (
+        discovery_credential
+        if discovery_credential is not None
+        else os.environ.get(auth.credential_env or "")
+    )
+    if auth.scheme not in {"none", "local"} and not secret:
+        raise MCPImportError("credential_missing", "MCP discovery credential is unavailable.")
+    return ExecutionContext(
+        Session(user_id="operator-discovery"),
+        ConnectedAccount(
+            id="discovery", user_id="operator-discovery", toolkit=toolkit_id, auth=auth
+        ),
+        secret,
+        cast(httpx.AsyncClient, None),
+        None,
+    )
+
+
+def _sanitize_metadata(
+    metadata: _ImportedToolMetadata, secrets: Sequence[str]
+) -> _ImportedToolMetadata:
+    return replace(
+        metadata,
+        capabilities=tuple(str(_redact(value, secrets)) for value in metadata.capabilities),
+        unit=str(_redact(metadata.unit, secrets)),
+        source=str(_redact(metadata.source, secrets)),
+        timezone=str(_redact(metadata.timezone, secrets)),
+        resolution=(
+            None if metadata.resolution is None else str(_redact(metadata.resolution, secrets))
+        ),
+        assumptions=tuple(str(_redact(value, secrets)) for value in metadata.assumptions),
+        quality=str(_redact(metadata.quality, secrets)),
+        credential_env=(
+            None
+            if metadata.credential_env is None
+            else str(_redact(metadata.credential_env, secrets))
+        ),
+    )
+
+
+def _validate_account_context(
+    scope: ToolAccountScope, toolkit_id: str, context: ExecutionContext
+) -> None:
+    account = context.account
+    session = context.session
+    if (
+        account is None
+        or session.workspace_id != scope.workspace_id
+        or session.resource_user_id != scope.user_id
+        or account.id != scope.account_id
+        or account.user_id != scope.user_id
+        or account.workspace_id != scope.workspace_id
+        or account.toolkit != toolkit_id
+        or account.state != "active"
+        or account.enabled is not True
+        or (session.site_id is not None and account.site_id != session.site_id)
+        or (context.site_id is not None and account.site_id != context.site_id)
+        or (session.connection_grants is not None and account.id not in session.connection_grants)
+        or (session.toolkits is not None and toolkit_id not in session.toolkits)
+    ):
+        raise EnergyError("account_forbidden", "MCP tool is outside this account scope.")
+    _validate_account_auth(account.auth)
+
+
 def inspect_mcp_manifest(
     discovered: Sequence[Any] | Mapping[str, Any],
     *,
@@ -459,7 +668,10 @@ def _redact(value: Any, secrets: Sequence[str] = ()) -> Any:
             result = _safe_url(result)
         return result
     if isinstance(value, Mapping):
-        return {str(key): _redact(item, secret_values) for key, item in value.items()}
+        return {
+            str(_redact(str(key), secret_values)): _redact(item, secret_values)
+            for key, item in value.items()
+        }
     if isinstance(value, (list, tuple)):
         return [_redact(item, secret_values) for item in value]
     if isinstance(value, bytes):
@@ -522,6 +734,19 @@ def _transport_secrets(transport: _Transport, context: ExecutionContext | None) 
     return tuple(value for value in values if value)
 
 
+def _has_secret_key(value: Any, secrets: Sequence[str]) -> bool:
+    secret_values = tuple(secret for secret in secrets if secret)
+    if isinstance(value, Mapping):
+        return any(
+            any(secret in str(key) for secret in secret_values)
+            or _has_secret_key(item, secret_values)
+            for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return any(_has_secret_key(item, secret_values) for item in value)
+    return False
+
+
 def _stdio_environment(
     transport: _Transport, context: ExecutionContext | None, credential_env: str | None
 ) -> dict[str, str] | None:
@@ -562,11 +787,17 @@ async def _client_session(
     assert transport.url is not None
     headers = dict(transport.headers or {})
     headers.update(_credential_headers(context))
-    async with httpx.AsyncClient(
-        headers=headers or None,
-        timeout=httpx.Timeout(transport.timeout, read=transport.sse_read_timeout),
-        follow_redirects=False,
-    ) as http_client:
+    if transport.approved_target is not None:
+        client = approved_mcp_client(transport.approved_target, timeout=transport.timeout)
+        client.headers.update(headers)
+        client.timeout = httpx.Timeout(transport.timeout, read=transport.sse_read_timeout)
+    else:
+        client = httpx.AsyncClient(
+            headers=headers or None,
+            timeout=httpx.Timeout(transport.timeout, read=transport.sse_read_timeout),
+            follow_redirects=False,
+        )
+    async with client as http_client:
         async with streamable_http_client(transport.url, http_client=http_client) as (
             read_stream,
             write_stream,
@@ -625,9 +856,18 @@ def _transport_from_arguments(
     headers: Mapping[str, str] | None,
     timeout: float,
     sse_read_timeout: float,
+    approved_target: ApprovedMCPTarget | None = None,
 ) -> _Transport:
     selected_command = stdio_command if stdio_command is not None else command
     selected_url = remote_url if remote_url is not None else url
+    if approved_target is not None and (
+        not isinstance(approved_target, ApprovedMCPTarget)
+        or selected_command is not None
+        or selected_url != approved_target.url
+    ):
+        raise MCPImportError(
+            "mcp_target_invalid", "MCP transport differs from its approved target."
+        )
     if selected_command is not None and selected_url is not None:
         raise ValueError("Configure either an MCP stdio command or a remote URL, not both")
     if selected_command is None and selected_url is None:
@@ -643,6 +883,7 @@ def _transport_from_arguments(
             headers=headers,
             timeout=timeout,
             sse_read_timeout=sse_read_timeout,
+            approved_target=approved_target,
         )
 
     assert selected_command is not None
@@ -688,6 +929,8 @@ async def inspect_mcp(
     metadata: Mapping[str, Mapping[str, Any]] | None = None,
     credential_env: str | None = None,
     discovery_auth: AuthConfig | Json | None = None,
+    discovery_credential: str | None = None,
+    approved_target: ApprovedMCPTarget | None = None,
     version: str | None = None,
 ) -> Json:
     """Discover an MCP server and return a credential-safe review manifest.
@@ -713,28 +956,9 @@ async def inspect_mcp(
         headers=headers,
         timeout=timeout,
         sse_read_timeout=sse_read_timeout,
+        approved_target=approved_target,
     )
-    discovery_context = None
-    if discovery_auth is not None:
-        auth = (
-            discovery_auth
-            if isinstance(discovery_auth, AuthConfig)
-            else AuthConfig.model_validate(discovery_auth)
-        )
-        secret = os.environ.get(auth.credential_env or "")
-        if auth.scheme not in {"none", "local"} and not secret:
-            raise MCPImportError(
-                "credential_missing", "MCP discovery credential is absent from the environment."
-            )
-        discovery_context = ExecutionContext(
-            Session(user_id="operator-discovery"),
-            ConnectedAccount(
-                id="discovery", user_id="operator-discovery", toolkit=toolkit_id, auth=auth
-            ),
-            secret,
-            cast(httpx.AsyncClient, None),
-            None,
-        )
+    discovery_context = _discovery_context(toolkit_id, discovery_auth, discovery_credential)
     try:
         with anyio.fail_after(transport.timeout):
             discovered = await _discover_tools(transport, discovery_context, credential_env)
@@ -787,6 +1011,10 @@ async def import_mcp(
     metadata: Mapping[str, Mapping[str, Any]] | None = None,
     credential_env: str | None = None,
     discovery_auth: AuthConfig | Json | None = None,
+    discovery_credential: str | None = None,
+    approved_target: ApprovedMCPTarget | None = None,
+    account_scope: ToolAccountScope | None = None,
+    selected_tools: frozenset[str] | None = None,
     status: Literal[
         "stable", "experimental", "requires credentials", "unavailable"
     ] = "experimental",
@@ -805,11 +1033,12 @@ async def import_mcp(
     ``True`` and ``kind``, ``unit`` and ``action``/``actions`` are all present.
     Other tools default to ``configuration-write`` and ``estimated``.
 
-    Every imported MCP tool is classified as operator-scoped. This includes
-    imports with no configured credentials: the server may still expose
-    operator-selected data or capabilities. Hosted sessions therefore cannot
-    call imported tools until a separate reviewed contract supports public or
-    tenant-owned MCP resources. Local sessions retain the existing behavior.
+    Default imports remain operator-scoped, including servers with no
+    credential declaration. A trusted integration may supply account_scope,
+    selected_tools, an approved_target and the reviewed schema digest to bind
+    explicitly reviewed HTTP tools to one managed connection. Discovery and
+    execution then use the approved, pinned transport and per-call credentials.
+    This is an internal integration contract, not a hosted URL approval API.
 
     The returned toolkit contains namespaced tools (``<toolkit_id>.<name>``).
     Names remain stable across versions; the toolkit and tools carry the
@@ -825,6 +1054,27 @@ async def import_mcp(
         raise ValueError(f"Duplicate toolkit: {toolkit_id}")
     version_value = _validated_version(version)
 
+    account_scope = _validated_account_scope(account_scope)
+    selected_tools = _validated_selected_tools(selected_tools, required=account_scope is not None)
+    if account_scope is not None:
+        _account_import_transport(
+            command=command,
+            args=args,
+            stdio_command=stdio_command,
+            stdio_args=stdio_args,
+            url=url,
+            remote_url=remote_url,
+            cwd=cwd,
+            env=env,
+            headers=headers,
+            credential_env=credential_env,
+            discovery_auth=discovery_auth,
+            discovery_credential=discovery_credential,
+            expected_schema_digest=expected_schema_digest,
+            auth_required=auth_required,
+            approved_target=approved_target,
+        )
+
     transport = _transport_from_arguments(
         command=command,
         args=args,
@@ -837,28 +1087,9 @@ async def import_mcp(
         headers=headers,
         timeout=timeout,
         sse_read_timeout=sse_read_timeout,
+        approved_target=approved_target,
     )
-    discovery_context = None
-    if discovery_auth is not None:
-        auth = (
-            discovery_auth
-            if isinstance(discovery_auth, AuthConfig)
-            else AuthConfig.model_validate(discovery_auth)
-        )
-        secret = os.environ.get(auth.credential_env or "")
-        if auth.scheme not in {"none", "local"} and not secret:
-            raise MCPImportError(
-                "credential_missing", "MCP discovery credential is absent from the environment."
-            )
-        discovery_context = ExecutionContext(
-            Session(user_id="operator-discovery"),
-            ConnectedAccount(
-                id="discovery", user_id="operator-discovery", toolkit=toolkit_id, auth=auth
-            ),
-            secret,
-            cast(httpx.AsyncClient, None),
-            None,
-        )
+    discovery_context = _discovery_context(toolkit_id, discovery_auth, discovery_credential)
     try:
         with anyio.fail_after(transport.timeout):
             discovered = await _discover_tools(transport, discovery_context, credential_env)
@@ -875,7 +1106,14 @@ async def import_mcp(
             retryable=True,
         ) from exc
 
-    actual_schema_digest = mcp_schema_digest(discovered)
+    try:
+        actual_schema_digest = mcp_schema_digest(discovered)
+    except MCPImportError:
+        if account_scope is not None:
+            raise MCPImportError(
+                "mcp_schema_invalid", "Selected MCP schemas could not be safely reviewed."
+            ) from None
+        raise
     if expected_schema_digest is not None:
         expected = str(expected_schema_digest).strip().lower()
         if not re.fullmatch(r"[0-9a-f]{64}", expected):
@@ -889,32 +1127,38 @@ async def import_mcp(
                 "MCP tool schemas changed since the approved schema digest was recorded.",
             )
 
-    toolkit = Toolkit(
-        id=toolkit_id,
-        name=name or toolkit_id,
-        description=description or f"Imported MCP toolkit {toolkit_id}",
-        runtime="mcp-local" if transport.kind == "stdio" else "mcp-remote",
-        status=status,
-        # Static headers are already operator-provided transport credentials;
-        # only a per-execution credential environment reference requires an
-        # Energy ConnectedAccount at runtime.
-        auth_required=bool(credential_env) if auth_required is None else auth_required,
-        # A remote endpoint can contain credentials in its query string.  Do
-        # not publish that URL as docs/provenance; callers can set an explicit
-        # safe docs_url when they want one.
-        docs_url=_safe_url(docs_url) if docs_url else None,
-        version=version_value,
-    )
-    destination = registry
-    registry = Registry()
-    registry.add_toolkit(toolkit)
-
     all_metadata = tool_metadata if tool_metadata is not None else metadata
     discovery_secrets = _transport_secrets(transport, discovery_context)
-    for remote_tool in discovered:
+    discovered_names = {_remote_tool_name(remote_tool) for remote_tool in discovered}
+    if selected_tools is not None and not selected_tools <= discovered_names:
+        raise MCPImportError("mcp_selection_invalid", "Selected MCP tools were not discovered.")
+    selected_remote_tools = [
+        remote_tool
+        for remote_tool in discovered
+        if selected_tools is None or _remote_tool_name(remote_tool) in selected_tools
+    ]
+    if account_scope is not None and any(secret in toolkit_id for secret in discovery_secrets):
+        raise MCPImportError(
+            "mcp_account_profile_invalid", "MCP identity overlaps a discovery credential."
+        )
+
+    prepared_tools: list[_PreparedMCPTool] = []
+    for remote_tool in selected_remote_tools:
         raw_name = _remote_tool_name(remote_tool)
+        if account_scope is not None and any(secret in raw_name for secret in discovery_secrets):
+            raise MCPImportError(
+                "mcp_schema_invalid", "Selected MCP names overlap a discovery credential."
+            )
         namespaced_name = f"{toolkit_id}.{raw_name}"
         try:
+            if account_scope is not None:
+                review = _metadata_value(all_metadata or {}, raw_name, namespaced_name)
+                unit = review.get("unit")
+                if type(unit) is not str or not unit.strip() or len(unit) > 128:
+                    raise MCPImportError(
+                        "mcp_review_required",
+                        "Reviewed MCP units must be bounded nonblank strings.",
+                    )
             imported_metadata = _metadata_for(
                 all_metadata,
                 raw_name,
@@ -922,30 +1166,116 @@ async def import_mcp(
                 default_source=f"mcp:{toolkit_id}",
                 default_credential_env=credential_env,
             )
+            if account_scope is not None and not imported_metadata.reviewed:
+                raise MCPImportError(
+                    "mcp_review_required",
+                    "Every account-scoped MCP tool requires complete reviewed metadata.",
+                )
+            if account_scope is not None and imported_metadata.credential_env is not None:
+                raise MCPImportError(
+                    "mcp_account_profile_invalid",
+                    "Account-scoped MCP tools cannot use credential environment variables.",
+                )
+            imported_metadata = _sanitize_metadata(imported_metadata, discovery_secrets)
             raw_input_schema = _input_schema(remote_tool)
+            if account_scope is not None and _has_secret_key(raw_input_schema, discovery_secrets):
+                raise MCPImportError(
+                    "mcp_schema_invalid",
+                    "Selected MCP schemas cannot safely retain credential-bearing field names.",
+                )
             input_schema = _redact(raw_input_schema, discovery_secrets)
             schema_hash = hashlib.sha256(_canonical_json(raw_input_schema)).hexdigest()
+            remote_description = _redact(
+                (
+                    remote_tool.get("description") or remote_tool.get("title") or raw_name
+                    if isinstance(remote_tool, Mapping)
+                    else getattr(remote_tool, "description", None)
+                    or getattr(remote_tool, "title", None)
+                    or raw_name
+                ),
+                discovery_secrets,
+            )
         except Exception as exc:
-            # Discovery succeeded, but a malformed schema or operator metadata
-            # must not leave a half-registered tool behind.
-            registry.toolkits.pop(toolkit_id, None)
+            if account_scope is not None:
+                if isinstance(exc, MCPImportError):
+                    raise
+                raise MCPImportError(
+                    "mcp_review_required", "Selected MCP tools could not be reviewed safely."
+                ) from None
             raise MCPImportError(
                 "mcp_registration_failed", f"Cannot register MCP tool {raw_name!r}: {exc}"
             ) from exc
-
-        remote_description = _redact(
-            (
-                remote_tool.get("description") or remote_tool.get("title") or raw_name
-                if isinstance(remote_tool, Mapping)
-                else getattr(remote_tool, "description", None)
-                or getattr(remote_tool, "title", None)
-                or raw_name
-            ),
-            discovery_secrets,
+        prepared_tools.append(
+            _PreparedMCPTool(
+                raw_name=raw_name,
+                namespaced_name=namespaced_name,
+                description=str(remote_description),
+                input_schema=cast(Json, input_schema),
+                schema_hash=schema_hash,
+                metadata=imported_metadata,
+            )
         )
 
-        # Capture immutable values only.  In particular, never capture an
-        # ExecutionContext or credential at import time.
+    try:
+        toolkit = Toolkit(
+            id=toolkit_id,
+            name=str(_redact(name or toolkit_id, discovery_secrets)),
+            description=str(
+                _redact(description or f"Imported MCP toolkit {toolkit_id}", discovery_secrets)
+            ),
+            runtime="mcp-local" if transport.kind == "stdio" else "mcp-remote",
+            status=status,
+            auth_required=(
+                True
+                if account_scope is not None
+                else bool(credential_env)
+                if auth_required is None
+                else auth_required
+            ),
+            docs_url=(str(_redact(_safe_url(docs_url), discovery_secrets)) if docs_url else None),
+            version=str(_redact(version_value, discovery_secrets)),
+        )
+        prepared_with_models = [
+            (
+                item,
+                Tool(
+                    name=item.namespaced_name,
+                    toolkit=toolkit_id,
+                    resource_scope="account" if account_scope is not None else "operator",
+                    description=item.description,
+                    input_schema=item.input_schema,
+                    account_scope=account_scope,
+                    capabilities=list(item.metadata.capabilities),
+                    actions=set(item.metadata.actions),
+                    idempotent=item.metadata.idempotent,
+                    version=toolkit.version,
+                    reviewed=item.metadata.reviewed,
+                    result_kind=item.metadata.kind if item.metadata.reviewed else None,
+                    result_unit=item.metadata.unit if item.metadata.reviewed else None,
+                ),
+            )
+            for item in prepared_tools
+        ]
+    except Exception as exc:
+        if account_scope is not None:
+            raise MCPImportError(
+                "mcp_registration_failed", "Reviewed MCP tools could not be registered safely."
+            ) from None
+        raise MCPImportError(
+            "mcp_registration_failed", "MCP toolkit could not be registered."
+        ) from exc
+
+    destination = registry
+    registry = Registry()
+    registry.add_toolkit(toolkit)
+
+    # Capture immutable values only. In particular, the discovery context and
+    # its credential never enter a registered handler's closure.
+    for item, imported_tool in prepared_with_models:
+        raw_name = item.raw_name
+        imported_metadata = item.metadata
+        schema_hash = item.schema_hash
+
         async def handler(
             arguments: Json,
             context: ExecutionContext,
@@ -953,7 +1283,10 @@ async def import_mcp(
             _raw_name: str = raw_name,
             _tool_metadata: _ImportedToolMetadata = imported_metadata,
             _schema_hash: str = schema_hash,
+            _account_scope: ToolAccountScope | None = account_scope,
         ) -> EnergyResult:
+            if _account_scope is not None:
+                _validate_account_context(_account_scope, toolkit_id, context)
             if not _tool_metadata.actions.issubset(context.session.allowed_actions):
                 allowed = ", ".join(
                     sorted(action.value for action in context.session.allowed_actions)
@@ -964,6 +1297,8 @@ async def import_mcp(
                     f"MCP tool {_raw_name!r} requires [{required}]; session allows [{allowed}].",
                 )
             secrets = _transport_secrets(transport, context)
+            schema_error: EnergyError | None = None
+            result: Any = None
             try:
                 with anyio.fail_after(transport.timeout):
                     async with _client_session(
@@ -973,42 +1308,47 @@ async def import_mcp(
                     ) as session:
                         try:
                             current_tools = await _list_tools(session)
-                        except MCPImportError as exc:
-                            raise EnergyError(
+                        except MCPImportError:
+                            schema_error = EnergyError(
                                 "mcp_schema_drift",
                                 f"MCP tool {_raw_name!r} could not be revalidated before execution.",
-                            ) from exc
-                        try:
-                            matching_tools = [
-                                tool
-                                for tool in current_tools
-                                if _remote_tool_name(tool) == _raw_name
-                            ]
-                        except MCPImportError as exc:
-                            raise EnergyError(
-                                "mcp_schema_drift",
-                                f"MCP tool {_raw_name!r} could not be revalidated before execution.",
-                            ) from exc
-                        if len(matching_tools) != 1:
-                            raise EnergyError(
-                                "mcp_schema_drift",
-                                f"MCP tool {_raw_name!r} is no longer the approved tool.",
                             )
-                        try:
-                            current_schema_hash = hashlib.sha256(
-                                _canonical_json(_input_schema(matching_tools[0]))
-                            ).hexdigest()
-                        except MCPImportError as exc:
-                            raise EnergyError(
-                                "mcp_schema_drift",
-                                f"MCP tool {_raw_name!r} schema is no longer valid.",
-                            ) from exc
-                        if current_schema_hash != _schema_hash:
-                            raise EnergyError(
-                                "mcp_schema_drift",
-                                f"MCP tool {_raw_name!r} schema changed after approval.",
-                            )
-                        result = await session.call_tool(_raw_name, arguments)
+                        if schema_error is None:
+                            try:
+                                matching_tools = [
+                                    tool
+                                    for tool in current_tools
+                                    if _remote_tool_name(tool) == _raw_name
+                                ]
+                            except MCPImportError:
+                                schema_error = EnergyError(
+                                    "mcp_schema_drift",
+                                    f"MCP tool {_raw_name!r} could not be revalidated before execution.",
+                                )
+                            if schema_error is None and len(matching_tools) != 1:
+                                schema_error = EnergyError(
+                                    "mcp_schema_drift",
+                                    f"MCP tool {_raw_name!r} is no longer the approved tool.",
+                                )
+                            if schema_error is None:
+                                try:
+                                    current_schema_hash = hashlib.sha256(
+                                        _canonical_json(_input_schema(matching_tools[0]))
+                                    ).hexdigest()
+                                except MCPImportError:
+                                    schema_error = EnergyError(
+                                        "mcp_schema_drift",
+                                        f"MCP tool {_raw_name!r} schema is no longer valid.",
+                                    )
+                                if schema_error is None and current_schema_hash != _schema_hash:
+                                    schema_error = EnergyError(
+                                        "mcp_schema_drift",
+                                        f"MCP tool {_raw_name!r} schema changed after approval.",
+                                    )
+                            if schema_error is None:
+                                result = await session.call_tool(_raw_name, arguments)
+                if schema_error is not None:
+                    raise schema_error
             except TimeoutError as exc:
                 raise EnergyError(
                     "mcp_timeout", f"MCP tool {_raw_name!r} exceeded its timeout.", retryable=True
@@ -1052,35 +1392,21 @@ async def import_mcp(
             )
 
         try:
-            registry.add(
-                Tool(
-                    name=namespaced_name,
-                    toolkit=toolkit_id,
-                    resource_scope="operator",
-                    description=remote_description,
-                    input_schema=input_schema,
-                    capabilities=list(imported_metadata.capabilities),
-                    actions=set(imported_metadata.actions),
-                    idempotent=imported_metadata.idempotent,
-                    version=version_value,
-                    reviewed=imported_metadata.reviewed,
-                    result_kind=imported_metadata.kind if imported_metadata.reviewed else None,
-                    result_unit=imported_metadata.unit if imported_metadata.reviewed else None,
-                ),
-                handler,
-            )
+            registry.add(imported_tool, handler)
         except Exception as exc:
-            registry.toolkits.pop(toolkit_id, None)
-            for registered_name in [
-                registered.name
-                for registered in registry.tools.values()
-                if registered.toolkit == toolkit_id
-            ]:
-                registry.tools.pop(registered_name, None)
-                registry.handlers.pop(registered_name, None)
+            if account_scope is not None:
+                raise MCPImportError(
+                    "mcp_registration_failed", "Reviewed MCP tools could not be registered safely."
+                ) from None
             raise MCPImportError(
-                "mcp_registration_failed", f"Cannot register MCP tool {raw_name!r}: {exc}"
+                "mcp_registration_failed", "MCP tool could not be registered."
             ) from exc
+
+    colliding_names = set(registry.tools) & set(destination.tools)
+    if colliding_names:
+        raise MCPImportError(
+            "mcp_registration_failed", "MCP tool names conflict with the registry."
+        )
     destination.add_toolkit(toolkit)
     for tool_name, imported_tool in registry.tools.items():
         destination.add(imported_tool, registry.handlers[tool_name])

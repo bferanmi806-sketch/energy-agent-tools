@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-04",
+  "feature": "Connection-owned MCP foundation",
+  "implementation_base": "2f18012",
+  "scope": "Trusted backend import and approved transport; managed Add Custom MCP onboarding remains open.",
+  "orchestration": {
+    "worker_model": "GPT-6 Luna",
+    "worker_reasoning": "max",
+    "independent_assignments": [
+      "bridge implementation",
+      "approved network transport",
+      "managed host acceptance"
+    ],
+    "primary_ownership": [
+      "resource model and visibility",
+      "capability/account resolution",
+      "public contracts",
+      "bridge/network integration",
+      "final review and acceptance"
+    ]
+  },
+  "validation": {
+    "full_python": {
+      "passed": 898,
+      "seconds": 583.45,
+      "timing": "Before the final deprecated IPv6 site-local denylist regression; do not describe this as the final 899-test source run."
+    },
+    "final_affected_checks": {
+      "passed": 59,
+      "seconds": 33.12,
+      "coverage": [
+        "actual managed gateway, encrypted Vault and pinned MCP HTTP server",
+        "ownership/schema privacy",
+        "current credentials and redaction",
+        "review/registration atomicity",
+        "schema drift before call",
+        "workspace grants/key revocation",
+        "disable/revoke/removal",
+        "DNS/SNI/origin/Host and special-address denial"
+      ]
+    },
+    "sdk": {
+      "passed": 18
+    },
+    "production_web": {
+      "passed": 11
+    },
+    "static": {
+      "ruff": "passed",
+      "format": "passed",
+      "mypy_source_files": 62,
+      "public_contract_export": "unchanged and check passed",
+      "lock": "check passed"
+    },
+    "package": "Final rebuilt sdist/wheel passed; installed wheel passed owned pinned HTTP smoke, private schema omission and deprecated IPv6 site-local rejection.",
+    "ci": {
+      "status": "pending publication qualification",
+      "implementation_commit": null
+    }
+  },
+  "source_files_sha256": {
+    "pyproject.toml": "20d7a159d0efec04fa41286a2cf7d9096055adfedf0aae9fee5ca862529d3a25",
+    "uv.lock": "e6e88089432a930e3a64cf1700d8480c6749391fd90fe7f62c2be89ea154273e",
+    "scripts/export_typescript_contracts.py": "cb189c4ef88a029d0a70de8dbc116ec268daf18f98836ee715b2d288dbd7fceb",
+    "src/energy_agent_tools/models.py": "0f5512e878c05869530f0cd108e82049d53fcde6dddc7c9f6bdfe9380266178b",
+    "src/energy_agent_tools/runtime.py": "4728d7e6aca8e45ffcb8a9410566ba3fd064150943c8267df92e1764f6a887ac",
+    "src/energy_agent_tools/capabilities.py": "d2c7e04b200feda5d4bb064a6c771c032ffe9b41c749676c463d7ca420b7a870",
+    "src/energy_agent_tools/connectors/mcp_bridge.py": "49e327789e271b8af1d53420e0f3c9a4fdc51987d6374e057e688d54c8242062",
+    "src/energy_agent_tools/connectors/mcp_network.py": "6d5c82a100f5129d86b8087f99e4b450191d32b0c4e87de5a86b312c7343c6ff",
+    "tests/test_tool_account_scope.py": "a722511111a8e45a2ff9e6606a453bc0845e1512a1f34c609f1debd86921c89b",
+    "tests/test_scoped_mcp_bridge.py": "b292d4d9fcdef18414a55cb3368bef6d36465bff5fdb2b41407642ad5b819627",
+    "tests/test_mcp_network.py": "af5d575037c9367a5b4cd9006fa6f225a543a1c5770a08a6aa043c362ab1d389",
+    "tests/test_host_private_tools.py": "5bbd24ba1e064601194d512d20525ac08746afaf8f59c74b91d2eb77863501c1",
+    "tests/test_host_scoped_mcp.py": "6c549f89d0126135d7104c39a2d43a84a06a854e3e7f497ce765e9ed2e1933df"
+  },
+  "limits": [
+    "No managed custom MCP onboarding routes or web review flow yet.",
+    "No persistent custom MCP review/definition recovery or auth-none Vault lifecycle qualified.",
+    "Provider-payload bounds and workspace-bound private endpoint policy are required before arbitrary hosted URLs.",
+    "Network pinning/SNI tests use controlled backends; real HTTP acceptance uses explicitly approved loopback fixtures.",
+    "These fixtures do not qualify physical meter data, real provider consent, external contributor work, held-out actual agent evaluation, independent discovery review or sustained production operation."
+  ],
+  "full_goal_status": "active; remaining requirements in product-objective.md are not replaced by these tests"
+}

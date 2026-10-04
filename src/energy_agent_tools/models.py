@@ -11,7 +11,7 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator, model_validator
 
 Json = dict[str, Any]
 QuantityShape = Literal["interval", "instantaneous", "counter"]
@@ -241,6 +241,19 @@ class Toolkit(StrictModel):
     categories: list[str] = Field(default_factory=list)
 
 
+class ToolAccountScope(StrictModel):
+    workspace_id: StrictStr = Field(min_length=1, max_length=256)
+    user_id: StrictStr = Field(min_length=1, max_length=256)
+    account_id: StrictStr = Field(min_length=1, max_length=256)
+
+    @field_validator("workspace_id", "user_id", "account_id")
+    @classmethod
+    def nonblank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Tool ownership identifiers must not be blank")
+        return value
+
+
 class Tool(StrictModel):
     name: str
     toolkit: str
@@ -249,6 +262,7 @@ class Tool(StrictModel):
     )
     description: str
     input_schema: Json
+    account_scope: ToolAccountScope | None = Field(default=None, exclude=True)
     account_argument_settings: dict[str, str] = Field(default_factory=dict)
     capabilities: list[str]
     actions: set[Action] = Field(default_factory=lambda: {Action.READ})
@@ -258,6 +272,12 @@ class Tool(StrictModel):
     result_kind: DataKind | None = None
     result_unit: str | None = None
     dependencies: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def account_resource(self) -> Tool:
+        if self.account_scope is not None and self.resource_scope != "account":
+            raise ValueError("Owned tool schemas require account resource scope")
+        return self
 
     def public(self) -> Json:
         data = self.model_dump(mode="json")

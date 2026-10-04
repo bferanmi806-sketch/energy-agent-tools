@@ -499,8 +499,22 @@ class EnergyAgent:
     def account_granted(session: Session, account: ConnectedAccount) -> bool:
         return session.connection_grants is None or account.id in session.connection_grants
 
-    @staticmethod
-    def _tool_visible(session: Session, tool: Tool) -> bool:
+    def _tool_visible(self, session: Session, tool: Tool) -> bool:
+        if scope := tool.account_scope:
+            account = self.accounts.get(scope.account_id)
+            if (
+                session.workspace_id != scope.workspace_id
+                or session.resource_user_id != scope.user_id
+                or account is None
+                or account.user_id != scope.user_id
+                or account.workspace_id != scope.workspace_id
+                or account.toolkit != tool.toolkit
+                or not account.enabled
+                or account.state != "active"
+                or not self.account_granted(session, account)
+                or (session.site_id is not None and account.site_id != session.site_id)
+            ):
+                return False
         return (session.toolkits is None or tool.toolkit in session.toolkits) and (
             session.access_mode == "local"
             or tool.resource_scope in {"public", "account", "session"}
@@ -508,6 +522,7 @@ class EnergyAgent:
 
     def get_tool(self, session: Session, name: str) -> Json:
         self._scope(session)
+        self._sync_connections(session.resource_user_id, session.workspace_id)
         tool = self.registry.get(name)
         if not self._tool_visible(session, tool):
             raise EnergyError("tool_forbidden", "Tool is outside this session's resource scope.")
@@ -541,7 +556,7 @@ class EnergyAgent:
             if any(find_spec(dependency) is None for dependency in tool.dependencies):
                 return 0
             try:
-                account = self._account(session, tool.toolkit)
+                account = self._tool_account(session, tool)
                 if account is None and tool.resource_scope == "account":
                     return 0
                 return 1 if account is None or self.credential_available(account, session) else 0
@@ -576,7 +591,7 @@ class EnergyAgent:
                 if (
                     account.user_id == user_id
                     and account.workspace_id == workspace_id
-                    and account.auth.secret_id
+                    and (account.auth.secret_id or account.workspace_id is not None)
                     and account_id not in current_ids
                 ):
                     del self.accounts[account_id]
@@ -608,6 +623,15 @@ class EnergyAgent:
             and (session.toolkits is None or a.toolkit in session.toolkits)
             and (session.access_mode == "local" or a.toolkit in visible_toolkits)
         ]
+
+    def _tool_account(
+        self, session: Session, tool: Tool, account_id: str | None = None
+    ) -> ConnectedAccount | None:
+        if scope := tool.account_scope:
+            if account_id is not None and account_id != scope.account_id:
+                raise EnergyError("account_forbidden", "Tool belongs to a different connection.")
+            account_id = scope.account_id
+        return self._account(session, tool.toolkit, account_id)
 
     def _account(
         self, session: Session, toolkit: str, account_id: str | None = None
@@ -736,7 +760,7 @@ class EnergyAgent:
                     "binding_arguments_changed",
                     "Execution hooks changed a fixed capability argument.",
                 )
-            account = self._account(session, tool.toolkit, account_id)
+            account = self._tool_account(session, tool, account_id)
             event["account_id"] = account.id if account else None
             if tool.resource_scope == "account" and account is None:
                 raise EnergyError("connection_required", "An owned connection is required.")
@@ -1043,6 +1067,10 @@ class EnergyAgent:
 
     def catalogue(self, session: Session) -> list[Json]:
         self._scope(session)
+        self._sync_connections(session.resource_user_id, session.workspace_id)
+        private_toolkits = {
+            tool.toolkit for tool in self.registry.tools.values() if tool.account_scope is not None
+        }
         visible_toolkits = {
             tool.toolkit
             for tool in self.registry.tools.values()
@@ -1052,7 +1080,10 @@ class EnergyAgent:
             t.model_dump(mode="json")
             for t in self.registry.toolkits.values()
             if (session.toolkits is None or t.id in session.toolkits)
-            and (session.access_mode == "local" or t.id in visible_toolkits)
+            and (
+                t.id in visible_toolkits
+                or (session.access_mode == "local" and t.id not in private_toolkits)
+            )
         ]
 
     def write_manifests(self, path: Path) -> None:

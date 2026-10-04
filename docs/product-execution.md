@@ -5,6 +5,32 @@ record extends the existing backend roadmap; it does not replace unfinished
 gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 [passing CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37032700732).
 
+## Connection-owned MCP foundation, October 4
+
+Trusted integrations can now import explicitly selected and reviewed MCP HTTP
+tools into one managed connection. Ownership filters schemas, search, catalogue,
+capability resolution and execution. Current stored lifecycle and grants apply
+before publication or provider IO, and another account preference cannot retarget
+a private tool. An approved transport pins DNS addresses, preserves TLS hostname,
+blocks foreign origins/Host overrides and disables environment proxies/redirects.
+Legacy imports remain operator-scoped.
+
+Three Luna/max workers owned the bridge, network transport and managed-host
+acceptance. Primary review owned shared contracts, integration and the actual
+managed-gateway-to-MCP acceptance. The full suite passed 898 tests before the
+final deprecated IPv6 site-local denial regression. All 59 affected checks passed
+with that final fix, as did 18 SDK tests, 11 web tests, static checks and package
+builds. The [qualification record](evidence/custom-mcp-foundation-oct04.json)
+preserves the distinction; final published-source CI qualification is pending.
+
+The [MCP guide](mcp-review.md) documents the trusted integration contract. This
+foundation does not complete Add Custom MCP. Managed inspection/review/staging,
+persisted definitions and recovery, auth-none storage, provider-payload limits,
+private endpoint workspace policy, health and the normal web journey remain open.
+Complete account/settings, generic OAuth/events, actual held-out agent evaluation,
+physical-site evidence, external contribution, sustained operations and a coherent
+platform release remain governed by the full objective.
+
 ## Persistent job history follow-up, October 4
 
 Jobs now carry durable workspace ownership. Authenticated discovery spans

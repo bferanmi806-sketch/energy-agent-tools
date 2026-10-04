@@ -238,6 +238,12 @@ class CapabilityResolver:
                 continue
             if not self.agent._tool_visible(session, tool):
                 continue
+            if (
+                tool.account_scope is not None
+                and binding.account_id is not None
+                and binding.account_id != tool.account_scope.account_id
+            ):
+                continue
             if binding.account_id:
                 account = self.agent.accounts.get(binding.account_id)
                 if (
@@ -248,7 +254,11 @@ class CapabilityResolver:
                     or (session.site_id and account.site_id != session.site_id)
                 ):
                     continue
-                selected = session.account_ids.get(tool.toolkit)
+                selected = (
+                    tool.account_scope.account_id
+                    if tool.account_scope is not None
+                    else session.account_ids.get(tool.toolkit)
+                )
                 if selected and selected != account.id:
                     continue
             if binding.asset_id:
@@ -307,6 +317,7 @@ class CapabilityResolver:
                 a
                 for a in self.agent.accounts.values()
                 if a.toolkit == tool.toolkit
+                and (tool.account_scope is None or a.id == tool.account_scope.account_id)
                 and a.user_id == session.resource_user_id
                 and a.workspace_id == session.workspace_id
                 and self.agent.account_granted(session, a)
@@ -314,7 +325,11 @@ class CapabilityResolver:
             ]
             if binding.account_id:
                 accounts = [a for a in accounts if a.id == binding.account_id]
-            selected = request.account_id or session.account_ids.get(tool.toolkit)
+            selected = request.account_id or (
+                tool.account_scope.account_id
+                if tool.account_scope is not None
+                else session.account_ids.get(tool.toolkit)
+            )
             if selected:
                 accounts = [a for a in accounts if a.id == selected]
             selected_asset_id = binding.asset_id or request.asset_id
