@@ -112,5 +112,42 @@
     "Unsupported-platform private-file fallback was reviewed in source; Windows execution was not qualified.",
     "This does not satisfy broad actual-agent evaluation, outside contribution, sustained operations or a coherent final platform release."
   ],
-  "qualification_status": "Local acceptance passed; published CI pending."
+  "qualification_status": "Local acceptance and matching published CI passed.",
+  "published_ci": {
+    "commit": "28415e593161d6c72ec470ff27550e3113a8a893",
+    "run_id": 37222447515,
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37222447515",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "home-assistant",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.13)",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.11)",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.12)",
+        "conclusion": "success"
+      },
+      {
+        "name": "container",
+        "conclusion": "success"
+      },
+      {
+        "name": "upgrade",
+        "conclusion": "success"
+      }
+    ],
+    "python_summaries": [
+      "848 passed in 217.26s (0:03:37)",
+      "848 passed in 277.19s (0:04:37)",
+      "848 passed in 299.12s (0:04:59)"
+    ]
+  }
 }
