@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Literal
 
+from .activity import ExecutionLogQuery, ExecutionLogScope
 from .app import build_agent, configure_mcp
 from .capabilities import CapabilityRequest
 from .models import Json, Session
@@ -56,6 +57,20 @@ class BoundSession:
         from .workflows import run_skill
 
         return await run_skill(self.agent, self.context, skill_id, parameters or {})
+
+    def activity(self, *, limit: int = 50, before: int | None = None) -> Json:
+        self.agent._scope(self.context)
+        query = ExecutionLogQuery(limit=limit, before=before)
+        scope = ExecutionLogScope(
+            user_id=self.context.user_id,
+            workspace_id=self.context.workspace_id,
+            access_mode=self.context.access_mode,
+            site_ids={self.context.site_id},
+            connection_ids=self.context.connection_grants,
+        )
+        return self.agent.execution_activity(
+            scope, limit=query.limit, before=query.before
+        ).model_dump(mode="json")
 
     async def job(self, operation: str, **kwargs: Any) -> Json:
         return await self.agent.job(self.context, operation, **kwargs)

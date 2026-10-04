@@ -44,6 +44,13 @@ The SDK calls authenticated `POST /activity`. Its JSON body accepts `limit`
 an execution ID, monotonically increasing sequence, scope references and a
 `success` or `failure` outcome. History reads perform no provider requests.
 
+## Use the bound Python SDK
+
+`session.activity(limit=50, before=None)` reads history for the bound actor,
+workspace, site and access mode, after checking current session authorization.
+It returns the same JSON page shape. Sessions at another site cannot read this
+site's records. See the [Python SDK guide](sdk.md).
+
 ## Retention and availability
 
 The default store retains up to 2,000 executions per actor, workspace and access

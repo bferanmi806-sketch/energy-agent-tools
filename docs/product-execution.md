@@ -20,8 +20,10 @@ The [qualification record](evidence/execution-activity-oct04.json) preserves
 35 focused Python checks, the corrected dataset backup cases, 16 SDK tests and
 11 production web tests, plus desktop/mobile pagination and real storage-failure
 checks. The first full Python run passed 813 tests and failed the two stale
-backup assertions; the corrected cases passed separately. Full CI qualification
-for the final source is pending. Custom MCP onboarding, jobs, complete account
+backup assertions; the corrected cases passed separately. [CI for published activity source 2b0ca6f](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37214046465)
+passed all six jobs, including all Python versions, container, upgrade and
+installed Home Assistant qualification. The bound Python SDK also exposes
+`session.activity()`; its follow-up passed nine focused activity/SDK checks. Custom MCP onboarding, jobs, complete account
 and settings flows, broad actual agent evaluation, physical-site evidence,
 external connector contribution, sustained operations and a coherent release
 remain open.

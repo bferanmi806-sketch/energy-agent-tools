@@ -76,5 +76,64 @@
     "Default bounded retention is 2000 per actor/workspace/access mode and 10000 gateway-wide.",
     "Synthetic fixtures and numerical runs do not qualify physical-site telemetry or close broad actual agent evaluations.",
     "Custom MCP onboarding, jobs, complete account/settings, outside connector contribution, sustained operations and a coherent release remain open."
-  ]
+  ],
+  "published_ci": {
+    "source": "2b0ca6ffd4cc5857d1b017e9ba4970fd526db953",
+    "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37214046465",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "container",
+        "conclusion": "success"
+      },
+      {
+        "name": "home-assistant",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.12)",
+        "conclusion": "success"
+      },
+      {
+        "name": "upgrade",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.11)",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify (3.13)",
+        "conclusion": "success"
+      }
+    ],
+    "python_summaries": [
+      {
+        "job": "verify (3.12)",
+        "summaries": [
+          "verify (3.12)\tRun uv run pytest -q\t2026-10-04T15:48:07.3477114Z 815 passed in 275.18s (0:04:35)"
+        ]
+      },
+      {
+        "job": "verify (3.11)",
+        "summaries": [
+          "verify (3.11)\tRun uv run pytest -q\t2026-10-04T15:46:08.1789754Z 815 passed in 168.05s (0:02:48)"
+        ]
+      },
+      {
+        "job": "verify (3.13)",
+        "summaries": [
+          "verify (3.13)\tRun uv run pytest -q\t2026-10-04T15:46:00.2967701Z 815 passed in 159.91s (0:02:39)"
+        ]
+      }
+    ]
+  },
+  "bound_python_sdk_followup": {
+    "method": "session.activity(limit=50, before=None)",
+    "focused_tests": 9,
+    "seconds": 11.27,
+    "coverage": "New bound-session identity/site history check, runtime activity cases, existing bound SDK workflows",
+    "status": "locally verified; separate source follow-up"
+  }
 }

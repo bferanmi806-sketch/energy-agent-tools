@@ -205,3 +205,27 @@ async def test_rest_activity_auth_current_site_actor_mode_paging_and_strict_quer
             assert "broken" not in failed.text
     finally:
         await agent.close()
+
+
+@pytest.mark.asyncio
+async def test_bound_python_sdk_reads_current_site_history_without_session_reuse(tmp_path):
+    from pydantic import ValidationError
+
+    from energy_agent_tools.sdk import BoundSession
+
+    agent = _agent(tmp_path)
+    try:
+        original = BoundSession(agent, Session(user_id="one", site_id="one-a"))
+        executed = await original.execute("FIXTURE_ENERGY", {"value": 3})
+        other_site = BoundSession(agent, Session(user_id="one", site_id="one-b"))
+        await other_site.execute("FIXTURE_ENERGY", {"value": 4})
+        reopened = BoundSession(agent, Session(user_id="one", site_id="one-a"))
+        page = reopened.activity(limit=1)
+        assert [item["execution_id"] for item in page["entries"]] == [executed["execution_id"]]
+        assert page["next_before"] is None
+        foreign = BoundSession(agent, Session(user_id="two", site_id="two-a"))
+        assert foreign.activity()["entries"] == []
+        with pytest.raises(ValidationError):
+            reopened.activity(limit=101)
+    finally:
+        await agent.close()

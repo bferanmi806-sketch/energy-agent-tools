@@ -265,3 +265,13 @@ result = await session.skill(
 The caller still supplies the network model and identifies the source artifacts
 used to construct it. Other workflows record their derived inputs internally
 and reject this top-level field.
+
+## Execution history
+
+`session.activity(limit=50, before=None)` reads durable execution metadata for
+that actor, workspace, site and access mode. It rechecks the session's current
+policy before reading. Another session for the same actor and site can read
+retained history without reusing an execution session ID. Pass a returned
+`next_before` value as `before` to read older records. The method is synchronous
+and returns the same JSON page shape as REST. See the
+[activity guide](execution-activity.md) for retention and recording health.
