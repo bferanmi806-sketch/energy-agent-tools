@@ -1,10 +1,10 @@
 import "server-only";
 
-import { EnergyAgentTools, EnergyHttpError } from "@energy-agent-tools/sdk";
+import { EnergyAgentTools, EnergyHttpError, type JobHistoryQuery } from "@energy-agent-tools/sdk";
 import { cookies } from "next/headers";
 import { unstable_noStore } from "next/cache";
 import { readWebRuntimeConfig, openSession, SESSION_COOKIE_NAME } from "./security";
-import type { DashboardState, ExecutionActivityState } from "./types";
+import type { DashboardState, ExecutionActivityState, JobHistoryState } from "./types";
 
 const SIGNED_OUT_MESSAGE = "Your gateway session has expired. Sign in again.";
 const UNAVAILABLE_MESSAGE = "The gateway is unavailable. Check the web and gateway configuration.";
@@ -25,7 +25,7 @@ function gatewayClient(baseUrl: string, token: string): EnergyAgentTools {
   });
 }
 
-export async function loadDashboard(activityBefore?: number): Promise<DashboardState> {
+export async function loadDashboard(activityBefore?: number, jobQuery: JobHistoryQuery = {}): Promise<DashboardState> {
   unstable_noStore();
   const cookieJar = await cookies();
   const cookieValue = cookieJar.get(SESSION_COOKIE_NAME)?.value;
@@ -49,6 +49,10 @@ export async function loadDashboard(activityBefore?: number): Promise<DashboardS
     ).then((page): ExecutionActivityState => ({ kind: "ready", page }))
       .catch((): ExecutionActivityState => ({ kind: "unavailable" }));
 
+    const jobs: JobHistoryState = await gateway.jobHistory(jobQuery)
+      .then((page): JobHistoryState => ({ kind: "ready", page }))
+      .catch((): JobHistoryState => ({ kind: "unavailable" }));
+
     if (identity.can_manage_workspace === true && identity.workspace?.mode === "managed") {
       const workspace = gateway.workspace();
       const results = await Promise.allSettled([
@@ -70,6 +74,7 @@ export async function loadDashboard(activityBefore?: number): Promise<DashboardS
           kind: "managed",
           identity,
           activity,
+          jobs,
           workspace: settledValue(results[0]).workspace,
           sites: settledValue(results[1]).sites,
           assets: settledValue(results[2]).assets,
@@ -110,6 +115,7 @@ export async function loadDashboard(activityBefore?: number): Promise<DashboardS
           kind: "operator",
           identity,
           activity,
+          jobs,
           siteId,
           connectionSetups: settledValue(results[4]).setups,
           toolkits: toolkits.toolkits,

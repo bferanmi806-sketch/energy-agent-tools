@@ -1,6 +1,7 @@
 import type {
   ConnectionSetupsResponse,
   ExecutionLogResponse,
+  JobHistoryResponse,
   ConnectionsResponse,
   IdentityResponse,
   SkillsResponse,
@@ -18,10 +19,15 @@ export type ExecutionActivityState =
   | { kind: "ready"; page: ExecutionLogResponse }
   | { kind: "unavailable" };
 
+export type JobHistoryState =
+  | { kind: "ready"; page: JobHistoryResponse }
+  | { kind: "unavailable" };
+
 interface DashboardBase {
   identity: IdentityResponse;
   publicGatewayUrl: string | null;
   activity: ExecutionActivityState;
+  jobs: JobHistoryState;
 }
 
 export interface OperatorDashboardData extends DashboardBase {

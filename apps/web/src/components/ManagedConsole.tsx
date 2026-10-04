@@ -26,10 +26,11 @@ import { PendingConnection } from "./PendingConnection";
 import { AgentKeyPanel } from "./AgentKeyPanel";
 import { WorkspaceAssetForm, WorkspaceSiteForm } from "./WorkspaceForms";
 import { WorkspaceSharing } from "./WorkspaceSharing";
+import { JobsHistory } from "./JobsHistory";
 import { ExecutionActivity } from "./ExecutionActivity";
 import { SkillsCatalogue } from "./SkillsCatalogue";
 
-type ViewId = "apps" | "connections" | "sites" | "sharing" | "agent" | "skills" | "activity";
+type ViewId = "apps" | "connections" | "sites" | "sharing" | "agent" | "skills" | "activity" | "jobs";
 
 interface NavigationItem {
   id: ViewId;
@@ -44,6 +45,7 @@ const NAVIGATION: NavigationItem[] = [
   { id: "sharing", label: "Sharing", icon: Users },
   { id: "agent", label: "Connect my agent", icon: ArrowRight },
   { id: "skills", label: "Skills", icon: Sparkles },
+  { id: "jobs", label: "Jobs", icon: Activity },
   { id: "activity", label: "Activity log", icon: Activity },
 ];
 
@@ -64,6 +66,7 @@ const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
     title: "Connect your agent",
     description: "Create an agent key with access only to the sites you select.",
   },
+  jobs: { title: "Jobs", description: "Recover numerical simulation jobs and their results across sessions." },
   activity: { title: "Activity log", description: "Review recent tool executions in your current scope." },
   skills: {
     title: "Skills",
@@ -143,10 +146,12 @@ export function ManagedConsole({
   data,
   initialView = "apps",
   authorizationResult,
+  jobStatus,
 }: {
   data: ManagedDashboardData;
   initialView?: ViewId;
   authorizationResult?: AuthorizationResult;
+  jobStatus?: string;
 }) {
   const [view, setView] = useState<ViewId>(initialView);
   const [query, setQuery] = useState("");
@@ -271,6 +276,7 @@ export function ManagedConsole({
           {view === "connections" ? <ConnectionsView data={data} onBrowseApps={() => navigate("apps")} /> : null}
           {view === "sites" ? <SitesView data={data} /> : null}
           {view === "sharing" ? <WorkspaceSharing members={data.members} sites={data.sites} connections={data.connections} gatewayUrl={data.publicGatewayUrl} /> : null}
+          {view === "jobs" ? <JobsHistory jobs={data.jobs} siteNames={Object.fromEntries(data.identity.sites.map(site => [site.id, site.name]))} {...(jobStatus ? { status: jobStatus } : {})} /> : null}
           {view === "activity" ? <ExecutionActivity activity={data.activity} /> : null}
           {view === "skills" ? <SkillsCatalogue skills={data.skills} /> : null}
           {view === "agent" ? <AgentKeyPanel keys={data.keys} sites={data.sites} gatewayUrl={data.publicGatewayUrl} /> : null}

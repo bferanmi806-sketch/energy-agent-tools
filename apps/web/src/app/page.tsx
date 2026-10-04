@@ -72,15 +72,18 @@ function Unavailable({ message }: { message: string }) {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ auth_error?: string | string[]; oauth?: string | string[]; view?: string | string[]; activity_before?: string | string[] }>;
+  searchParams?: Promise<{ auth_error?: string | string[]; oauth?: string | string[]; view?: string | string[]; activity_before?: string | string[]; job_before?: string | string[]; job_status?: string | string[] }>;
 }) {
   const params = searchParams ? await searchParams : undefined;
   const cursor = params?.activity_before;
   const activityBefore = typeof cursor === "string" && /^[1-9][0-9]*$/.test(cursor) && Number.isSafeInteger(Number(cursor))
     ? Number(cursor) : undefined;
+  const jobBefore = typeof params?.job_before === "string" && /^[A-Za-z0-9_-]{1,256}$/.test(params.job_before) ? params.job_before : undefined;
+  const rawStatus = params?.job_status;
+  const jobStatus = rawStatus === "pending" || rawStatus === "running" || rawStatus === "completed" || rawStatus === "failed" || rawStatus === "cancelled" || rawStatus === "interrupted" ? rawStatus : undefined;
   let state: DashboardState;
   try {
-    state = await loadDashboard(activityBefore);
+    state = await loadDashboard(activityBefore, { ...(jobBefore ? { before: jobBefore } : {}), ...(jobStatus ? { status: jobStatus } : {}) });
   } catch {
     state = { kind: "unavailable", message: "The gateway could not be reached. Check that it is running, then try again." };
   }
@@ -91,15 +94,15 @@ export default async function HomePage({
     }
     case "ready": {
       if (state.data.kind === "managed") {
-        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills" || params?.view === "activity"
+        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs"
           ? params.view
           : "apps";
         const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed"
           ? params.oauth
           : undefined;
-        return <ManagedConsole data={state.data} initialView={initialView} {...(authorizationResult ? { authorizationResult } : {})} />;
+        return <ManagedConsole data={state.data} initialView={initialView} {...(jobStatus ? { jobStatus } : {})} {...(authorizationResult ? { authorizationResult } : {})} />;
       }
-      return <Console data={state.data} initialView={params?.view === "connections" || params?.view === "skills" || params?.view === "activity" ? params.view : "apps"} />;
+      return <Console data={state.data} {...(jobStatus ? { jobStatus } : {})} initialView={params?.view === "connections" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs" ? params.view : "apps"} />;
     }
     case "unavailable":
       return <Unavailable message={state.message} />;

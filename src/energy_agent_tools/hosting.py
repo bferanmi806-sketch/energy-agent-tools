@@ -67,6 +67,7 @@ from .control_contracts import (
     WorkspaceSiteRequest,
 )
 from .control_store import ControlStore
+from .job_contracts import JobActionQuery, JobListQuery, JobReadScope
 from .managed_oauth import HomeAssistantOAuthConfiguration, ManagedHomeAssistantOAuth
 from .models import ConnectedAccount, EnergyError, Json, Session, Site
 from .onboarding import ConnectionHealth, probe_provider
@@ -493,6 +494,8 @@ class AuthenticatedHost:
             Route("/workspace/keys/{key_id}", self._workspace_revoke_key, methods=["DELETE"]),
             Route("/workspace/toolkits", self._workspace_toolkits, methods=["GET"]),
             Route("/activity", self._activity, methods=["POST"]),
+            Route("/jobs", self._job_history, methods=["POST"]),
+            Route("/jobs/{job_id}", self._job_action, methods=["POST"]),
             Route("/workspace/skills", self._workspace_skills, methods=["GET"]),
             Route("/workspace/connection-setups", self._workspace_setups, methods=["GET"]),
             Route("/workspace/connections", self._workspace_connections, methods=["GET", "POST"]),
@@ -1164,7 +1167,7 @@ class AuthenticatedHost:
             403
             if exc.code.endswith("forbidden")
             else 503
-            if exc.code in {"mcp_unavailable", "activity_unavailable"}
+            if exc.code in {"mcp_unavailable", "activity_unavailable", "job_history_unavailable"}
             else 429
             if exc.code == "mcp_mount_limit"
             else 409
@@ -1248,6 +1251,61 @@ class AuthenticatedHost:
             return _json_response(
                 page.model_dump(mode="json"), headers={"Cache-Control": "no-store"}
             )
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _job_history(self, request: Request) -> Response:
+        principal = self._principal_from_request(request)
+        if isinstance(principal, Response):
+            return principal
+        parsed = await self._parse_json(request, JobListQuery)
+        if isinstance(parsed, Response):
+            return parsed
+        scope = JobReadScope(
+            user_id=principal.user_id,
+            workspace_id=self._runtime_workspace(principal),
+            access_mode="hosted",
+            site_ids=set(self._available_sites(principal)),
+        )
+        try:
+            page = self.agent.job_history(
+                scope,
+                cast(JobListQuery, parsed),
+                adopt_managed_legacy=principal.workspace_mode == "managed",
+            )
+            return _json_response(
+                page.model_dump(mode="json"), headers={"Cache-Control": "no-store"}
+            )
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _job_action(self, request: Request) -> Response:
+        principal = self._principal_from_request(request)
+        if isinstance(principal, Response):
+            return principal
+        parsed = await self._parse_json(request, JobActionQuery)
+        if isinstance(parsed, Response):
+            return parsed
+        job_id = request.path_params.get("job_id", "")
+        scope = JobReadScope(
+            user_id=principal.user_id,
+            workspace_id=self._runtime_workspace(principal),
+            access_mode="hosted",
+            site_ids=set(self._available_sites(principal)),
+        )
+        try:
+            metadata = self.agent.job_metadata(job_id, scope)
+            session = self.agent.session(
+                principal.user_id,
+                metadata.site_id,
+                id=metadata.session_id,
+                access_mode="hosted",
+                **self._runtime_authorization(principal),
+            )
+            result = await self.agent.job(
+                session, cast(JobActionQuery, parsed).operation, job_id=job_id
+            )
+            return _json_response(result, headers={"Cache-Control": "no-store"})
         except EnergyError as exc:
             return self._energy_error(exc)
 

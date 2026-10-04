@@ -5,6 +5,26 @@ record extends the existing backend roadmap; it does not replace unfinished
 gates with test counts. Baseline is main `cb3ac05`, with 419 local tests and
 [passing CI](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37032700732).
 
+## Persistent job history follow-up, October 4
+
+Jobs now carry durable workspace ownership. Authenticated discovery spans
+originating sessions and filters current actor, workspace, site grants and
+hosted mode. Scoped recovery reads results and controls numerical work without
+overwriting or closing the original REST session. Both web consoles provide
+status filters, pagination, result preparation, cancellation and terminal
+cleanup; Python and TypeScript SDKs use the same access rules.
+
+The [job guide](jobs-product.md) records lifecycle and quotas. The
+[qualification record](evidence/job-product-oct04.json) preserves all 828 passing
+Python tests, 17 SDK tests, 11 production web tests and actual browser checks
+using private numerical workers at synthetic sites. The browser verified
+result readiness and a save link, but no saved-file download event was captured.
+Pending work remains queued for a bounded worker run, and interrupted work is
+not silently rerun. Full MCP job discovery and an explicit queue restart journey
+remain follow-up work alongside custom MCP onboarding, complete settings,
+broader actual agent evaluation, physical-site evidence, external contribution,
+sustained operations and a coherent release.
+
 ## Durable execution activity follow-up, October 4
 
 The gateway now persists a bounded allowlist of execution metadata, including

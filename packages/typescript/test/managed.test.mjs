@@ -8,12 +8,12 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { EnergyAgentTools, EnergyHttpError } from '../dist/index.js';
+import { EnergyAgentTools, EnergyHttpError, EnergyProtocolError } from '../dist/index.js';
 
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const python = process.env.ENERGY_AGENT_TEST_PYTHON ?? join(root, '.venv/bin/python');
 
-async function startHost() {
+async function startHost({ withOtherWorkspace = false } = {}) {
   const allocation = createServer();
   allocation.listen(0, '127.0.0.1');
   await once(allocation, 'listening');
@@ -24,12 +24,15 @@ async function startHost() {
 
   const state = await mkdtemp(join(tmpdir(), 'energy-sdk-managed-'));
   const tokenFile = join(state, 'one-time-management-token');
-  const child = spawn(python, [
+  const otherTokenFile = join(state, 'other-management-token');
+  const hostArguments = [
     join(root, 'packages/typescript/test/managed_host.py'),
     '--port', String(port),
     '--state-dir', state,
     '--token-file', tokenFile,
-  ], {
+  ];
+  if (withOtherWorkspace) hostArguments.push('--other-token-file', otherTokenFile);
+  const child = spawn(python, hostArguments, {
     cwd: root,
     env: {
       ...process.env,
@@ -43,16 +46,23 @@ async function startHost() {
   child.once('error', () => { launchFailed = true; exited = true; });
   const baseUrl = `http://127.0.0.1:${port}`;
   let managementToken;
+  let otherManagementToken;
 
   try {
     const deadline = Date.now() + 15000;
-    while (!managementToken) {
+    while (!managementToken || (withOtherWorkspace && !otherManagementToken)) {
       if (exited) throw new Error('Managed acceptance host exited during startup.');
       try {
         managementToken = await readFile(tokenFile, 'utf8');
         await unlink(tokenFile);
       } catch { }
-      if (!managementToken) {
+      if (withOtherWorkspace && !otherManagementToken) {
+        try {
+          otherManagementToken = await readFile(otherTokenFile, 'utf8');
+          await unlink(otherTokenFile);
+        } catch { }
+      }
+      if (!managementToken || (withOtherWorkspace && !otherManagementToken)) {
         if (Date.now() > deadline) throw new Error('Managed host credential startup timed out.');
         await new Promise(resolve => setTimeout(resolve, 50));
       }
@@ -75,6 +85,7 @@ async function startHost() {
     return {
       baseUrl,
       managementToken,
+      otherManagementToken,
       octopusCredential: `fixture-${randomBytes(32).toString('hex')}`,
       async close() {
         if (!exited) {
@@ -100,6 +111,21 @@ async function startHost() {
 
 function hasStatus(status) {
   return error => error instanceof EnergyHttpError && error.status === status;
+}
+
+async function waitForCompletedJob(gateway, jobId) {
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    const response = await gateway.jobAction(jobId, { operation: 'status' });
+    assert.equal(response.ok, true, JSON.stringify(response.error));
+    if (response.job.status === 'completed') return response.job;
+    assert.ok(
+      ['pending', 'running'].includes(response.job.status),
+      `Unexpected job status: ${response.job.status}`,
+    );
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.fail(`Job ${jobId} did not complete before the acceptance timeout.`);
 }
 
 test('managed workspace SDK browses, maps, executes, scopes, and revokes through the production host', async () => {
@@ -173,6 +199,125 @@ test('managed workspace SDK browses, maps, executes, scopes, and revokes through
     const disconnected = await workspace.disconnectConnection(staged.account.id);
     assert.equal(disconnected.ok, true);
     assert.equal(disconnected.account.enabled, false);
+  } finally {
+    await host.close();
+  }
+});
+
+test('managed gateway discovers scoped simulation jobs and acts on completed results', async () => {
+  const host = await startHost({ withOtherWorkspace: true });
+  try {
+    const management = new EnergyAgentTools({ baseUrl: host.baseUrl, token: host.managementToken });
+    const workspace = management.workspace();
+    const foreignGateway = new EnergyAgentTools({
+      baseUrl: host.baseUrl,
+      token: host.otherManagementToken,
+    });
+    const identity = await management.identity();
+    const foreignIdentity = await foreignGateway.identity();
+    assert.equal(foreignIdentity.user_id, identity.user_id);
+    assert.notEqual(
+      (await foreignGateway.workspace().details()).workspace.id,
+      (await workspace.details()).workspace.id,
+    );
+
+    assert.throws(() => management.jobHistory({ limit: 0 }), EnergyProtocolError);
+    assert.throws(() => management.jobHistory({ limit: 101 }), EnergyProtocolError);
+    assert.throws(() => management.jobHistory({ before: 'invalid+cursor' }), EnergyProtocolError);
+    assert.throws(() => management.jobHistory({ status: 'unknown' }), EnergyProtocolError);
+    assert.throws(
+      () => management.jobAction('0'.repeat(32), { operation: 'resume' }),
+      EnergyProtocolError,
+    );
+
+    const site = await workspace.createSite({
+      name: 'Job history site',
+      timezone: 'Europe/London',
+    });
+    const issued = await workspace.createAgentKey({
+      name: 'Job history agent',
+      site_ids: [site.site.id],
+    });
+    const agent = new EnergyAgentTools({ baseUrl: host.baseUrl, token: issued.token });
+    const session = await agent.createSession({ site_id: site.site.id });
+    const arguments_ = {
+      indoor_temp_c: 21,
+      outdoor_temp_c: 2,
+      components: [{ name: 'wall', area_m2: 100, u_value_w_m2k: 0.2 }],
+      air_changes_per_hour: 0.4,
+    };
+    const submitted = [];
+    for (let index = 0; index < 3; index += 1) {
+      const response = await session.job({
+        operation: 'submit',
+        simulation: 'heat_loss',
+        arguments: arguments_,
+      });
+      assert.equal(response.ok, true, JSON.stringify(response.error));
+      assert.equal(response.job.operation, 'heat_loss');
+      submitted.push(response.job.job_id);
+    }
+    await session.close();
+
+    for (const jobId of submitted) await waitForCompletedJob(management, jobId);
+
+    const metadataFields = [
+      'access_mode', 'created_at', 'error_code', 'finished_at', 'input_bytes', 'job_id',
+      'operation', 'output_bytes', 'session_id', 'site_id', 'started_at', 'status', 'user_id',
+      'workspace_id',
+    ].sort();
+    const firstPage = await management.jobHistory({ limit: 1 });
+    assert.equal(firstPage.jobs.length, 1);
+    assert.match(firstPage.next_before, /^[A-Za-z0-9_-]+$/);
+    const pages = [firstPage];
+    while (pages.at(-1).next_before !== null) {
+      pages.push(await management.jobHistory({ limit: 1, before: pages.at(-1).next_before }));
+    }
+    assert.equal(pages.length, 3);
+    const metadata = pages.flatMap(page => page.jobs);
+    assert.deepEqual(new Set(metadata.map(job => job.job_id)), new Set(submitted));
+    for (const job of metadata) {
+      assert.deepEqual(Object.keys(job).sort(), metadataFields);
+      assert.equal(job.status, 'completed');
+      const encoded = JSON.stringify(job);
+      for (const privateField of [
+        'arguments', 'indoor_temp_c', 'outdoor_temp_c', 'components', 'gross_heat_loss_kw',
+        'result', 'error_message', 'message', 'path',
+      ]) assert.equal(encoded.includes(privateField), false);
+    }
+
+    const completed = await management.jobHistory({ status: 'completed', limit: 100 });
+    assert.deepEqual(new Set(completed.jobs.map(job => job.job_id)), new Set(submitted));
+    assert.deepEqual((await management.jobHistory({ status: 'failed' })).jobs, []);
+    await assert.rejects(
+      management.jobHistory({ before: 'AAAA' }),
+      error => error instanceof EnergyHttpError && error.status === 400 && error.code === 'invalid_cursor',
+    );
+
+    const result = await management.jobAction(submitted[0], { operation: 'result' });
+    assert.equal(result.ok, true);
+    assert.equal(result.result.data.gross_heat_loss_kw, 0.38);
+
+    const terminalCancel = await management.jobAction(submitted[1], { operation: 'cancel' });
+    assert.equal(terminalCancel.ok, true);
+    assert.equal(terminalCancel.job.status, 'completed');
+    const deletion = await management.jobAction(submitted[2], { operation: 'delete' });
+    assert.equal(deletion.ok, true);
+    assert.equal(deletion.deleted, true);
+    assert.equal(
+      (await management.jobHistory({ limit: 100 })).jobs.some(job => job.job_id === submitted[2]),
+      false,
+    );
+
+    assert.deepEqual((await foreignGateway.jobHistory({ limit: 100 })).jobs, []);
+    await assert.rejects(
+      foreignGateway.jobAction(submitted[0], { operation: 'status' }),
+      hasStatus(403),
+    );
+    assert.equal(
+      (await management.jobAction(submitted[0], { operation: 'status' })).job.status,
+      'completed',
+    );
   } finally {
     await host.close();
   }

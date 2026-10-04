@@ -449,6 +449,262 @@ export const ExecutionLogQuerySchema = {
 } as const;
 export type ExecutionLogQuery = FromSchema<typeof ExecutionLogQuerySchema, { keepDefaultedPropertiesOptional: true }>;
 
+export const JobHistoryResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "jobs": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "pattern": "^[a-f0-9]{32}$",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "user_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          },
+          "session_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "access_mode": {
+            "enum": [
+              "local",
+              "hosted"
+            ],
+            "title": "Access Mode",
+            "type": "string"
+          },
+          "operation": {
+            "description": "Numerical operations that may run in the isolated worker.",
+            "enum": [
+              "heat_loss",
+              "power_flow",
+              "battery",
+              "solar",
+              "network_power_flow",
+              "network_dispatch"
+            ],
+            "title": "SimulationOperation",
+            "type": "string"
+          },
+          "status": {
+            "description": "Persistent lifecycle states for a job.",
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ],
+            "title": "JobStatus",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "input_bytes": {
+            "minimum": 0,
+            "title": "Input Bytes",
+            "type": "integer"
+          },
+          "output_bytes": {
+            "minimum": 0,
+            "title": "Output Bytes",
+            "type": "integer"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_]{0,127}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          }
+        },
+        "required": [
+          "job_id",
+          "user_id",
+          "session_id",
+          "workspace_id",
+          "site_id",
+          "access_mode",
+          "operation",
+          "status",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "input_bytes",
+          "output_bytes",
+          "error_code"
+        ],
+        "title": "JobMetadata",
+        "type": "object"
+      },
+      "maxItems": 100,
+      "title": "Jobs",
+      "type": "array"
+    },
+    "next_before": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Next Before"
+    }
+  },
+  "required": [
+    "jobs",
+    "next_before"
+  ],
+  "title": "JobMetadataPage",
+  "type": "object"
+} as const;
+export type JobHistoryResponse = FromSchema<typeof JobHistoryResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const JobHistoryQuerySchema = {
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 50,
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "before": {
+      "anyOf": [
+        {
+          "maxLength": 256,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Before"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "enum": [
+            "pending",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "interrupted"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Status"
+    }
+  },
+  "title": "JobListQuery",
+  "type": "object"
+} as const;
+export type JobHistoryQuery = FromSchema<typeof JobHistoryQuerySchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const JobActionQuerySchema = {
+  "additionalProperties": false,
+  "properties": {
+    "operation": {
+      "enum": [
+        "status",
+        "result",
+        "cancel",
+        "delete"
+      ],
+      "title": "Operation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "operation"
+  ],
+  "title": "JobActionQuery",
+  "type": "object"
+} as const;
+export type JobActionQuery = FromSchema<typeof JobActionQuerySchema, { keepDefaultedPropertiesOptional: true }>;
+
 export const WorkspaceResponseSchema = {
   "type": "object",
   "properties": {

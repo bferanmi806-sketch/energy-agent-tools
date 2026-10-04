@@ -3,6 +3,7 @@
 import { GatewayForm } from "./GatewayForm";
 import { ConnectionActions } from "./ConnectionActions";
 import { ConnectionForm } from "./ConnectionForm";
+import { JobsHistory } from "./JobsHistory";
 import { ExecutionActivity } from "./ExecutionActivity";
 import { SkillsCatalogue } from "./SkillsCatalogue";
 
@@ -80,7 +81,7 @@ const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
   artifacts: { title: "Artifacts", description: "Browse the artifacts currently retained in the gateway session." },
   agents: { title: "Connect my agent", description: "Copy a site-scoped MCP endpoint into an agent that supports Streamable HTTP." },
   mcp: { title: "Custom MCP", description: "Review the current boundary for adding a custom MCP server." },
-  jobs: { title: "Jobs", description: "Background job controls are not part of this web view yet." },
+  jobs: { title: "Jobs", description: "Recover numerical simulation jobs and their results across sessions." },
   activity: { title: "Activity log", description: "Review recent tool executions in your current scope." },
   settings: { title: "Settings", description: "Inspect the identity and gateway scope used by this workspace." },
 };
@@ -162,7 +163,7 @@ function siteName(data: DashboardData, siteId: string | null): string {
   return site?.name ?? `Site ${siteId}`;
 }
 
-export function Console({ data, initialView = "apps" }: { data: OperatorDashboardData; initialView?: "apps" | "connections" | "skills" | "activity" }) {
+export function Console({ data, initialView = "apps", jobStatus }: { data: OperatorDashboardData; initialView?: "apps" | "connections" | "skills" | "activity" | "jobs"; jobStatus?: string }) {
   const [view, setView] = useState<ViewId>(initialView);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -301,7 +302,7 @@ export function Console({ data, initialView = "apps" }: { data: OperatorDashboar
             />
           ) : null}
           {view === "mcp" ? <UnsupportedView kind="custom-mcp" /> : null}
-          {view === "jobs" ? <UnsupportedView kind="jobs" /> : null}
+          {view === "jobs" ? <JobsHistory jobs={data.jobs} siteNames={Object.fromEntries(data.identity.sites.map(site => [site.id, site.name]))} {...(jobStatus ? { status: jobStatus } : {})} /> : null}
           {view === "activity" ? <ExecutionActivity activity={data.activity} /> : null}
           {view === "settings" ? <SettingsView data={data} selectedSite={selectedSite} /> : null}
         </main>
@@ -638,7 +639,7 @@ function AgentsView({
   );
 }
 
-type UnsupportedKind = "custom-mcp" | "jobs";
+type UnsupportedKind = "custom-mcp";
 
 const UNSUPPORTED_CONTENT: Record<UnsupportedKind, { icon: LucideIcon; title: string; description: string; available: string }> = {
   "custom-mcp": {
@@ -647,12 +648,7 @@ const UNSUPPORTED_CONTENT: Record<UnsupportedKind, { icon: LucideIcon; title: st
     description: "This web view does not create or review imported MCP servers. Review, namespace and schema-drift checks remain part of the gateway’s operator and SDK workflow.",
     available: "No server is created or changed from this page.",
   },
-  jobs: {
-    icon: Clock3,
-    title: "Job controls are not available here yet",
-    description: "The web dashboard does not load job history or expose pause, resume or cancellation controls.",
-    available: "No background job is started or changed from this page.",
-  },
+
 };
 
 function UnsupportedView({ kind }: { kind: UnsupportedKind }) {

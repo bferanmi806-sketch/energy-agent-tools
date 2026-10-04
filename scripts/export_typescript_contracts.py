@@ -40,6 +40,7 @@ from energy_agent_tools.hosting import (
     _SessionCreate,
     _SkillExecutionRequest,
 )
+from energy_agent_tools.job_contracts import JobActionQuery, JobListQuery, JobMetadataPage
 from energy_agent_tools.models import Asset, EnergyResult, Site, Tool, Toolkit
 from energy_agent_tools.workspace_access import (
     WorkspaceMember,
@@ -143,6 +144,9 @@ def schemas() -> dict[str, dict[str, Any]]:
         "IdentityResponse": expand_model(IdentityResponse),
         "ExecutionLogResponse": expand_model(ExecutionLogPage),
         "ExecutionLogQuery": expand_model(ExecutionLogQuery),
+        "JobHistoryResponse": expand_model(JobMetadataPage),
+        "JobHistoryQuery": expand_model(JobListQuery),
+        "JobActionQuery": expand_model(JobActionQuery),
         "WorkspaceResponse": obj({"workspace": expand_model(WorkspaceDetails)}, ["workspace"]),
         "WorkspaceSiteRequest": expand_model(WorkspaceSiteRequest),
         "WorkspaceSiteResponse": obj({"site": expand_model(Site)}, ["site"]),

@@ -24,6 +24,7 @@ from .activity import (
     ExecutionSuccess,
 )
 from .execution_log_store import ExecutionLogStore
+from .job_contracts import JobListQuery, JobMetadata, JobMetadataPage, JobReadScope
 from .jobs import JobError, JobManager, SimulationOperation
 from .models import (
     Action,
@@ -193,6 +194,47 @@ class EnergyAgent:
             return page.model_copy(update={"recording_status": "unavailable"})
         return page
 
+    def job_history(
+        self, scope: JobReadScope, query: JobListQuery, *, adopt_managed_legacy: bool = False
+    ) -> JobMetadataPage:
+        if self._closed:
+            raise EnergyError("job_history_unavailable", "Job history is unavailable.")
+        try:
+            if self._jobs is None:
+                self._jobs = JobManager(self._job_root)
+            if (
+                adopt_managed_legacy
+                and scope.workspace_id is not None
+                and scope.access_mode == "hosted"
+                and self.workspace_authorizer is not None
+            ):
+                for site_id in scope.site_ids:
+                    if site_id is not None:
+                        self._jobs.adopt_legacy_hosted_workspace(site_id, scope.workspace_id)
+            return self._jobs.metadata_page(scope, query)
+        except JobError as exc:
+            if exc.code == "invalid_cursor":
+                raise EnergyError(exc.code, exc.message) from exc
+            raise EnergyError("job_history_unavailable", "Job history is unavailable.") from exc
+        except Exception as exc:
+            raise EnergyError("job_history_unavailable", "Job history is unavailable.") from exc
+
+    def job_metadata(self, job_id: str, scope: JobReadScope) -> JobMetadata:
+        if not re.fullmatch(r"[a-f0-9]{32}", job_id):
+            raise EnergyError("job_forbidden", "Job is outside the current scope.")
+        if self._closed:
+            raise EnergyError("job_history_unavailable", "Job history is unavailable.")
+        try:
+            if self._jobs is None:
+                self._jobs = JobManager(self._job_root)
+            return self._jobs.metadata(job_id, scope)
+        except JobError as exc:
+            if exc.code == "job_history_unavailable":
+                raise EnergyError(exc.code, exc.message) from exc
+            raise EnergyError("job_forbidden", "Job is outside the current scope.") from exc
+        except Exception as exc:
+            raise EnergyError("job_history_unavailable", "Job history is unavailable.") from exc
+
     def _record_execution(self, session: Session, event: Json) -> None:
         # Only this allowlist reaches disk; arguments, results and messages do not.
         try:
@@ -305,6 +347,13 @@ class EnergyAgent:
             if self._jobs is None:
                 self._jobs = JobManager(self._job_root)
             manager = self._jobs
+            if (
+                session.workspace_id is not None
+                and session.site_id is not None
+                and session.access_mode == "hosted"
+                and self.workspace_authorizer is not None
+            ):
+                manager.adopt_legacy_hosted_workspace(session.site_id, session.workspace_id)
             if operation == "submit":
                 record = manager.submit(
                     session.user_id,
@@ -313,6 +362,7 @@ class EnergyAgent:
                     arguments or {},
                     site_id=session.site_id,
                     access_mode=session.access_mode,
+                    workspace_id=session.workspace_id,
                 )
                 if self._job_task is None or self._job_task.done():
                     self._job_task = asyncio.create_task(manager.run_pending())
@@ -323,6 +373,8 @@ class EnergyAgent:
                         item.as_dict()
                         for item in manager.list(session.user_id, session.id)
                         if item.site_id == session.site_id
+                        and item.workspace_id == session.workspace_id
+                        and item.access_mode == session.access_mode
                         and (
                             session.toolkits is None
                             or self.registry.get(tools[item.operation.value]).toolkit
@@ -339,6 +391,10 @@ class EnergyAgent:
                 if scope["site_id"] != session.site_id:
                     raise EnergyError("site_forbidden", "Job belongs to a different site.")
                 record = manager.status(job_id, session.user_id, scope["session_id"] or "")
+                if record.workspace_id != session.workspace_id:
+                    raise EnergyError(
+                        "workspace_forbidden", "Job belongs to a different workspace."
+                    )
                 self.get_tool(session, tools[record.operation.value])
                 if operation == "resume":
                     result = {"scope": scope}

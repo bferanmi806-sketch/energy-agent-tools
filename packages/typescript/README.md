@@ -174,3 +174,13 @@ Current development source also exposes `energy.identity()` over authenticated
 clients can choose a site without asking users to know its identifier. This
 route requires the current gateway and SDK source; it is absent from v0.3.0
 and from the earlier locally qualified 0.1.0 tarball.
+
+## Durable numerical jobs
+
+`energy.jobHistory({ limit: 50, status: "completed" })` discovers current-actor
+job metadata across sessions. Pass the returned `next_before` as `before` to
+read older work. `energy.jobAction(jobId, { operation: "result" })` recovers a
+completed result under current workspace and site access. `status`, `cancel`
+and `delete` use the same interface. Discovery excludes input arguments,
+result data, raw messages and private paths. See the
+[persistent job guide](../../docs/jobs-product.md) for lifecycle and limits.

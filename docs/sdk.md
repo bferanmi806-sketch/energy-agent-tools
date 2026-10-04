@@ -86,6 +86,8 @@ constructs the session.
 | `execute(tool, arguments, **kwargs)` | yes | Execute a canonical registry tool through scope, action, schema, credential, result, and artifact policy. `persist=True` stores a scoped artifact. |
 | `capability(capability, arguments=None, *, persist=False, **kwargs)` | yes | Resolve and execute one uniquely selected reviewed capability. |
 | `skill(skill_id, parameters=None)` | yes | Run one of the twelve bounded workflows. See [workflows](workflows.md). |
+| `job_history(*, limit=50, before=None, status=None)` | no | Discover durable metadata for the current actor, workspace, site and access mode across sessions. |
+| `job_action(job_id, operation)` | yes | Recover status, result, cancel or delete through current access checks without changing the bound session. |
 | `job(operation, **kwargs)` | yes | Submit, inspect, resume, cancel or delete a bounded numerical job under the current user/site/session policy. |
 | `dispatch(name, arguments)` | yes | Map a provider function name back to one canonical helper and invoke it through the local MCP server. |
 

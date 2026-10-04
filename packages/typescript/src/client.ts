@@ -10,7 +10,7 @@ import {
   ArtifactsResponseSchema, SkillsResponseSchema, JobRequestSchema, JobResponseSchema,
   DeleteSessionResponseSchema, DeleteArtifactResponseSchema,
   SkillExecutionRequestSchema, WorkflowResponseSchema, ToolkitsResponseSchema,
-  ExecutionLogResponseSchema, ExecutionLogQuerySchema,
+  ExecutionLogResponseSchema, ExecutionLogQuerySchema, JobHistoryResponseSchema, JobHistoryQuerySchema, JobActionQuerySchema,
   WorkspaceResponseSchema, WorkspaceSiteRequestSchema, WorkspaceSiteResponseSchema,
   WorkspaceSitesResponseSchema, WorkspaceAssetRequestSchema, WorkspaceAssetResponseSchema,
   WorkspaceAssetsResponseSchema, WorkspaceMapRequestSchema, WorkspaceAgentKeyRequestSchema,
@@ -25,7 +25,7 @@ import type {
   ConnectionVerificationResponse, ConnectionDisconnectedResponse,
   IdentityResponse, ConnectionSetupsResponse, OctopusConnectionRequest, ConnectionCreatedResponse,
   SessionCreate, SessionResponse, SearchRequest, SearchResponse, ExecuteRequest, ExecutionResponse, CapabilityRequest, CapabilityExecutionRequest, ResolutionResponse, ConnectionsResponse, ArtifactsResponse, SkillsResponse, JobRequest, JobResponse, DeleteSessionResponse, DeleteArtifactResponse, SkillExecutionRequest, WorkflowResponse, ToolkitsResponse,
-  ExecutionLogResponse, ExecutionLogQuery,
+  ExecutionLogResponse, ExecutionLogQuery, JobHistoryResponse, JobHistoryQuery, JobActionQuery,
   WorkspaceResponse, WorkspaceSiteRequest, WorkspaceSiteResponse, WorkspaceSitesResponse,
   WorkspaceAssetRequest, WorkspaceAssetResponse, WorkspaceAssetsResponse, WorkspaceMapRequest,
   WorkspaceAgentKeyRequest, WorkspaceIssuedKeyResponse, WorkspaceKeysResponse,
@@ -39,6 +39,9 @@ import type {
 
 const parseSessionCreate = parser<SessionCreate>(SessionCreateSchema);
 const parseIdentity = parser<IdentityResponse>(IdentityResponseSchema);
+const parseJobActionQuery = parser<JobActionQuery>(JobActionQuerySchema);
+const parseJobHistory = parser<JobHistoryResponse>(JobHistoryResponseSchema);
+const parseJobHistoryQuery = parser<JobHistoryQuery>(JobHistoryQuerySchema);
 const parseExecutionLog = parser<ExecutionLogResponse>(ExecutionLogResponseSchema);
 const parseExecutionLogQuery = parser<ExecutionLogQuery>(ExecutionLogQuerySchema);
 const parseConnectionSetups = parser<ConnectionSetupsResponse>(ConnectionSetupsResponseSchema);
@@ -110,6 +113,16 @@ export class EnergyAgentTools {
   activity(input: ExecutionLogQuery = {}, options: RequestOptions = {}) {
     return this.#transport.request({ path: "activity", method: "POST",
       body: parseExecutionLogQuery(input), parse: parseExecutionLog, ...options });
+  }
+
+  jobHistory(input: JobHistoryQuery = {}, options: RequestOptions = {}) {
+    return this.#transport.request({ path: "jobs", method: "POST",
+      body: parseJobHistoryQuery(input), parse: parseJobHistory, ...options });
+  }
+
+  jobAction(jobId: string, input: JobActionQuery, options: RequestOptions = {}) {
+    return this.#transport.request({ path: `jobs/${identifier(jobId)}`, method: "POST",
+      body: parseJobActionQuery(input), parse: parseJob, ...options });
   }
 
   /** Management API for the managed workspace associated with this gateway key. */

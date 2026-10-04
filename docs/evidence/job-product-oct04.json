@@ -1,0 +1,111 @@
+{
+  "scope": "Persistent numerical-job discovery, scoped recovery and Jobs web UI",
+  "base_commit": "dec05d01f87ee914ae36194275c967221673e687",
+  "python_source": "eb4b9a6e114ff46fad8c4e771985b9a4d88e1e1ef7c8a8dfa984dc389f959df2",
+  "qualification": {
+    "focused_initial": {
+      "passed": 26,
+      "failed": 1,
+      "reason": "new managed test fixture omitted encrypted auth store"
+    },
+    "focused_followup": {
+      "passed": 41,
+      "failed": 1,
+      "reason": "new fixture referenced IssuedKey.record instead of IssuedKey.key"
+    },
+    "focused_final": {
+      "passed": 42,
+      "failed": 0
+    },
+    "final_history_latency_and_corruption": {
+      "passed": 12,
+      "failed": 0
+    },
+    "full_python": {
+      "passed": 828,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 893.73,
+      "source_hash_matches": true
+    },
+    "sdk": {
+      "passed": 17,
+      "failed": 0,
+      "seconds": 21.265
+    },
+    "web": {
+      "passed": 11,
+      "failed": 0,
+      "seconds": 17.677,
+      "production_build": true,
+      "type_check": true
+    },
+    "browser": {
+      "synthetic_jobs": 3,
+      "real_private_numerical_workers": true,
+      "originating_rest_session_closed": true,
+      "readable_site_names": true,
+      "status_filter_and_empty_state": true,
+      "result_preparation_and_save_link": true,
+      "safe_stale_result_feedback": true,
+      "safe_corrupt_history_feedback": true,
+      "desktop_requested": [
+        1280,
+        900
+      ],
+      "mobile_requested": [
+        390,
+        844
+      ],
+      "mobile_document_client_width": 380,
+      "mobile_document_scroll_width": 380,
+      "saved_file_observed": false,
+      "download_limit": "In-app browser download events and downloadMedia timed out. Result response payload, ready state and explicit filename were verified; saved-file completion remains unverified."
+    }
+  },
+  "limits": [
+    "Synthetic sites and real private numerical workers; no private physical provider evidence",
+    "Pending jobs remain queued until a bounded worker run; metadata reads do not start work",
+    "Interrupted calculations are visible, not silently rerun",
+    "No cross-member job administration"
+  ],
+  "artifacts_directory": "outputs/job-product-validation-oct04",
+  "workers": [
+    {
+      "model": "gpt-6-luna",
+      "reasoning": "max",
+      "assignment": "SQLite discovery acceptance",
+      "owned_paths": [
+        "tests/test_job_discovery.py"
+      ]
+    },
+    {
+      "model": "gpt-6-luna",
+      "reasoning": "max",
+      "assignment": "Jobs UI and action feedback",
+      "owned_paths": [
+        "apps/web/src/components/JobsHistory.tsx",
+        "apps/web/src/components/JobsHistory.module.css"
+      ]
+    },
+    {
+      "model": "gpt-6-luna",
+      "reasoning": "max",
+      "assignment": "TypeScript SDK real-host acceptance",
+      "owned_paths": [
+        "packages/typescript/test/managed.test.mjs"
+      ]
+    }
+  ],
+  "review": [
+    "Primary owned storage, authorization, shared contracts and route integration.",
+    "Native browser POST did not produce a result; explicit client payloads and fixed feedback replaced navigation to raw error JSON.",
+    "Automatic Blob download produced no observable download; result preparation now exposes an explicit Save JSON link.",
+    "One overlapping build attempt was rejected by the Next.js build lock; the final build and acceptance ran sequentially."
+  ],
+  "browser_screenshots": [
+    "job-product-desktop-oct04.png",
+    "job-product-mobile-oct04.png"
+  ],
+  "published_ci": "not yet run"
+}

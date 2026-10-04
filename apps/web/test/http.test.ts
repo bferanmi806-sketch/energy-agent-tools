@@ -70,6 +70,37 @@ test("production web routes authenticate the real gateway and keep keys out of r
     const dashboard=await fetch(webUrl,{headers:{cookie}}); assert.equal(dashboard.status,200);
     const html=await dashboard.text(); assert.match(html,/Connect apps/); assert.match(html,/Synthetic home/);
     const session=await sdk.createSession({site_id:"synthetic-home"});
+    const submitted = await session.job({ operation: "submit", simulation: "heat_loss", arguments: {
+      indoor_temp_c: 21, outdoor_temp_c: 2,
+      components: [{ name: "wall", area_m2: 100, u_value_w_m2k: .2 }], air_changes_per_hour: .4,
+    } });
+    assert.equal(submitted.ok, true);
+    assert.ok("job" in submitted && isRecord(submitted.job));
+    const jobId = submitted.job.job_id;
+    assert.ok(typeof jobId === "string");
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const history = await sdk.jobHistory({ status: "completed" });
+      if (history.jobs.some(job => job.job_id === jobId)) break;
+      if (attempt === 99) throw new Error("Real numerical worker did not complete.");
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    const jobsPage = await fetch(webUrl + "/?view=jobs&job_status=completed", { headers: { cookie } });
+    const jobsHtml = await jobsPage.text();
+    assert.match(jobsHtml, /Heat loss/); assert.ok(jobsHtml.includes(jobId));
+    assert.match(jobsHtml, /Download result/); assert.ok(!jobsHtml.includes(providerKey));
+    const jobFields = { job_id: jobId, operation: "result" };
+    assert.equal((await post("/api/jobs/action", jobFields, cookie, null)).status, 403);
+    assert.equal((await post("/api/jobs/action", jobFields)).status, 401);
+    assert.equal((await post("/api/jobs/action", { ...jobFields, user_id: "foreign" }, cookie)).status, 400);
+    const downloaded = await post("/api/jobs/action", jobFields, cookie);
+    assert.equal(downloaded.status, 200);
+    assert.match(downloaded.headers.get("content-disposition") ?? "", /attachment/);
+    const downloadedResult: unknown = await downloaded.json();
+    assert.ok(isRecord(downloadedResult) && isRecord(downloadedResult.result) && isRecord(downloadedResult.result.data));
+    assert.ok(Math.abs(Number(downloadedResult.result.data.gross_heat_loss_kw) - .38) < .0001);
+    const removedJob = await post("/api/jobs/action", { job_id: jobId, operation: "delete" }, cookie);
+    assert.equal(removedJob.status, 303);
+    assert.equal((await sdk.jobHistory()).jobs.length, 0);
     const catalogue=await session.toolkits();
     const setups=await session.connectionSetups();
     assert.equal(setups.setups[0]?.enabled,true);

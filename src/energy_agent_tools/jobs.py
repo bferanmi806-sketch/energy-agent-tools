@@ -15,6 +15,7 @@ not a security sandbox; see ``docs/simulation-jobs.md``.
 from __future__ import annotations
 
 import asyncio
+import base64
 import builtins
 import json
 import math
@@ -31,8 +32,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from .job_contracts import JobListQuery, JobMetadata, JobMetadataPage, JobReadScope
 
 try:
     import fcntl
@@ -155,6 +159,7 @@ class JobRecord:
     output_bytes: int
     error_code: str | None = None
     error_message: str | None = None
+    workspace_id: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a transport-safe status object without private file paths."""
@@ -164,6 +169,7 @@ class JobRecord:
             "user_id": self.user_id,
             "session_id": self.session_id,
             "site_id": self.site_id,
+            "workspace_id": self.workspace_id,
             "access_mode": self.access_mode,
             "operation": self.operation.value,
             "status": self.status.value,
@@ -387,6 +393,9 @@ class JobManager:
         _chmod_private(self.root, stat.S_IRWXU)
         _chmod_private(self.jobs_dir, stat.S_IRWXU)
         with self._connect() as connection:
+            version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+            if version not in {0, 1, 2}:
+                raise JobError("invalid_job_store", "The job schema version is not supported.")
             connection.executescript(
                 f"""
                 CREATE TABLE IF NOT EXISTS jobs (
@@ -418,6 +427,8 @@ class JobManager:
                 columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(jobs)")}
                 if "site_id" not in columns:
                     connection.execute("ALTER TABLE jobs ADD COLUMN site_id TEXT")
+                if "workspace_id" not in columns:
+                    connection.execute("ALTER TABLE jobs ADD COLUMN workspace_id TEXT")
                 if "access_mode" not in columns:
                     connection.execute(
                         "ALTER TABLE jobs ADD COLUMN access_mode TEXT NOT NULL DEFAULT 'local' "
@@ -428,6 +439,7 @@ class JobManager:
                 connection.rollback()
                 raise
             self._migrate_operations(connection)
+            connection.execute("PRAGMA user_version = 2")
         if self.database_path.exists():
             _chmod_private(self.database_path, stat.S_IRUSR | stat.S_IWUSR)
 
@@ -540,10 +552,10 @@ class JobManager:
         except Exception:
             pass
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
+    def _connect(self, *, timeout: float = 30) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.database_path, timeout=timeout, isolation_level=None)
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA busy_timeout=30000")
+        connection.execute(f"PRAGMA busy_timeout={int(timeout * 1000)}")
         connection.execute("PRAGMA foreign_keys=ON")
         # The service uses short IMMEDIATE transactions, so the rollback
         # journal keeps the durable directory to one mode-0600 database file.
@@ -581,8 +593,8 @@ class JobManager:
             )
             return cursor.rowcount
 
-    def _row(self, job_id: str) -> sqlite3.Row:
-        with self._connect() as connection:
+    def _row(self, job_id: str, *, timeout: float = 30) -> sqlite3.Row:
+        with self._connect(timeout=timeout) as connection:
             row = connection.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
         if row is None:
             raise JobNotFound()
@@ -599,6 +611,7 @@ class JobManager:
             user_id=str(row["user_id"]),
             session_id=str(row["session_id"]),
             site_id=row["site_id"],
+            workspace_id=row["workspace_id"],
             access_mode=access_mode,
             operation=SimulationOperation(str(row["operation"])),
             status=JobStatus(str(row["status"])),
@@ -625,6 +638,7 @@ class JobManager:
         *,
         site_id: str | None = None,
         access_mode: AccessMode = "local",
+        workspace_id: str | None = None,
     ) -> JobRecord:
         """Persist a validated pending job and return its scoped identifier."""
 
@@ -632,6 +646,8 @@ class JobManager:
         access_mode = _validate_access_mode(access_mode)
         user_id = _validate_identity(user_id, "user_id")
         session_id = _validate_identity(session_id, "session_id")
+        if workspace_id is not None:
+            workspace_id = _validate_identity(workspace_id, "workspace_id")
         if site_id is not None:
             site_id = _validate_identity(site_id, "site_id")
         try:
@@ -690,8 +706,8 @@ class JobManager:
                     """
                     INSERT INTO jobs (
                         job_id, user_id, session_id, site_id, operation, status,
-                        input_path, output_path, state_dir, input_bytes, created_at, access_mode
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        input_path, output_path, state_dir, input_bytes, created_at, access_mode, workspace_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         job_id,
@@ -706,6 +722,7 @@ class JobManager:
                         len(payload),
                         now,
                         access_mode,
+                        workspace_id,
                     ),
                 )
                 connection.commit()
@@ -882,6 +899,94 @@ class JobManager:
                 (user_id, session_id),
             ).fetchall()
         return [self._record(row) for row in rows]
+
+    def metadata(self, job_id: str, scope: JobReadScope) -> JobMetadata:
+        from .job_contracts import JobMetadata
+
+        row = self._row(job_id, timeout=0.1)
+        if (
+            row["user_id"] != scope.user_id
+            or row["workspace_id"] != scope.workspace_id
+            or row["access_mode"] != scope.access_mode
+            or row["site_id"] not in scope.site_ids
+        ):
+            raise JobAccessDenied()
+        try:
+            data = self._record(row).as_dict()
+            data.pop("error_message")
+            return JobMetadata.model_validate_json(json.dumps(data))
+        except (ValueError, KeyError) as exc:
+            raise JobError("job_history_unavailable", "Job history is unavailable.") from exc
+
+    def metadata_page(self, scope: JobReadScope, query: JobListQuery) -> JobMetadataPage:
+        from pydantic import ValidationError
+
+        from .job_contracts import JobCursor, JobMetadata, JobMetadataPage
+
+        self._ensure_open()
+        clauses = ["user_id = ?", "workspace_id IS ?", "access_mode = ?"]
+        parameters: list[str | int | None] = [scope.user_id, scope.workspace_id, scope.access_mode]
+        if query.status is not None:
+            clauses.append("status = ?")
+            parameters.append(query.status)
+        if query.before is not None:
+            try:
+                raw = base64.b64decode(
+                    query.before + "=" * (-len(query.before) % 4), altchars=b"-_", validate=True
+                )
+                cursor = JobCursor.model_validate_json(raw)
+            except (ValueError, ValidationError) as exc:
+                raise JobError("invalid_cursor", "Job history cursor is invalid.") from exc
+            clauses.append("(created_at < ? OR (created_at = ? AND job_id < ?))")
+            timestamp = cursor.created_at.astimezone(UTC).isoformat()
+            parameters.extend([timestamp, timestamp, cursor.job_id])
+        sql = (
+            "SELECT * FROM jobs WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY created_at DESC, job_id DESC"
+        )
+        entries: list[JobMetadata] = []
+        more = False
+        try:
+            with self._connect(timeout=0.1) as connection:
+                rows = connection.execute(sql, parameters)
+                while batch := rows.fetchmany(128):
+                    for row in batch:
+                        if row["site_id"] not in scope.site_ids:
+                            continue
+                        if len(entries) == query.limit:
+                            more = True
+                            break
+                        data = self._record(row).as_dict()
+                        data.pop("error_message")
+                        entries.append(JobMetadata.model_validate_json(json.dumps(data)))
+                    if more:
+                        break
+        except (sqlite3.Error, ValueError, KeyError, OSError) as exc:
+            raise JobError("job_history_unavailable", "Job history is unavailable.") from exc
+        next_before = None
+        if more:
+            last = entries[-1]
+            cursor = JobCursor(created_at=last.created_at, job_id=last.job_id)
+            next_before = (
+                base64.urlsafe_b64encode(cursor.model_dump_json().encode()).decode().rstrip("=")
+            )
+        return JobMetadataPage(jobs=entries, next_before=next_before)
+
+    def adopt_legacy_hosted_workspace(self, site_id: str, workspace_id: str) -> None:
+        """Attach legacy rows only after the host verifies an immutable managed site."""
+        self._ensure_open()
+        site_id = _validate_identity(site_id, "site_id")
+        workspace_id = _validate_identity(workspace_id, "workspace_id")
+        try:
+            with self._connect(timeout=0.1) as connection:
+                connection.execute(
+                    """UPDATE jobs SET workspace_id = ?
+                   WHERE site_id = ? AND workspace_id IS NULL AND access_mode = 'hosted'""",
+                    (workspace_id, site_id),
+                )
+        except (sqlite3.Error, OSError) as exc:
+            raise JobError("job_history_unavailable", "Job history is unavailable.") from exc
 
     def _claim_pending(self, limit: int) -> builtins.list[sqlite3.Row]:
         if limit <= 0:
