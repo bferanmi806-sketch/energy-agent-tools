@@ -1,4 +1,4 @@
-export { EnergyAgentTools, EnergySession, EnergyWorkspace } from "./client.js";
+export { EnergyAgentTools, EnergySession, EnergyWorkspace, parseMcpInspectionRequest, parseMcpStageRequest } from "./client.js";
 export type { RequestOptions } from "./client.js";
 export { EnergyHttpError, EnergyProtocolError, EnergyTransportError } from "./transport.js";
 export type { HttpTransportOptions } from "./transport.js";
@@ -17,6 +17,9 @@ export type {
   WorkspaceOAuthConfigurationsResponse, WorkspaceHomeAssistantAuthorizationRequest,
   WorkspaceOAuthCompleteRequest, WorkspaceAuthorizationResponse,
   WorkspaceOAuthCleanupRequest, WorkspaceOAuthCleanupResponse,
+  MCPConnectionInspectionRequest, MCPConnectionInspectionResponse,
+  MCPConnectionStageRequest, MCPConnectionStageResponse,
+  MCPConnectionRecoveryResponse,
 } from "./contracts.js";
 export { EnergyMcpClient, EnergyMcpError } from "./mcp.js";
 export type {

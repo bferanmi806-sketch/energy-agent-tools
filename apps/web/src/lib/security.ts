@@ -397,3 +397,41 @@ export async function readBoundedForm(request: Request): Promise<URLSearchParams
   }
   return parseUrlEncodedFormBody(body);
 }
+
+
+export const MAX_MCP_BODY_BYTES = 128 * 1024;
+
+/** Read JSON without trusting a caller's declared body size. */
+export async function readBoundedJson(request: Request): Promise<unknown> {
+  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  if (contentType !== "application/json" || request.headers.has("content-encoding")) return null;
+  const declared = request.headers.get("content-length");
+  if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > MAX_MCP_BODY_BYTES)) return null;
+  if (request.body === null) return null;
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      if (part.value.byteLength > MAX_MCP_BODY_BYTES - total) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(part.value.slice());
+      total += part.value.byteLength;
+    }
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+}

@@ -13,6 +13,7 @@ import {
   Sparkles,
   Users,
   Waves,
+  Wrench,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -29,8 +30,9 @@ import { WorkspaceSharing } from "./WorkspaceSharing";
 import { JobsHistory } from "./JobsHistory";
 import { ExecutionActivity } from "./ExecutionActivity";
 import { SkillsCatalogue } from "./SkillsCatalogue";
+import { CustomMCPConnect } from "./CustomMCPConnect";
 
-type ViewId = "apps" | "connections" | "sites" | "sharing" | "agent" | "skills" | "activity" | "jobs";
+type ViewId = "apps" | "mcp" | "connections" | "sites" | "sharing" | "agent" | "skills" | "activity" | "jobs";
 
 interface NavigationItem {
   id: ViewId;
@@ -40,6 +42,7 @@ interface NavigationItem {
 
 const NAVIGATION: NavigationItem[] = [
   { id: "apps", label: "Connect apps", icon: LayoutGrid },
+  { id: "mcp", label: "Add MCP server", icon: Wrench },
   { id: "connections", label: "Connections", icon: Activity },
   { id: "sites", label: "Sites & assets", icon: ShieldCheck },
   { id: "sharing", label: "Sharing", icon: Users },
@@ -53,6 +56,10 @@ const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
   apps: {
     title: "Connect a system",
     description: "Choose a system from your gateway catalogue. You can map it to a site after the gateway verifies the connection.",
+  },
+  mcp: {
+    title: "Add MCP server",
+    description: "Inspect a custom MCP endpoint, review the tools it exposes, and save a pending connection.",
   },
   connections: {
     title: "Connections",
@@ -120,7 +127,10 @@ function connectionLabel(state: string): string {
 
 function connectionDisplayName(connection: ManagedDashboardData["connections"][number]): string {
   const displayName = connection.display_name?.trim();
-  return displayName || connection.toolkit.replaceAll("-", " ");
+  if (displayName) return displayName;
+  return connection.toolkit.startsWith("custom-mcp-")
+    ? "Custom MCP server"
+    : connection.toolkit.replaceAll("-", " ");
 }
 
 function connectionStatusClass(state: string): string {
@@ -153,12 +163,15 @@ export function ManagedConsole({
   authorizationResult?: AuthorizationResult;
   jobStatus?: string;
 }) {
-  const [view, setView] = useState<ViewId>(initialView);
+  const canManageCustomMCP = data.identity.can_manage_workspace === true && data.workspace.mode === "managed";
+  const [view, setView] = useState<ViewId>(() => initialView === "mcp" && !canManageCustomMCP ? "apps" : initialView);
   const [query, setQuery] = useState("");
   const [selectedToolkitId, setSelectedToolkitId] = useState(
     () => data.toolkits.find((toolkit) => toolkit.id === "octopus-energy-account")?.id ?? data.toolkits[0]?.id ?? null,
   );
-  const currentView = VIEW_CONTENT[view];
+  const currentViewId = view === "mcp" && !canManageCustomMCP ? "apps" : view;
+  const currentView = VIEW_CONTENT[currentViewId];
+  const visibleNavigation = canManageCustomMCP ? NAVIGATION : NAVIGATION.filter((item) => item.id !== "mcp");
   const categories = useMemo(() => {
     const values = new Set<string>();
     for (const toolkit of data.toolkits) {
@@ -179,6 +192,11 @@ export function ManagedConsole({
   const stage = workspaceStep(data);
 
   function navigate(next: ViewId) {
+    if (next === "mcp" && !canManageCustomMCP) {
+      setView("apps");
+      window.history.replaceState(null, "", "/?view=apps");
+      return;
+    }
     setView(next);
     window.history.replaceState(null, "", `/?view=${next}`);
   }
@@ -197,14 +215,14 @@ export function ManagedConsole({
         <nav className="product-navigation managed-navigation" aria-label="Workspace sections">
           <p className="nav-group-label">Set up</p>
           <div className="nav-items">
-            {NAVIGATION.map((item) => {
+            {visibleNavigation.map((item) => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.id}
-                  className={`nav-item${view === item.id ? " nav-item-active" : ""}`}
+                  className={`nav-item${currentViewId === item.id ? " nav-item-active" : ""}`}
                   type="button"
-                  aria-current={view === item.id ? "page" : undefined}
+                  aria-current={currentViewId === item.id ? "page" : undefined}
                   onClick={() => navigate(item.id)}
                 >
                   <Icon size={17} strokeWidth={1.8} aria-hidden="true" />
@@ -260,7 +278,7 @@ export function ManagedConsole({
             </div>
           ) : null}
 
-          {view === "apps" ? (
+          {currentViewId === "apps" ? (
             <AppsView
               categories={categories}
               data={data}
@@ -273,13 +291,14 @@ export function ManagedConsole({
               onSelectToolkit={setSelectedToolkitId}
             />
           ) : null}
-          {view === "connections" ? <ConnectionsView data={data} onBrowseApps={() => navigate("apps")} /> : null}
-          {view === "sites" ? <SitesView data={data} /> : null}
-          {view === "sharing" ? <WorkspaceSharing members={data.members} sites={data.sites} connections={data.connections} gatewayUrl={data.publicGatewayUrl} /> : null}
-          {view === "jobs" ? <JobsHistory jobs={data.jobs} siteNames={Object.fromEntries(data.identity.sites.map(site => [site.id, site.name]))} {...(jobStatus ? { status: jobStatus } : {})} /> : null}
-          {view === "activity" ? <ExecutionActivity activity={data.activity} /> : null}
-          {view === "skills" ? <SkillsCatalogue skills={data.skills} /> : null}
-          {view === "agent" ? <AgentKeyPanel keys={data.keys} sites={data.sites} gatewayUrl={data.publicGatewayUrl} /> : null}
+          {currentViewId === "mcp" && canManageCustomMCP ? <CustomMCPConnect enabled={canManageCustomMCP} /> : null}
+          {currentViewId === "connections" ? <ConnectionsView data={data} onBrowseApps={() => navigate("apps")} /> : null}
+          {currentViewId === "sites" ? <SitesView data={data} /> : null}
+          {currentViewId === "sharing" ? <WorkspaceSharing members={data.members} sites={data.sites} connections={data.connections} gatewayUrl={data.publicGatewayUrl} /> : null}
+          {currentViewId === "jobs" ? <JobsHistory jobs={data.jobs} siteNames={Object.fromEntries(data.identity.sites.map(site => [site.id, site.name]))} {...(jobStatus ? { status: jobStatus } : {})} /> : null}
+          {currentViewId === "activity" ? <ExecutionActivity activity={data.activity} /> : null}
+          {currentViewId === "skills" ? <SkillsCatalogue skills={data.skills} /> : null}
+          {currentViewId === "agent" ? <AgentKeyPanel keys={data.keys} sites={data.sites} gatewayUrl={data.publicGatewayUrl} /> : null}
         </main>
         <footer className="workspace-footer">
           <span>Energy Agent Tools</span>

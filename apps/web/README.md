@@ -83,3 +83,15 @@ The production HTTP acceptance in `test/managed-workspace.test.ts` runs a real
 managed gateway and web server with synthetic provider responses. It checks
 zero-site onboarding, mapping, scope boundaries and agent-key issuance. These
 fixtures do not qualify a physical meter or real provider account.
+
+
+## Connect a custom MCP server
+
+Workspace managers can open **Add MCP server**, inspect an approved endpoint,
+review selected tools, and save a pending connection. Mapping verifies the saved
+schema before it publishes the tools at the owned site. The gateway supports
+no-auth, bearer, Basic, and API-key servers. Its default target policy accepts
+public HTTPS endpoints. Private targets require an operator approval callback.
+
+Follow the [custom MCP connection guide](../../docs/custom-mcp-onboarding.md).
+A connection health check confirms schema and connectivity, not measurement accuracy.

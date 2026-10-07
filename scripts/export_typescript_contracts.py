@@ -41,6 +41,12 @@ from energy_agent_tools.hosting import (
     _SkillExecutionRequest,
 )
 from energy_agent_tools.job_contracts import JobActionQuery, JobListQuery, JobMetadataPage
+from energy_agent_tools.mcp_contracts import (
+    MCPConnectionInspectionRequest,
+    MCPConnectionInspectionResponse,
+    MCPConnectionRecoveryResponse,
+    MCPConnectionStageRequest,
+)
 from energy_agent_tools.models import Asset, EnergyResult, Site, Tool, Toolkit
 from energy_agent_tools.workspace_access import (
     WorkspaceMember,
@@ -176,6 +182,19 @@ def schemas() -> dict[str, dict[str, Any]]:
         "WorkspaceAuthorizationResponse": expand_model(WorkspaceAuthorizationResponse),
         "ConnectionSetupsResponse": expand_model(ConnectionSetupsResponse),
         "OctopusConnectionRequest": expand_model(OctopusConnectionRequest),
+        "MCPConnectionInspectionRequest": expand_model(MCPConnectionInspectionRequest),
+        "MCPConnectionInspectionResponse": expand_model(MCPConnectionInspectionResponse),
+        "MCPConnectionRecoveryResponse": expand_model(MCPConnectionRecoveryResponse),
+        "MCPConnectionStageRequest": expand_model(MCPConnectionStageRequest),
+        "MCPConnectionStageResponse": obj(
+            {
+                "ok": {"const": True},
+                "account": connection,
+                "schema_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "selected_tool_count": {"type": "integer", "minimum": 1, "maximum": 100},
+            },
+            ["ok", "account", "schema_digest", "selected_tool_count"],
+        ),
         "SessionCreate": expand_model(_SessionCreate),
         "SearchRequest": expand_model(_SearchRequest),
         "ExecuteRequest": expand_model(_ExecuteRequest),
@@ -214,10 +233,10 @@ def schemas() -> dict[str, dict[str, Any]]:
                 "health": obj(
                     {
                         "connection_id": text,
-                        "provider": {"enum": ["octopus", "home_assistant"]},
+                        "provider": {"enum": ["octopus", "home_assistant", "custom_mcp"]},
                         "status": {"const": "healthy"},
                         "checked_at": text,
-                        "probe": {"const": "provider-read"},
+                        "probe": {"enum": ["provider-read", "mcp-schema"]},
                         "message": text,
                     },
                     ["connection_id", "provider", "status", "checked_at", "probe", "message"],
@@ -232,10 +251,10 @@ def schemas() -> dict[str, dict[str, Any]]:
                 "health": obj(
                     {
                         "connection_id": text,
-                        "provider": {"enum": ["octopus", "home_assistant"]},
+                        "provider": {"enum": ["octopus", "home_assistant", "custom_mcp"]},
                         "status": {"enum": ["healthy", "unhealthy"]},
                         "checked_at": text,
-                        "probe": {"const": "provider-read"},
+                        "probe": {"enum": ["provider-read", "mcp-schema"]},
                         "message": text,
                     },
                     ["connection_id", "provider", "status", "checked_at", "probe", "message"],

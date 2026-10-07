@@ -639,6 +639,23 @@ class ControlStore:
             for row in rows
         ]
 
+    def managed_workspaces(self) -> list[WorkspaceRecord]:
+        """Return the trusted local operator inventory of managed workspaces."""
+        with self._connection() as db:
+            rows = db.execute(
+                """SELECT id, user_id, name, mode FROM workspaces
+                   WHERE mode = 'managed' ORDER BY user_id, id"""
+            ).fetchall()
+        return [
+            WorkspaceRecord(
+                id=row["id"],
+                user_id=row["user_id"],
+                name=row["name"],
+                mode=_parse_workspace_mode(row["mode"]),
+            )
+            for row in rows
+        ]
+
     def create_key(
         self,
         user_id: str,

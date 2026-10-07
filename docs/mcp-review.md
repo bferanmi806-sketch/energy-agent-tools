@@ -17,8 +17,27 @@ grant. An unrelated account preference cannot retarget that tool. Stored disable
 revoke and removal state refreshes before schema or catalogue publication.
 Ownership fields stay out of public schemas and the TypeScript contract.
 
-This is a backend foundation. The managed Add Custom MCP onboarding API, persisted
-review definitions, recovery, health and web review journey remain open.
+Workspace managers can use **Add MCP server** in the web console, or
+`POST /workspace/mcp/inspect` and `POST /workspace/mcp/stage`. Inspection returns
+names and schema hashes without publishing tools. Each selected tool requires
+an explicit action, result kind, unit and review confirmation. Staging encrypts
+the provider credential and saves a bounded review definition as a pending
+connection. The existing connection mapping endpoint verifies the current
+schema again before publishing the selected tools at the owned site.
+
+The gateway restores active reviewed definitions during managed-host startup.
+It reapproves the network target and checks the saved schema before publication.
+A failed provider stays unavailable while other connections recover. Managers
+can retry with `POST /workspace/mcp/recover` or the connection health check.
+Disconnect removes the private namespace and revokes execution access.
+
+The default network policy accepts public HTTPS targets only. Private targets
+require a trusted operator approval callback passed to `create_host`; users
+cannot enable private access in an onboarding request. This callback is an
+embedded-host configuration, not a persisted web setting. No-auth, bearer,
+Basic and API-key connections are supported; managed custom-MCP OAuth remains
+open. A healthy MCP connection confirms connectivity and the approved schema,
+not the accuracy of its measurements or safety of a physical installation.
 `reviewed: true` alone does not make a shared transport tenant-safe.
 
 ## Review contract

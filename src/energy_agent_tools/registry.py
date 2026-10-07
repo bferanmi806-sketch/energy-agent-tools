@@ -7,7 +7,7 @@ from collections.abc import Mapping
 
 from jsonschema import Draft202012Validator
 
-from .models import EnergyError, Handler, Tool, Toolkit
+from .models import EnergyError, Handler, Tool, ToolAccountScope, Toolkit
 
 
 class Registry:
@@ -55,6 +55,69 @@ class Registry:
         if name not in self.tools:
             raise EnergyError("tool_not_found", "Tool does not exist; search the registry first.")
         return self.tools[name]
+
+    def _account_tool_names(self, toolkit_id: str, account_scope: ToolAccountScope) -> set[str]:
+        names = {name for name, tool in self.tools.items() if tool.toolkit == toolkit_id}
+        if toolkit_id in self.toolkits:
+            if not names or any(self.tools[name].account_scope != account_scope for name in names):
+                raise ValueError("Toolkit is outside the connection ownership scope")
+        elif names:
+            raise ValueError("Toolkit registration is inconsistent")
+        return names
+
+    def replace_account_toolkit(
+        self,
+        toolkit: Toolkit,
+        tools: Mapping[str, tuple[Tool, Handler]],
+        *,
+        account_scope: ToolAccountScope,
+    ) -> None:
+        """Publish one validated connection namespace without changing its neighbors."""
+
+        if not isinstance(account_scope, ToolAccountScope):
+            raise TypeError("Connection ownership is required")
+        if not tools or len(tools) > 100:
+            raise ValueError("A managed toolkit requires between 1 and 100 tools")
+        old_names = self._account_tool_names(toolkit.id, account_scope)
+        prepared = Registry()
+        prepared.add_toolkit(toolkit)
+        for name, (tool, handler) in tools.items():
+            if (
+                name != tool.name
+                or not name.startswith(toolkit.id + ".")
+                or tool.toolkit != toolkit.id
+                or tool.account_scope != account_scope
+                or tool.resource_scope != "account"
+                or not callable(handler)
+                or (name in self.tools and name not in old_names)
+            ):
+                raise ValueError("Tool is outside the connection namespace or ownership scope")
+            prepared.add(tool, handler)
+        self.toolkits = {**self.toolkits, toolkit.id: toolkit}
+        self.tools = {
+            **{name: tool for name, tool in self.tools.items() if name not in old_names},
+            **prepared.tools,
+        }
+        self.handlers = {
+            **{name: handler for name, handler in self.handlers.items() if name not in old_names},
+            **prepared.handlers,
+        }
+        self._indexed_count = -1
+
+    def remove_account_toolkit(self, toolkit_id: str, *, account_scope: ToolAccountScope) -> None:
+        """Remove only the exact connection-owned namespace; missing removal is harmless."""
+
+        if not isinstance(account_scope, ToolAccountScope):
+            raise TypeError("Connection ownership is required")
+        names = self._account_tool_names(toolkit_id, account_scope)
+        if toolkit_id not in self.toolkits:
+            return
+        self.toolkits = {key: value for key, value in self.toolkits.items() if key != toolkit_id}
+        self.tools = {name: tool for name, tool in self.tools.items() if name not in names}
+        self.handlers = {
+            name: handler for name, handler in self.handlers.items() if name not in names
+        }
+        self._indexed_count = -1
 
     def search(
         self,

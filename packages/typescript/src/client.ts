@@ -20,6 +20,8 @@ import {
   WorkspaceOAuthConfigurationsResponseSchema, WorkspaceHomeAssistantAuthorizationRequestSchema,
   WorkspaceAuthorizationResponseSchema, WorkspaceOAuthCompleteRequestSchema,
   WorkspaceOAuthCleanupRequestSchema, WorkspaceOAuthCleanupResponseSchema,
+  MCPConnectionInspectionRequestSchema, MCPConnectionInspectionResponseSchema,
+  MCPConnectionStageRequestSchema, MCPConnectionStageResponseSchema, MCPConnectionRecoveryResponseSchema,
 } from "./contracts.js";
 import type {
   ConnectionVerificationResponse, ConnectionDisconnectedResponse,
@@ -35,6 +37,8 @@ import type {
   WorkspaceOAuthConfigurationsResponse, WorkspaceHomeAssistantAuthorizationRequest,
   WorkspaceAuthorizationResponse, WorkspaceOAuthCompleteRequest,
   WorkspaceOAuthCleanupRequest, WorkspaceOAuthCleanupResponse,
+  MCPConnectionInspectionRequest, MCPConnectionInspectionResponse,
+  MCPConnectionStageRequest, MCPConnectionStageResponse, MCPConnectionRecoveryResponse,
 } from "./contracts.js";
 
 const parseSessionCreate = parser<SessionCreate>(SessionCreateSchema);
@@ -90,6 +94,11 @@ const parseWorkspaceAuthorization = parser<WorkspaceAuthorizationResponse>(Works
 const parseWorkspaceOAuthCompleteRequest = parser<WorkspaceOAuthCompleteRequest>(WorkspaceOAuthCompleteRequestSchema);
 const parseWorkspaceOAuthCleanupRequest = parser<WorkspaceOAuthCleanupRequest>(WorkspaceOAuthCleanupRequestSchema);
 const parseWorkspaceOAuthCleanup = parser<WorkspaceOAuthCleanupResponse>(WorkspaceOAuthCleanupResponseSchema);
+export const parseMcpInspectionRequest = parser<MCPConnectionInspectionRequest>(MCPConnectionInspectionRequestSchema);
+const parseMcpInspection = parser<MCPConnectionInspectionResponse>(MCPConnectionInspectionResponseSchema);
+export const parseMcpStageRequest = parser<MCPConnectionStageRequest>(MCPConnectionStageRequestSchema);
+const parseMcpStage = parser<MCPConnectionStageResponse>(MCPConnectionStageResponseSchema);
+const parseMcpRecovery = parser<MCPConnectionRecoveryResponse>(MCPConnectionRecoveryResponseSchema);
 
 export interface RequestOptions { signal?: AbortSignal }
 
@@ -151,6 +160,26 @@ export class EnergyWorkspace {
 
   constructor(transport: HttpTransport) {
     this.#transport = transport;
+  }
+
+  inspectMcp(input: MCPConnectionInspectionRequest, options: RequestOptions = {}) {
+    return this.#transport.request({
+      path: "workspace/mcp/inspect", method: "POST",
+      body: parseMcpInspectionRequest(input), parse: parseMcpInspection, ...options,
+    });
+  }
+
+  stageMcp(input: MCPConnectionStageRequest, options: RequestOptions = {}) {
+    return this.#transport.request({
+      path: "workspace/mcp/stage", method: "POST",
+      body: parseMcpStageRequest(input), parse: parseMcpStage, ...options,
+    });
+  }
+
+  recoverMcp(options: RequestOptions = {}) {
+    return this.#transport.request({
+      path: "workspace/mcp/recover", method: "POST", body: {}, parse: parseMcpRecovery, ...options,
+    });
   }
 
   details(options: RequestOptions = {}) {

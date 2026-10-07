@@ -2111,6 +2111,380 @@ export const OctopusConnectionRequestSchema = {
 } as const;
 export type OctopusConnectionRequest = FromSchema<typeof OctopusConnectionRequestSchema, { keepDefaultedPropertiesOptional: true }>;
 
+export const MCPConnectionInspectionRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "url": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Url",
+      "type": "string"
+    },
+    "auth_scheme": {
+      "default": "none",
+      "enum": [
+        "none",
+        "bearer",
+        "basic",
+        "api-key"
+      ],
+      "title": "Auth Scheme",
+      "type": "string"
+    },
+    "auth_header": {
+      "default": "Authorization",
+      "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$",
+      "title": "Auth Header",
+      "type": "string"
+    },
+    "credential": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Credential"
+    }
+  },
+  "required": [
+    "url"
+  ],
+  "title": "MCPConnectionInspectionRequest",
+  "type": "object"
+} as const;
+export type MCPConnectionInspectionRequest = FromSchema<typeof MCPConnectionInspectionRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const MCPConnectionInspectionResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "inspection": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Schema Digest",
+          "type": "string"
+        },
+        "annotations_untrusted": {
+          "const": true,
+          "default": true,
+          "title": "Annotations Untrusted",
+          "type": "boolean"
+        },
+        "tools": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "maxLength": 256,
+                "minLength": 1,
+                "title": "Name",
+                "type": "string"
+              },
+              "schema_hash": {
+                "pattern": "^[0-9a-f]{64}$",
+                "title": "Schema Hash",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "schema_hash"
+            ],
+            "title": "MCPToolInspection",
+            "type": "object"
+          },
+          "maxItems": 500,
+          "title": "Tools",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_digest",
+        "tools"
+      ],
+      "title": "MCPInspection",
+      "type": "object"
+    }
+  },
+  "required": [
+    "inspection"
+  ],
+  "title": "MCPConnectionInspectionResponse",
+  "type": "object"
+} as const;
+export type MCPConnectionInspectionResponse = FromSchema<typeof MCPConnectionInspectionResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const MCPConnectionRecoveryResponseSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "ok": {
+      "const": true,
+      "default": true,
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "connections": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "connection_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "unavailable",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error Code"
+          }
+        },
+        "required": [
+          "connection_id",
+          "status"
+        ],
+        "title": "MCPRecoveryConnection",
+        "type": "object"
+      },
+      "title": "Connections",
+      "type": "array"
+    }
+  },
+  "required": [
+    "connections"
+  ],
+  "title": "MCPConnectionRecoveryResponse",
+  "type": "object"
+} as const;
+export type MCPConnectionRecoveryResponse = FromSchema<typeof MCPConnectionRecoveryResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const MCPConnectionStageRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "url": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "title": "Url",
+      "type": "string"
+    },
+    "auth_scheme": {
+      "default": "none",
+      "enum": [
+        "none",
+        "bearer",
+        "basic",
+        "api-key"
+      ],
+      "title": "Auth Scheme",
+      "type": "string"
+    },
+    "auth_header": {
+      "default": "Authorization",
+      "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$",
+      "title": "Auth Header",
+      "type": "string"
+    },
+    "credential": {
+      "anyOf": [
+        {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Credential"
+    },
+    "display_name": {
+      "maxLength": 256,
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "schema_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Schema Digest",
+      "type": "string"
+    },
+    "reviews": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reviewed": {
+            "const": true,
+            "title": "Reviewed",
+            "type": "boolean"
+          },
+          "actions": {
+            "items": {
+              "enum": [
+                "read-only",
+                "calculation",
+                "simulation",
+                "external-data",
+                "configuration-write",
+                "physical-control",
+                "safety-critical"
+              ],
+              "title": "Action",
+              "type": "string"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Actions",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "metered",
+              "calculated",
+              "estimated",
+              "simulated",
+              "forecast"
+            ],
+            "title": "DataKind",
+            "type": "string"
+          },
+          "unit": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "reviewed",
+          "actions",
+          "kind",
+          "unit"
+        ],
+        "title": "MCPToolReview",
+        "type": "object"
+      },
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Reviews",
+      "type": "array"
+    }
+  },
+  "required": [
+    "url",
+    "display_name",
+    "schema_digest",
+    "reviews"
+  ],
+  "title": "MCPConnectionStageRequest",
+  "type": "object"
+} as const;
+export type MCPConnectionStageRequest = FromSchema<typeof MCPConnectionStageRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const MCPConnectionStageResponseSchema = {
+  "type": "object",
+  "properties": {
+    "ok": {
+      "const": true
+    },
+    "account": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "toolkit": {
+          "type": "string"
+        },
+        "site_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "auth_scheme": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "verified": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "toolkit",
+        "site_id",
+        "enabled",
+        "auth_scheme",
+        "state",
+        "verified"
+      ],
+      "additionalProperties": true
+    },
+    "schema_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selected_tool_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    }
+  },
+  "required": [
+    "ok",
+    "account",
+    "schema_digest",
+    "selected_tool_count"
+  ],
+  "additionalProperties": true
+} as const;
+export type MCPConnectionStageResponse = FromSchema<typeof MCPConnectionStageResponseSchema, { keepDefaultedPropertiesOptional: true }>;
+
 export const SessionCreateSchema = {
   "additionalProperties": false,
   "properties": {
@@ -3505,7 +3879,8 @@ export const ConnectionCreatedResponseSchema = {
         "provider": {
           "enum": [
             "octopus",
-            "home_assistant"
+            "home_assistant",
+            "custom_mcp"
           ]
         },
         "status": {
@@ -3515,7 +3890,10 @@ export const ConnectionCreatedResponseSchema = {
           "type": "string"
         },
         "probe": {
-          "const": "provider-read"
+          "enum": [
+            "provider-read",
+            "mcp-schema"
+          ]
         },
         "message": {
           "type": "string"
@@ -3602,7 +3980,8 @@ export const ConnectionVerificationResponseSchema = {
         "provider": {
           "enum": [
             "octopus",
-            "home_assistant"
+            "home_assistant",
+            "custom_mcp"
           ]
         },
         "status": {
@@ -3615,7 +3994,10 @@ export const ConnectionVerificationResponseSchema = {
           "type": "string"
         },
         "probe": {
-          "const": "provider-read"
+          "enum": [
+            "provider-read",
+            "mcp-schema"
+          ]
         },
         "message": {
           "type": "string"

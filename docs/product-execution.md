@@ -614,3 +614,39 @@ These synthetic inputs qualify product behavior and native calculation, not a
 physical energy installation. Custom MCP onboarding, complete account/settings
 flows, generic OAuth/events, broad actual-agent evaluation, outside contribution,
 sustained operations and a coherent platform release remain open.
+
+
+## Managed custom MCP product flow, October 7
+
+Workspace managers now open **Add MCP server**, inspect an approved HTTP endpoint,
+review selected tools, and save an encrypted pending connection. Mapping checks
+the saved schema before publishing the private namespace at an owned site.
+The TypeScript SDK exposes the same inspect, stage, and recovery contracts.
+
+Managed-host startup reapproves saved targets and recovers active reviewed
+definitions. Failed providers remain unavailable while healthy neighbors recover.
+Health checks compare the approved schema. Disconnect revokes execution and
+removes private tools. Registry replacement validates the entire namespace before
+mutation and invalidates search indexes even when the tool count stays unchanged.
+A 30-second discovery deadline bounds a server that stalls after initialization.
+
+Four Luna workers implemented independent UI, SDK acceptance, streamed-body
+acceptance, and durable workspace inventory tasks. The primary agent owned
+contracts, authorization, registry integration, startup recovery, packaging,
+and the real browser review. Browser testing found a React event capture bug in
+unit and review edits; the primary fixed it before the final production rebuild.
+
+The final local Python suite passed 954 tests. The SDK passed 21 tests, and the
+production web suite passed 18 tests. Actual local MCP servers cover the lifecycle,
+scoping, redaction, schema drift, failures, and deadlines. Production browser
+checks completed review, save, mapping, health, and disconnect. The 390-pixel
+mobile connection and review pages had no horizontal overflow.
+
+See the [connection guide](custom-mcp-onboarding.md) and
+[qualification record](evidence/custom-mcp-product-oct07.json).
+These tests use synthetic local servers. They do not qualify a private physical
+installation or a third-party MCP provider. Managed custom-MCP OAuth and a web
+editor for private endpoint approval remain open. Complete settings, generic
+OAuth and events, broad held-out agent evaluation, an outside connector author,
+sustained operations, private-provider evidence, and a coherent platform release
+also remain open. This unit does not complete the project goal.

@@ -1,0 +1,229 @@
+{
+  "qualified_at": "2026-10-07T20:00:08.664657+00:00",
+  "base_commit": "d817e77b08f6a7b942c61631ce73e4b09891be08",
+  "qualification": "Managed custom MCP product behavior against owned synthetic providers; not real private-site qualification or a new package release.",
+  "source_files": [
+    {
+      "path": "apps/web/src/app/api/workspace/mcp/inspect/route.ts",
+      "sha256": "e46507a15938b119b37da39a42d62fd34dfe5c728fc4550faf043321d1b0cff8"
+    },
+    {
+      "path": "apps/web/src/app/api/workspace/mcp/recover/route.ts",
+      "sha256": "5f73e8352c817483994f918d3439e5cca449b92c31cf6d2b2238a3bea9d86eb7"
+    },
+    {
+      "path": "apps/web/src/app/api/workspace/mcp/stage/route.ts",
+      "sha256": "d74dc65dd4470e5ba95861a7722294293c116f83427e0d5093db4ae598cf5764"
+    },
+    {
+      "path": "apps/web/src/app/page.tsx",
+      "sha256": "a578b6bd53800f8c720f3f70c055aba04ebfd7a48105a692c98eb7e952835fe7"
+    },
+    {
+      "path": "apps/web/src/components/CustomMCPConnect.module.css",
+      "sha256": "efd1e48c53ce88264368f00b2eedcd750fc03f30480c6d225d59325bed4d705a"
+    },
+    {
+      "path": "apps/web/src/components/CustomMCPConnect.tsx",
+      "sha256": "fe4f703594d085a4621885a2c203623e058cc750f4ddeb59f691a9b3477ba02d"
+    },
+    {
+      "path": "apps/web/src/components/ManagedConsole.tsx",
+      "sha256": "8dbc6963cffa25d36a8e09a83025a7ee1738a4e8ad79b525c84b83f5f8055259"
+    },
+    {
+      "path": "apps/web/src/lib/security.ts",
+      "sha256": "1c915dc34fbc2efc6f3a16afcf028baa1fa3e9f914a3f89a5b645d839ff155b4"
+    },
+    {
+      "path": "apps/web/test/custom-mcp-http.test.ts",
+      "sha256": "667dc384c1043426955ef7e5ba661e60bd3aecb1723036c86c012fe02ca8d1b3"
+    },
+    {
+      "path": "apps/web/test/mcp-body.test.ts",
+      "sha256": "760d6f07f0c25763a5226b24d1ed478001734206cf7d8f75306119f43edc18b0"
+    },
+    {
+      "path": "packages/typescript/src/client.ts",
+      "sha256": "690fdbabc5e5288add8cefffe05f612fee12d0e9e29044bf385adae17d78d18a"
+    },
+    {
+      "path": "packages/typescript/src/contracts.ts",
+      "sha256": "6184f1c9d88a421009d96cd34f86df6339ba7cfc2c1176b5f2faff8c805efc86"
+    },
+    {
+      "path": "packages/typescript/src/index.ts",
+      "sha256": "884eb9cef34eed8a1dc31c8343128dfa76dbdf6f202bd8f03cfcc3646a9d63d9"
+    },
+    {
+      "path": "packages/typescript/test/managed-mcp.test.mjs",
+      "sha256": "1a5618a947bbd3dc6d7e3ff6ece20752a3b64e8af82d01098dbea4fe9a5ee601"
+    },
+    {
+      "path": "scripts/export_typescript_contracts.py",
+      "sha256": "1bd47348842954a26c48bb21e3097625086d03e4e61f8b99103dafdd008e8710"
+    },
+    {
+      "path": "scripts/test_managed_mcp_web_host.py",
+      "sha256": "7dbf30179340950f7f62e5270cd15a131dd28ef52bf961a2c7e669ab132bc6e8"
+    },
+    {
+      "path": "src/energy_agent_tools/connectors/mcp_bridge.py",
+      "sha256": "3dc6f0b995ba5961268125b6eccef650180585ae4aee9f142c2818d2af487afd"
+    },
+    {
+      "path": "src/energy_agent_tools/control_store.py",
+      "sha256": "30e93d40db94305eb6c4b217ac752ceb13d88c5801583bd42e2f0ac4df44685b"
+    },
+    {
+      "path": "src/energy_agent_tools/hosting.py",
+      "sha256": "07a613b02dbd8fd208fbd99b62d06e0696382c7daebcfd588f83b7c3abe4d08d"
+    },
+    {
+      "path": "src/energy_agent_tools/managed_mcp.py",
+      "sha256": "73e60a1bb3de61612f8d4a857092e15b49b8f405ae6b22b659edb87476bdaa15"
+    },
+    {
+      "path": "src/energy_agent_tools/mcp_contracts.py",
+      "sha256": "6ba3ca8a0dfe91314968656cdf60f82c57379bafea66508696b49041f83ed447"
+    },
+    {
+      "path": "src/energy_agent_tools/registry.py",
+      "sha256": "30072cfabd67ecd440f4fc4df94fa9a7705fd99436f48eaac24069cae1e8acef"
+    },
+    {
+      "path": "tests/test_control_managed_workspaces.py",
+      "sha256": "9fa883bcfc4dc3a58d3ed614785140d23dc535ab78beb80cda5681b5d2ccbb23"
+    },
+    {
+      "path": "tests/test_host_managed_mcp.py",
+      "sha256": "8eb996f24e26cf3605c327d1a3be5dcd514aeca3520f64ea2fca0f1f2ea2edf7"
+    },
+    {
+      "path": "tests/test_managed_mcp.py",
+      "sha256": "07af92ebd1ae60fc117eda128dfcd9305589522cb0f26d07b7981d332ca20ccd"
+    },
+    {
+      "path": "tests/test_mcp_contracts.py",
+      "sha256": "fc5e41a779c9b4d2ed595e08d49dd256d10e9e0e62920f1d812b204d9674e35b"
+    },
+    {
+      "path": "tests/test_registry_scoped_replace.py",
+      "sha256": "d6a54119d05ac2f0e84b1e46210a7ff205266125f2e31cf80613211a267616f9"
+    }
+  ],
+  "source_fingerprint": "9e78c2a255e4d2a13f6400d3d4300a44bc36b6510b267a4e9746e707d279730b",
+  "verification": {
+    "python": {
+      "command": ".venv/bin/pytest -q",
+      "passed": 954,
+      "seconds": 602.84
+    },
+    "typescript_sdk": {
+      "command": "npm --prefix packages/typescript run test",
+      "passed": 21
+    },
+    "web": {
+      "command": "npm --prefix apps/web run test",
+      "passed": 18,
+      "production_http_mcp_acceptance": true
+    },
+    "static": [
+      "Ruff checks and canonical format",
+      "mypy: 64 source files",
+      "TypeScript SDK build",
+      "web TypeScript check",
+      "production Next.js build",
+      "generated contracts --check",
+      "uv lock --check",
+      "wheel and source distribution build"
+    ]
+  },
+  "browser": {
+    "synthetic_fixture": true,
+    "provider_requests": 30,
+    "provider_credentials_only": true,
+    "management_credentials_forwarded": false,
+    "review_unit_edit_and_confirmation": true,
+    "journey": [
+      "inspect",
+      "explicit selected review",
+      "stage pending",
+      "map owned site",
+      "active",
+      "health",
+      "disconnect",
+      "mobile review discard clears credential"
+    ],
+    "desktop_viewport": [
+      1365,
+      900
+    ],
+    "mobile_viewport": [
+      390,
+      844
+    ],
+    "mobile_connection_document_width": 390,
+    "mobile_review_document_width": 380
+  },
+  "screenshots": [
+    "custom-mcp-review-desktop-oct07.jpg",
+    "custom-mcp-review-mobile-oct07.jpg",
+    "custom-mcp-active-desktop-oct07.jpg",
+    "custom-mcp-active-mobile-oct07.jpg"
+  ],
+  "publication": {
+    "status": "pending",
+    "source_commit": null,
+    "remote_ci": null
+  },
+  "open_limits": [
+    "Managed custom-MCP OAuth",
+    "Persisted web editing of private target policy",
+    "Complete settings and generic OAuth/events",
+    "Real private physical-site and third-party MCP qualification",
+    "100+ actual held-out agent tasks with two model families",
+    "Independent discovery review and external connector author",
+    "Sustained deployment/load/soak qualification",
+    "Coherent platform release"
+  ],
+  "installed_wheel": {
+    "status": "passed",
+    "sha256": "98125739560193ad86ff57c7740aadf0589649321d456414e3c67b361aca09e1",
+    "pythonpath_cleared_for_gateway": true,
+    "runtime": {
+      "dependencies": {
+        "httpx": "0.28.1",
+        "mcp": "1.30.0",
+        "pydantic": "2.13.5",
+        "starlette": "1.7.0"
+      },
+      "editable_install": false,
+      "package_version": "0.3.0",
+      "python": "3.12.14"
+    },
+    "import_path": "managed-product-installed/lib/python3.12/site-packages/energy_agent_tools/__init__.py",
+    "acceptance": {
+      "disconnect_denied_without_provider_io": true,
+      "editable_source_mapping_absent": true,
+      "fresh_session_execution_after_restart": true,
+      "import_path_under_installed_site_packages": true,
+      "initial_execution_redacted": true,
+      "inspect": true,
+      "management_auth_never_reached_provider": true,
+      "manager_identity_managed": true,
+      "map_active": true,
+      "persisted_mapping_recovered": true,
+      "provider_credential_never_reflected": true,
+      "provider_requests_before_restart": 26,
+      "provider_requests_total": 42,
+      "recovery_response_ready": true,
+      "stage_pending_mapping": true,
+      "verify_healthy": true
+    },
+    "cleanup": {
+      "gateway_processes_stopped": true,
+      "temporary_state_removed": true
+    }
+  }
+}

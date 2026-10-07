@@ -51,6 +51,7 @@ from .mcp_network import ApprovedMCPTarget, approved_mcp_client
 
 __all__ = [
     "MCPImportError",
+    "validate_mcp_connection_auth",
     "inspect_mcp",
     "inspect_mcp_manifest",
     "inspect_mcp_manifest_from_server",
@@ -413,7 +414,9 @@ def _validated_account_scope(value: ToolAccountScope | None) -> ToolAccountScope
         raise MCPImportError("mcp_account_scope_invalid", "MCP account scope is invalid.") from exc
 
 
-def _validate_account_auth(auth: AuthConfig) -> None:
+def validate_mcp_connection_auth(auth: AuthConfig) -> None:
+    """Validate credential header safety before managed discovery or execution IO."""
+
     forbidden_headers = {
         "host",
         "connection",
@@ -486,7 +489,7 @@ def _account_import_transport(
             raise MCPImportError(
                 "mcp_account_profile_invalid", "Account-scoped MCP discovery auth is invalid."
             ) from exc
-        _validate_account_auth(auth)
+        validate_mcp_connection_auth(auth)
     endpoint = remote_url if remote_url is not None else url
     if discovery_credential and endpoint and discovery_credential in endpoint:
         raise MCPImportError(
@@ -576,7 +579,7 @@ def _validate_account_context(
         or (session.toolkits is not None and toolkit_id not in session.toolkits)
     ):
         raise EnergyError("account_forbidden", "MCP tool is outside this account scope.")
-    _validate_account_auth(account.auth)
+    validate_mcp_connection_auth(account.auth)
 
 
 def inspect_mcp_manifest(

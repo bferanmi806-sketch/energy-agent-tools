@@ -68,8 +68,16 @@ from .control_contracts import (
 )
 from .control_store import ControlStore
 from .job_contracts import JobActionQuery, JobCursorToken, JobListQuery, JobReadScope, JobState
+from .managed_mcp import ManagedMCPService, TargetApprover
 from .managed_oauth import HomeAssistantOAuthConfiguration, ManagedHomeAssistantOAuth
-from .models import ConnectedAccount, EnergyError, Json, Session, Site
+from .mcp_contracts import (
+    MCPConnectionInspectionRequest,
+    MCPConnectionInspectionResponse,
+    MCPConnectionStageRequest,
+    MCPInspection,
+    MCPToolInspection,
+)
+from .models import AuthConfig, ConnectedAccount, EnergyError, Json, Session, Site, ToolAccountScope
 from .onboarding import ConnectionHealth, probe_provider
 from .runtime import EnergyAgent
 from .server import create_server
@@ -410,6 +418,7 @@ class AuthenticatedHost:
         control_store: ControlStore | None = None,
         managed_workspaces: bool = False,
         managed_oauth_configurations: tuple[HomeAssistantOAuthConfiguration, ...] = (),
+        managed_mcp_target_approver: TargetApprover | None = None,
     ) -> None:
         if max_requests_per_minute <= 0:
             raise ValueError("max_requests_per_minute must be positive.")
@@ -434,6 +443,9 @@ class AuthenticatedHost:
         if managed_workspaces:
             agent.auth_store.validate_encryption_key()
         self._managed_workspaces = managed_workspaces
+        if managed_mcp_target_approver is not None and not managed_workspaces:
+            raise ValueError("Managed MCP target approval requires managed hosting.")
+        self._managed_mcp_target_approver = managed_mcp_target_approver
         if managed_oauth_configurations and not managed_workspaces:
             raise ValueError("Managed OAuth configurations require managed hosting.")
         self._managed_oauth: ManagedHomeAssistantOAuth | None = None
@@ -502,6 +514,9 @@ class AuthenticatedHost:
             Route("/workspace/skills", self._workspace_skills, methods=["GET"]),
             Route("/workspace/connection-setups", self._workspace_setups, methods=["GET"]),
             Route("/workspace/connections", self._workspace_connections, methods=["GET", "POST"]),
+            Route("/workspace/mcp/inspect", self._workspace_mcp_inspect, methods=["POST"]),
+            Route("/workspace/mcp/stage", self._workspace_mcp_stage, methods=["POST"]),
+            Route("/workspace/mcp/recover", self._workspace_mcp_recover, methods=["POST"]),
             Route(
                 "/workspace/connections/{connection_id}/map", self._workspace_map, methods=["POST"]
             ),
@@ -554,6 +569,7 @@ class AuthenticatedHost:
         @asynccontextmanager
         async def lifespan(_: Starlette) -> AsyncIterator[None]:
             async with AsyncExitStack() as stack:
+                await self._recover_managed_mcp()
                 for mount in self._mounts.values():
                     await stack.enter_async_context(mount.manager.run())
                 self._lifespan_active = True
@@ -1642,6 +1658,139 @@ class AuthenticatedHost:
         except EnergyError as exc:
             return self._energy_error(exc)
 
+    async def _recover_managed_mcp(self) -> None:
+        if not self._managed_workspaces:
+            return
+        assert self._control_store is not None
+        assert isinstance(self.agent.auth_store, AuthStore)
+        service = ManagedMCPService(
+            self.agent.auth_store,
+            self.agent.registry,
+            approve_target=self._managed_mcp_target_approver,
+        )
+        for workspace in self._control_store.managed_workspaces():
+            await service.recover(user_id=workspace.user_id, workspace_id=workspace.id)
+
+    def _workspace_mcp_service(
+        self, request: Request, principal: Principal, *, site_id: str | None = None
+    ) -> ManagedMCPService:
+        assert isinstance(self.agent.auth_store, AuthStore)
+
+        def authorize_write() -> None:
+            current = self._authenticate(request.scope)
+            if (
+                current is None
+                or current.user_id != principal.user_id
+                or current.workspace_id != principal.workspace_id
+                or current.token_id != principal.token_id
+                or current.workspace_mode != "managed"
+                or not isinstance(current.key_access, ManageKeyAccess)
+                or (site_id is not None and site_id not in current.allowed_site_ids)
+            ):
+                raise EnergyError("workspace_forbidden", "Workspace authorization changed.")
+
+        return ManagedMCPService(
+            self.agent.auth_store,
+            self.agent.registry,
+            approve_target=self._managed_mcp_target_approver,
+            authorize_write=authorize_write,
+        )
+
+    @staticmethod
+    def _mcp_health_result(account: Json, *, healthy: bool) -> Json:
+        health = ConnectionHealth(
+            connection_id=account["id"],
+            provider="custom_mcp",
+            status="healthy" if healthy else "unhealthy",
+            checked_at=datetime.now(UTC),
+            probe="mcp-schema",
+            message="Reviewed MCP schema matched."
+            if healthy
+            else "MCP schema verification failed.",
+        )
+        return {"ok": True, "account": account, "health": health.public()}
+
+    async def _workspace_mcp_inspect(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None
+        parsed = await self._parse_json(request, MCPConnectionInspectionRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(MCPConnectionInspectionRequest, parsed)
+        try:
+            manifest = await self._workspace_mcp_service(request, principal).inspect(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                url=data.url,
+                auth=AuthConfig(scheme=data.auth_scheme, header=data.auth_header),
+                credential=data.credential,
+            )
+            response = MCPConnectionInspectionResponse(
+                inspection=MCPInspection(
+                    schema_digest=manifest["schema_digest"],
+                    tools=[
+                        MCPToolInspection(name=item["name"], schema_hash=item["schema_hash"])
+                        for item in manifest["tools"]
+                    ],
+                )
+            )
+            return _json_response(
+                response.model_dump(mode="json"), headers={"Cache-Control": "no-store"}
+            )
+        except EnergyError as exc:
+            return self._energy_error(exc)
+        except (KeyError, TypeError, ValidationError):
+            return _error(
+                "mcp_discovery_failed", "MCP inspection returned unsupported metadata.", 502
+            )
+
+    async def _workspace_mcp_stage(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None
+        parsed = await self._parse_json(request, MCPConnectionStageRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(MCPConnectionStageRequest, parsed)
+        metadata = {
+            review.name: review.model_dump(mode="json", exclude={"name"}) for review in data.reviews
+        }
+        try:
+            result = await self._workspace_mcp_service(request, principal).stage(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                url=data.url,
+                display_name=data.display_name,
+                auth=AuthConfig(scheme=data.auth_scheme, header=data.auth_header),
+                credential=data.credential,
+                expected_schema_digest=data.schema_digest,
+                selected_tools=frozenset(metadata),
+                tool_metadata=metadata,
+            )
+            return _json_response(result, status_code=201, headers={"Cache-Control": "no-store"})
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
+    async def _workspace_mcp_recover(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None
+        parsed = await self._parse_json(request, _ConnectionActionRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        try:
+            result = await self._workspace_mcp_service(request, principal).recover(
+                user_id=principal.user_id, workspace_id=principal.workspace_id
+            )
+            self.agent._sync_connections(principal.user_id, principal.workspace_id)
+            return _json_response(result, headers={"Cache-Control": "no-store"})
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
     async def _workspace_connections(self, request: Request) -> Response:
         principal = self._workspace_manager(request)
         if isinstance(principal, Response):
@@ -1734,14 +1883,23 @@ class AuthenticatedHost:
                 principal.user_id, principal.workspace_id, request.path_params["connection_id"]
             )
             self._require_managed_oauth_approval(account)
-            result = await map_managed_connection(
-                store,
-                self.agent.http,
-                user_id=principal.user_id,
-                workspace_id=principal.workspace_id,
-                connection_id=request.path_params["connection_id"],
-                site=site,
-            )
+            if account.toolkit.startswith("custom-mcp-"):
+                mapped = await self._workspace_mcp_service(request, principal, site_id=site.id).map(
+                    user_id=principal.user_id,
+                    workspace_id=principal.workspace_id,
+                    connection_id=account.id,
+                    site=site,
+                )
+                result = self._mcp_health_result(mapped["account"], healthy=True)
+            else:
+                result = await map_managed_connection(
+                    store,
+                    self.agent.http,
+                    user_id=principal.user_id,
+                    workspace_id=principal.workspace_id,
+                    connection_id=request.path_params["connection_id"],
+                    site=site,
+                )
             self.agent._sync_connections(principal.user_id, principal.workspace_id)
             return _json_response(result, headers={"Cache-Control": "no-store"})
         except EnergyError as exc:
@@ -1769,7 +1927,11 @@ class AuthenticatedHost:
             account, _ = store.managed_snapshot(
                 principal.user_id, principal.workspace_id, request.path_params["connection_id"]
             )
-            if account.toolkit not in {"octopus-energy-account", "home-assistant"}:
+            is_custom_mcp = account.toolkit.startswith("custom-mcp-")
+            if not is_custom_mcp and account.toolkit not in {
+                "octopus-energy-account",
+                "home-assistant",
+            }:
                 return _error(
                     "unsupported_provider", "This connection provider is unsupported.", 400
                 )
@@ -1781,7 +1943,30 @@ class AuthenticatedHost:
                         409,
                     )
                 self._require_managed_oauth_approval(account)
-                if account.toolkit == "octopus-energy-account":
+                if is_custom_mcp:
+                    site = self.agent.sites.get(account.site_id)
+                    if site is None:
+                        return _error("site_forbidden", "Select a site in this workspace.", 403)
+                    try:
+                        mapped = await self._workspace_mcp_service(
+                            request, principal, site_id=site.id
+                        ).map(
+                            user_id=principal.user_id,
+                            workspace_id=principal.workspace_id,
+                            connection_id=account.id,
+                            site=site,
+                        )
+                        result = self._mcp_health_result(mapped["account"], healthy=True)
+                    except EnergyError as exc:
+                        if exc.code not in {
+                            "mcp_schema_drift",
+                            "mcp_discovery_failed",
+                            "mcp_timeout",
+                            "mcp_target_invalid",
+                        }:
+                            raise
+                        result = self._mcp_health_result(account.public(), healthy=False)
+                elif account.toolkit == "octopus-energy-account":
                     result = await OctopusConnectionLifecycle(store, self.agent.http).verify(
                         user_id=principal.user_id, site_id=account.site_id, connection_id=account.id
                     )
@@ -1833,6 +2018,15 @@ class AuthenticatedHost:
                     )
                 else:
                     revoked = store.revoke(principal.user_id, account.id, account.site_id)
+                if is_custom_mcp:
+                    self.agent.registry.remove_account_toolkit(
+                        account.toolkit,
+                        account_scope=ToolAccountScope(
+                            workspace_id=principal.workspace_id,
+                            user_id=principal.user_id,
+                            account_id=account.id,
+                        ),
+                    )
                 result = {
                     "ok": True,
                     "account": revoked.public(),
@@ -2228,6 +2422,7 @@ def create_host(
     control_store: ControlStore | None = None,
     managed_workspaces: bool = False,
     managed_oauth_configurations: tuple[HomeAssistantOAuthConfiguration, ...] = (),
+    managed_mcp_target_approver: TargetApprover | None = None,
 ) -> AuthenticatedHost:
     """Build an authenticated multi-user ASGI host.
 
@@ -2249,6 +2444,7 @@ def create_host(
         control_store=control_store,
         managed_workspaces=managed_workspaces,
         managed_oauth_configurations=managed_oauth_configurations,
+        managed_mcp_target_approver=managed_mcp_target_approver,
     )
 
 

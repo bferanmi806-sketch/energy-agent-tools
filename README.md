@@ -10,10 +10,13 @@ and MCP hosting, Python and TypeScript SDKs, executable workflows, and local tim
 analysis. Results retain their physical unit, measurement kind, source, input
 lineage and warnings. A forecast or simulation never becomes a meter reading.
 
-The first web console is in [apps/web](apps/web/README.md). It requires the
-current-source gateway and provides authenticated catalogue browsing and site
-selection. It can verify and securely connect an Octopus meter to an existing
-owned site. Other provider forms and the complete control plane remain under development.
+Workspace managers can [connect reviewed custom MCP servers](docs/custom-mcp-onboarding.md), map them to sites, and expose selected tools through the gateway.
+
+The [web console](apps/web/README.md) connects supported systems, maps sites and
+assets, manages shared access and agent keys, and displays skills, jobs, and
+execution activity. It requires the current-source gateway. Octopus, approved
+Home Assistant instances, and reviewed custom MCP servers have managed connection
+flows. Other provider forms and the complete control plane remain under development.
 
 ## Start locally
 

@@ -94,9 +94,12 @@ export default async function HomePage({
     }
     case "ready": {
       if (state.data.kind === "managed") {
-        const initialView = params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs"
-          ? params.view
-          : "apps";
+        const canManageCustomMCP = state.data.identity.can_manage_workspace === true && state.data.workspace.mode === "managed";
+        const initialView = canManageCustomMCP && params?.view === "mcp"
+          ? "mcp"
+          : params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs"
+            ? params.view
+            : "apps";
         const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed"
           ? params.oauth
           : undefined;
