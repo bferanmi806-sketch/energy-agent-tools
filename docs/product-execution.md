@@ -658,3 +658,17 @@ Home Assistant checks passed. A fresh installed wheel also completed the
 managed MCP HTTP lifecycle, restart execution, and disconnect denial against
 an owned synthetic server. The wheel proof used its installed package rather
 than the editable source checkout.
+
+## Managed provider authorization during verification, October 7
+
+An HTTP regression reproduced a revoked manager key saving an Octopus connection
+or activating its site mapping after a provider probe. Managed staging and mapping
+now recheck current workspace authorization immediately before persisting changes.
+Mapping also rechecks site access. The host shares this authorization callback
+with the managed MCP service.
+
+Seven new tests cover denied entry, revocation during provider I/O, unchanged
+pending credentials and mapping revisions, and successful authorized staging and
+mapping. The focused onboarding, managed MCP, native lifecycle, OAuth, and sharing
+suites passed 44 tests. These checks use synthetic provider responses; they do not
+add real meter qualification or close the broader project gates.

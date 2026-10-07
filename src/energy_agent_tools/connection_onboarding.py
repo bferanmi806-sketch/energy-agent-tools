@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import unicodedata
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import httpx
@@ -22,9 +23,16 @@ from .onboarding import (
 class OctopusConnectionService:
     """Verify and save Octopus credentials without owning the supplied clients."""
 
-    def __init__(self, auth_store: AuthStore, http: httpx.AsyncClient) -> None:
+    def __init__(
+        self,
+        auth_store: AuthStore,
+        http: httpx.AsyncClient,
+        *,
+        authorize_write: Callable[[], None] | None = None,
+    ) -> None:
         self.auth_store = auth_store
         self.http = http
+        self._authorize_write = authorize_write if authorize_write is not None else (lambda: None)
 
     async def stage_managed(
         self,
@@ -35,6 +43,7 @@ class OctopusConnectionService:
         mpan: str,
         serial_number: str,
     ) -> Json:
+        self._authorize_write()
         if not self._valid_credential(credential):
             raise EnergyError("credential_invalid", "Credential is invalid.")
         try:
@@ -84,6 +93,7 @@ class OctopusConnectionService:
                 "last_verified_at": verified_at,
             }
         )
+        self._authorize_write()
         stored = self.auth_store.stage_managed(
             pending, credential, expected_version=expected_version
         )
@@ -176,7 +186,10 @@ async def map_managed_connection(
     workspace_id: str,
     connection_id: str,
     site: Site,
+    authorize_write: Callable[[], None] | None = None,
 ) -> Json:
+    if authorize_write is not None:
+        authorize_write()
     if site.user_id != user_id:
         raise EnergyError(
             "connection_site_forbidden", "Connection site is outside this user scope."
@@ -194,6 +207,8 @@ async def map_managed_connection(
     except Exception:
         raise EnergyError("provider_verification_failed", "Provider verification failed.") from None
     verified_at = datetime.now(UTC)
+    if authorize_write is not None:
+        authorize_write()
     stored = auth_store.activate_managed(
         user_id,
         workspace_id,

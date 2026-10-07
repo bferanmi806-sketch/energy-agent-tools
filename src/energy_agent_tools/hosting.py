@@ -22,7 +22,7 @@ import json
 import re
 import time
 from collections import deque
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -1671,11 +1671,9 @@ class AuthenticatedHost:
         for workspace in self._control_store.managed_workspaces():
             await service.recover(user_id=workspace.user_id, workspace_id=workspace.id)
 
-    def _workspace_mcp_service(
+    def _workspace_authorize_write(
         self, request: Request, principal: Principal, *, site_id: str | None = None
-    ) -> ManagedMCPService:
-        assert isinstance(self.agent.auth_store, AuthStore)
-
+    ) -> Callable[[], None]:
         def authorize_write() -> None:
             current = self._authenticate(request.scope)
             if (
@@ -1689,11 +1687,17 @@ class AuthenticatedHost:
             ):
                 raise EnergyError("workspace_forbidden", "Workspace authorization changed.")
 
+        return authorize_write
+
+    def _workspace_mcp_service(
+        self, request: Request, principal: Principal, *, site_id: str | None = None
+    ) -> ManagedMCPService:
+        assert isinstance(self.agent.auth_store, AuthStore)
         return ManagedMCPService(
             self.agent.auth_store,
             self.agent.registry,
             approve_target=self._managed_mcp_target_approver,
-            authorize_write=authorize_write,
+            authorize_write=self._workspace_authorize_write(request, principal, site_id=site_id),
         )
 
     @staticmethod
@@ -1829,7 +1833,11 @@ class AuthenticatedHost:
             data = cast(OctopusConnectionRequest, parsed)
             from .connection_onboarding import OctopusConnectionService
 
-            result = await OctopusConnectionService(store, self.agent.http).stage_managed(
+            result = await OctopusConnectionService(
+                store,
+                self.agent.http,
+                authorize_write=self._workspace_authorize_write(request, principal),
+            ).stage_managed(
                 user_id=principal.user_id,
                 workspace_id=principal.workspace_id,
                 credential=data.credential,
@@ -1899,6 +1907,9 @@ class AuthenticatedHost:
                     workspace_id=principal.workspace_id,
                     connection_id=request.path_params["connection_id"],
                     site=site,
+                    authorize_write=self._workspace_authorize_write(
+                        request, principal, site_id=site.id
+                    ),
                 )
             self.agent._sync_connections(principal.user_id, principal.workspace_id)
             return _json_response(result, headers={"Cache-Control": "no-store"})
