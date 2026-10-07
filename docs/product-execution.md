@@ -695,3 +695,27 @@ Its full member HTTP journey removes a connection grant during token refresh and
 proves denied execution, no subsequent energy read, unchanged stored credentials
 and revision, and queued cleanup followed by successful upstream revocation.
 Ruff, formatting, and mypy passed for the final integrated source.
+
+Published source `3b91add` passed all six jobs in
+[run 37682331298](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37682331298).
+Python 3.11, 3.12, and 3.13 each passed 975 tests.
+
+## Published-source development agent evaluation, October 7
+
+One frozen run attempted all 16 qualified development cases against published
+source `6f884cd`. The harness recorded a mean score of 0.8577: nine pass, six
+partial, zero fail, and one inconclusive after a 180-second timeout. No case was
+retried or rescored. All 16 gateway subprocess import assertions point into the
+immutable checkout; its full tree matches the published source and remained clean.
+
+The [qualification record](evidence/agent-development-oct07.json) links the
+compressed bounded transcripts and original suite. It records requested
+`gpt-6-luna` with max reasoning. The retained events do not identify the resolved
+backend model, so this run cannot prove the two-model-family requirement.
+
+Trace review found negated safety statements triggering lexical false positives,
+an account-ambiguity fixture with authoritative meter links, and discovery
+inefficiency when an agent used a capability path for unbound workbench tools.
+Those recorded scores remain unchanged. This is synthetic development evidence.
+The 100+ actual tasks, held-out evaluation, independent human relevance review,
+real-site evidence, and full project completion gates remain open.

@@ -1,0 +1,205 @@
+{
+  "scope": "synthetic development evaluation only",
+  "published_commit": "6f884cdedabb16bfe8bb2115fdb38281b378d19a",
+  "published_tree": "524881b96c388d3776f8419334f36740b6303157",
+  "snapshot_commit": "341aa06d2c950100da3c244a7bc149feffa4d95e",
+  "source_unchanged": true,
+  "requested_model": "gpt-6-luna",
+  "requested_reasoning_effort": "max",
+  "resolved_backend_model": null,
+  "started_at": "2026-10-07T20:12:36.792158+00:00",
+  "completed_at": "2026-10-07T20:36:39.243429+00:00",
+  "summary": {
+    "cases": 16,
+    "mean_score": 0.8577,
+    "labels": {
+      "pass": 9,
+      "partial": 6,
+      "fail": 0,
+      "inconclusive": 1
+    }
+  },
+  "actual_gateway_import_assertions": [
+    {
+      "case_id": "dev_consumption_daily_csv",
+      "pid": 69229,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:12:39.286396+00:00"
+    },
+    {
+      "case_id": "dev_consumption_home_assistant",
+      "pid": 71389,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:15:29.068741+00:00"
+    },
+    {
+      "case_id": "dev_consumption_local_day_dublin",
+      "pid": 73188,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:16:50.453754+00:00"
+    },
+    {
+      "case_id": "dev_consumption_interval_gap",
+      "pid": 74848,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:18:48.112803+00:00"
+    },
+    {
+      "case_id": "dev_consumption_counter_reset",
+      "pid": 76311,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:20:10.631833+00:00"
+    },
+    {
+      "case_id": "dev_current_power_snapshot",
+      "pid": 79349,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:22:43.160871+00:00"
+    },
+    {
+      "case_id": "dev_two_account_selection",
+      "pid": 79835,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:23:02.607633+00:00"
+    },
+    {
+      "case_id": "dev_units_kw_kwh",
+      "pid": 80559,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:23:26.551076+00:00"
+    },
+    {
+      "case_id": "dev_counter_reset_quality",
+      "pid": 82037,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:24:25.730881+00:00"
+    },
+    {
+      "case_id": "dev_field_units_provenance",
+      "pid": 85067,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:27:25.388865+00:00"
+    },
+    {
+      "case_id": "dev_power_flow_two_bus",
+      "pid": 86659,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:29:11.419431+00:00"
+    },
+    {
+      "case_id": "dev_pypsa_capacity_constraint",
+      "pid": 87533,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:30:25.879974+00:00"
+    },
+    {
+      "case_id": "dev_heat_loss",
+      "pid": 88062,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:31:26.341040+00:00"
+    },
+    {
+      "case_id": "dev_bounded_simulation",
+      "pid": 89123,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:33:24.574260+00:00"
+    },
+    {
+      "case_id": "dev_optimization_advisory",
+      "pid": 90184,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:35:06.820218+00:00"
+    },
+    {
+      "case_id": "dev_network_asset_scope",
+      "pid": 90749,
+      "cwd": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout",
+      "server_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/server.py",
+      "harness_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/benchmarks/harness.py",
+      "energy_agent_tools_module": "/Users/odunayobalogun/Documents/Codex/2026-09-30/files-pasted-by-the-user-build/outputs/agent-evaluation-oct07/published-product-checkout/src/energy_agent_tools/__init__.py",
+      "assertion": "passed",
+      "recorded_at": "2026-10-07T20:35:52.834244+00:00"
+    }
+  ],
+  "artifacts": [
+    {
+      "file": "agent-development-cases-oct07.jsonl.gz",
+      "sha256": "780a7f52cd8a54698996074352d6ffedbe6691ab34e3262bc69c6ff59562309a",
+      "uncompressed_sha256": "2e4f08bf2ac81da55a0ed2cea20e3f096d77a270f1fbf71daae9446a84fac253",
+      "bytes": 287648
+    },
+    {
+      "file": "agent-development-suite-oct07.json.gz",
+      "sha256": "13a67b903c30912df819c12bfb997b0aeb88a38d83de9475ef473e90206f2a45",
+      "uncompressed_sha256": "e091a648f4777518aaa8d6b4f08f164fd7cf4e1caa1aeef4dfabf1835364a533",
+      "bytes": 385648
+    }
+  ],
+  "limitations": [
+    "No held-out cases",
+    "No physical installation or live private account",
+    "One recorded 180-second timeout",
+    "Frozen lexical scorer false positives remain unchanged",
+    "Actual model identity not emitted; two-model-family gate remains open"
+  ]
+}
