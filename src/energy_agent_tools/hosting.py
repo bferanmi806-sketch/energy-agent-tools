@@ -1645,6 +1645,7 @@ class AuthenticatedHost:
                 configuration_id=data.configuration_id,
                 state=data.state,
                 code=data.code,
+                authorize_write=self._workspace_authorize_write(request, principal),
             )
             self.agent._sync_connections(principal.user_id, principal.workspace_id)
             from .connection_onboarding import _managed_outcome
@@ -1978,13 +1979,24 @@ class AuthenticatedHost:
                             raise
                         result = self._mcp_health_result(account.public(), healthy=False)
                 elif account.toolkit == "octopus-energy-account":
-                    result = await OctopusConnectionLifecycle(store, self.agent.http).verify(
+                    result = await OctopusConnectionLifecycle(
+                        store,
+                        self.agent.http,
+                        authorize_write=self._workspace_authorize_write(
+                            request, principal, site_id=account.site_id
+                        ),
+                    ).verify(
                         user_id=principal.user_id, site_id=account.site_id, connection_id=account.id
                     )
                 else:
                     if account.auth.scheme == "oauth":
                         account = await store.refresh_managed(
-                            principal.user_id, principal.workspace_id, account.id
+                            principal.user_id,
+                            principal.workspace_id,
+                            account.id,
+                            authorize_write=self._workspace_authorize_write(
+                                request, principal, site_id=account.site_id
+                            ),
                         )
 
                     async def home_probe(checked: ConnectedAccount, credential: str) -> bool:
@@ -1995,7 +2007,13 @@ class AuthenticatedHost:
                     message = "Provider read succeeded."
                     try:
                         account = await store.verify_provider(
-                            principal.user_id, account.id, home_probe, account.site_id
+                            principal.user_id,
+                            account.id,
+                            home_probe,
+                            account.site_id,
+                            authorize_write=self._workspace_authorize_write(
+                                request, principal, site_id=account.site_id
+                            ),
                         )
                     except EnergyError as exc:
                         if exc.code != "provider_verification_failed":

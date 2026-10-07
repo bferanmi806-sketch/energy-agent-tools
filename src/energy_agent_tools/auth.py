@@ -1268,9 +1268,13 @@ class AuthStore:
         connection_id: str,
         probe: Callable[[ConnectedAccount, str], Awaitable[bool]],
         site_id: str | None = None,
+        *,
+        authorize_write: Callable[[], None] | None = None,
     ) -> ConnectedAccount:
         """Run a trusted provider probe before recording verification time."""
 
+        if authorize_write is not None:
+            authorize_write()
         row, payload = self._credential_payload_allow_disabled(user_id, connection_id, site_id)
         if row["state"] == "revoked":
             raise _safe_error("connection_revoked", "Revoked connections must be configured again.")
@@ -1307,6 +1311,8 @@ class AuthStore:
             parameters += (row["workspace_id"], self._managed_revision(row))
         else:
             where += " AND workspace_id IS NULL"
+        if authorize_write is not None:
+            authorize_write()
         updated = self._db.execute(
             "UPDATE accounts SET account_json = ?, last_verified_at = ?, updated_at = ?, "
             "managed_revision = managed_revision + CASE WHEN workspace_id IS NULL THEN 0 ELSE 1 END "
@@ -1984,9 +1990,12 @@ class AuthStore:
         verify: Callable[[ConnectedAccount, str], Awaitable[None]],
         expected_provider: OAuthProvider | None = None,
         expected_configuration_id: str | None = None,
+        authorize_write: Callable[[], None] | None = None,
     ) -> ConnectedAccount:
         """Exchange and verify a managed OAuth grant before publishing its account."""
 
+        if authorize_write is not None:
+            authorize_write()
         if not isinstance(code, str) or not code or len(code) > 4096:
             raise _safe_error("oauth_code_invalid", "OAuth authorization code is invalid.")
         transaction = self._take_oauth_transaction(
@@ -2036,6 +2045,8 @@ class AuthStore:
                 raise safe_error from exc
             raise
         try:
+            if authorize_write is not None:
+                authorize_write()
             return self._publish_managed_oauth(
                 transaction,
                 access_token=access_token,
@@ -2260,12 +2271,21 @@ class AuthStore:
             )
 
     async def refresh_managed(
-        self, user_id: str, workspace_id: str, connection_id: str
+        self,
+        user_id: str,
+        workspace_id: str,
+        connection_id: str,
+        *,
+        authorize_write: Callable[[], None] | None = None,
     ) -> ConnectedAccount:
         """Refresh one active managed grant with workspace scope and revision CAS."""
 
+        if authorize_write is not None:
+            authorize_write()
         lock_id = "\0".join((user_id, workspace_id, connection_id))
         async with self._refresh_lock(lock_id):
+            if authorize_write is not None:
+                authorize_write()
             row = self._managed_row(user_id, workspace_id, connection_id)
             account = self._view(row)
             if account.state != "active" or not account.enabled or account.site_id is None:
@@ -2322,6 +2342,8 @@ class AuthStore:
                         "connection_changed",
                         "Connection changed while the provider request was running.",
                     )
+                if authorize_write is not None:
+                    authorize_write()
                 updated = self._db.execute(
                     """
                     UPDATE accounts SET account_json = ?, secret_blob = ?, updated_at = ?,

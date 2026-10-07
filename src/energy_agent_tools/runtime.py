@@ -786,9 +786,16 @@ class EnergyAgent:
                     and account.expires_at
                     and account.expires_at <= datetime.now(UTC) + timedelta(seconds=60)
                 ):
+
+                    def authorize_refresh() -> None:
+                        self._scope(session)
+
                     account = (
                         await self.auth_store.refresh_managed(
-                            account.user_id, session.workspace_id, account.id
+                            account.user_id,
+                            session.workspace_id,
+                            account.id,
+                            authorize_write=authorize_refresh,
                         )
                         if session.workspace_id is not None
                         else await self.auth_store.refresh(account.user_id, account.id)

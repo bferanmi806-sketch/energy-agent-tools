@@ -672,3 +672,26 @@ pending credentials and mapping revisions, and successful authorized staging and
 mapping. The focused onboarding, managed MCP, native lifecycle, OAuth, and sharing
 suites passed 44 tests. These checks use synthetic provider responses; they do not
 add real meter qualification or close the broader project gates.
+
+Published source `6457a27` passed all six CI jobs in
+[run 37680920458](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37680920458).
+Python 3.11, 3.12, and 3.13 each passed 961 tests.
+
+The same authorization check now guards native health verification, managed
+OAuth completion, and refresh. Refresh rechecks after acquiring its per-account
+lock and before committing returned credentials. Rejected OAuth publication or
+rotation retains the existing cleanup path for the provider-issued refresh grant.
+Hosted tool execution supplies its current workspace scope check during refresh,
+so a removed connection grant cannot commit a token rotation.
+
+Actual HTTP regressions cover revoked manager keys during Octopus and Home
+Assistant health checks and OAuth completion. Store regressions cover denied
+entry, lock waits, unchanged account revisions, valid authorization, and durable
+cleanup when the upstream revocation endpoint fails. The primary reviewed the
+worker changes and passed 55 focused authentication and host tests, 32 runtime,
+workspace and configuration tests, and the OAuth completion HTTP regression.
+The integrated authorization and shared-connection acceptance set passed 22 tests.
+Its full member HTTP journey removes a connection grant during token refresh and
+proves denied execution, no subsequent energy read, unchanged stored credentials
+and revision, and queued cleanup followed by successful upstream revocation.
+Ruff, formatting, and mypy passed for the final integrated source.

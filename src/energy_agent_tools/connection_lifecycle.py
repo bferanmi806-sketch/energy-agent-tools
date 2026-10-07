@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -17,9 +18,16 @@ _OCTOPUS_TOOLKIT = "octopus-energy-account"
 class OctopusConnectionLifecycle:
     """Verify and disconnect Octopus accounts without owning injected clients."""
 
-    def __init__(self, auth_store: AuthStore, http: httpx.AsyncClient) -> None:
+    def __init__(
+        self,
+        auth_store: AuthStore,
+        http: httpx.AsyncClient,
+        *,
+        authorize_write: Callable[[], None] | None = None,
+    ) -> None:
         self.auth_store = auth_store
         self.http = http
+        self._authorize_write = authorize_write
 
     async def verify(self, *, user_id: str, site_id: str, connection_id: str) -> Json:
         self._scoped_octopus_account(user_id, site_id, connection_id)
@@ -39,6 +47,7 @@ class OctopusConnectionLifecycle:
                 connection_id,
                 octopus_probe,
                 site_id,
+                authorize_write=self._authorize_write,
             )
         except EnergyError as error:
             if error.code != "provider_verification_failed":

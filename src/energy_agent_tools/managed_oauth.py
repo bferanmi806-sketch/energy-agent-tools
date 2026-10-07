@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from urllib.parse import SplitResult, urlsplit
 
 import httpx
@@ -192,6 +192,7 @@ class ManagedHomeAssistantOAuth:
         configuration_id: str,
         state: str,
         code: str,
+        authorize_write: Callable[[], None] | None = None,
     ) -> ConnectedAccount:
         configuration = self._configuration(configuration_id)
 
@@ -211,6 +212,7 @@ class ManagedHomeAssistantOAuth:
             code,
             configuration.redirect_uri,
             verify=verify,
+            authorize_write=authorize_write,
             expected_provider=configuration.provider(),
             expected_configuration_id=configuration.id,
         )
