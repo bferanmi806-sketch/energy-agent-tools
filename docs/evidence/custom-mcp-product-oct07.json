@@ -173,9 +173,57 @@
     "custom-mcp-active-mobile-oct07.jpg"
   ],
   "publication": {
-    "status": "pending",
-    "source_commit": null,
-    "remote_ci": null
+    "status": "published_source_verified",
+    "source_commit": "6f884cdedabb16bfe8bb2115fdb38281b378d19a",
+    "remote_ci": {
+      "run_id": 37678898568,
+      "url": "https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37678898568",
+      "status": "completed",
+      "conclusion": "success",
+      "jobs": [
+        {
+          "name": "verify (3.13)",
+          "conclusion": "success"
+        },
+        {
+          "name": "verify (3.12)",
+          "conclusion": "success"
+        },
+        {
+          "name": "home-assistant",
+          "conclusion": "success"
+        },
+        {
+          "name": "verify (3.11)",
+          "conclusion": "success"
+        },
+        {
+          "name": "container",
+          "conclusion": "success"
+        },
+        {
+          "name": "upgrade",
+          "conclusion": "success"
+        }
+      ],
+      "python_suites": [
+        {
+          "python": "3.13",
+          "passed": 954,
+          "seconds": 305.77
+        },
+        {
+          "python": "3.12",
+          "passed": 954,
+          "seconds": 213.43
+        },
+        {
+          "python": "3.11",
+          "passed": 954,
+          "seconds": 225.21
+        }
+      ]
+    }
   },
   "open_limits": [
     "Managed custom-MCP OAuth",

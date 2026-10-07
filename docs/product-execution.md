@@ -630,7 +630,7 @@ removes private tools. Registry replacement validates the entire namespace befor
 mutation and invalidates search indexes even when the tool count stays unchanged.
 A 30-second discovery deadline bounds a server that stalls after initialization.
 
-Four Luna workers implemented independent UI, SDK acceptance, streamed-body
+Workers implemented independent lifecycle, UI, SDK acceptance, streamed-body
 acceptance, and durable workspace inventory tasks. The primary agent owned
 contracts, authorization, registry integration, startup recovery, packaging,
 and the real browser review. Browser testing found a React event capture bug in
@@ -650,3 +650,11 @@ editor for private endpoint approval remain open. Complete settings, generic
 OAuth and events, broad held-out agent evaluation, an outside connector author,
 sustained operations, private-provider evidence, and a coherent platform release
 also remain open. This unit does not complete the project goal.
+
+Published source `6f884cd` passed all six remote CI jobs in
+[run 37678898568](https://github.com/bferanmi806-sketch/energy-agent-tools/actions/runs/37678898568).
+Python 3.11, 3.12, and 3.13 each passed 954 tests. Container, upgrade, and
+Home Assistant checks passed. A fresh installed wheel also completed the
+managed MCP HTTP lifecycle, restart execution, and disconnect denial against
+an owned synthetic server. The wheel proof used its installed package rather
+than the editable source checkout.
