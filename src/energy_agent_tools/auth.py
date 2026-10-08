@@ -42,6 +42,29 @@ _RESERVED_AUTHORIZATION_PARAMS = {
     "response_type",
     "state",
 }
+_RESERVED_TOKEN_PARAMS = {
+    "access_token",
+    "assertion",
+    "authorization",
+    "client_assertion",
+    "client_assertion_type",
+    "client_id",
+    "client_secret",
+    "code",
+    "code_challenge",
+    "code_challenge_method",
+    "code_verifier",
+    "grant_type",
+    "id_token",
+    "redirect_uri",
+    "refresh_token",
+    "response_type",
+    "scope",
+    "state",
+    "token",
+    "token_type",
+    "token_type_hint",
+}
 _SECRET_KEYS = {
     "access_token",
     "apikey",
@@ -54,6 +77,7 @@ _SECRET_KEYS = {
     "secret",
     "token",
 }
+_COMPACT_SECRET_KEYS = {key.replace("_", "") for key in _SECRET_KEYS}
 
 
 def _now_utc() -> datetime:
@@ -101,7 +125,13 @@ def _has_secret_key(value: Any) -> bool:
     if isinstance(value, Mapping):
         for key, nested in value.items():
             normalized = str(key).strip().lower().replace("-", "_")
-            if normalized in _SECRET_KEYS or normalized.endswith("_token"):
+            compact = normalized.replace("_", "")
+            if (
+                normalized in _SECRET_KEYS
+                or normalized.endswith("_token")
+                or compact in _COMPACT_SECRET_KEYS
+                or compact.endswith("token")
+            ):
                 return True
             if _has_secret_key(nested):
                 return True
@@ -152,10 +182,14 @@ class OAuthProvider:
     state_ttl_seconds: int = _DEFAULT_STATE_TTL
     refresh_skew_seconds: int = _DEFAULT_REFRESH_SKEW
     extra_authorization_params: Mapping[str, str] = field(default_factory=dict)
-    protocol: Literal["oauth2_pkce", "home_assistant"] = "oauth2_pkce"
+    protocol: Literal["oauth2_pkce", "oauth2_confidential", "home_assistant"] = "oauth2_pkce"
+    extra_token_params: Mapping[str, str] = field(default_factory=dict)
+    refresh_endpoint_auth_method: (
+        Literal["none", "client_secret_basic", "client_secret_post"] | None
+    ) = None
 
     def __post_init__(self) -> None:
-        if self.protocol not in {"oauth2_pkce", "home_assistant"}:
+        if self.protocol not in {"oauth2_pkce", "oauth2_confidential", "home_assistant"}:
             raise ValueError("Unsupported OAuth protocol")
         if not isinstance(self.authorization_endpoint, str) or not isinstance(
             self.token_endpoint, str
@@ -183,12 +217,43 @@ class OAuthProvider:
             raise ValueError("refresh_skew_seconds must be between 0 and 3600")
         if self.token_endpoint_auth_method != "none" and not self.client_secret:
             raise ValueError("client_secret is required for client-secret auth")
+        if self.refresh_endpoint_auth_method not in (
+            None,
+            "none",
+            "client_secret_basic",
+            "client_secret_post",
+        ):
+            raise ValueError("Unsupported refresh endpoint auth method")
+        if (
+            self.refresh_endpoint_auth_method in ("client_secret_basic", "client_secret_post")
+            and not self.client_secret
+        ):
+            raise ValueError("client_secret is required for refresh endpoint client-secret auth")
+        if self.protocol == "oauth2_confidential" and (
+            not self.client_secret
+            or self.token_endpoint_auth_method not in {"client_secret_basic", "client_secret_post"}
+        ):
+            raise ValueError(
+                "oauth2_confidential requires client_secret and client-secret token auth"
+            )
         if _has_secret_key(self.extra_authorization_params):
             raise ValueError("authorization parameters cannot contain secrets")
         if any(
             key.lower() in _RESERVED_AUTHORIZATION_PARAMS for key in self.extra_authorization_params
         ):
             raise ValueError("authorization parameters cannot override OAuth protocol fields")
+        if not isinstance(self.extra_token_params, Mapping) or any(
+            not isinstance(key, str) or not key.strip() or not isinstance(value, str)
+            for key, value in self.extra_token_params.items()
+        ):
+            raise ValueError("token parameters must map non-empty names to string values")
+        if _has_secret_key(self.extra_token_params):
+            raise ValueError("token parameters cannot contain secrets")
+        if any(
+            key.strip().lower().replace("-", "_") in _RESERVED_TOKEN_PARAMS
+            for key in self.extra_token_params
+        ):
+            raise ValueError("token parameters cannot override OAuth protocol fields")
         if self.protocol == "home_assistant":
             self._validate_home_assistant()
 
@@ -201,8 +266,15 @@ class OAuthProvider:
         return parsed.scheme, parsed.hostname.lower(), port
 
     def _validate_home_assistant(self) -> None:
-        if self.client_secret is not None or self.token_endpoint_auth_method != "none":
-            raise ValueError("Home Assistant does not use client_secret authentication")
+        if (
+            self.client_secret is not None
+            or self.token_endpoint_auth_method != "none"
+            or self.extra_token_params
+            or self.refresh_endpoint_auth_method is not None
+        ):
+            raise ValueError(
+                "Home Assistant does not support client_secret or extra token parameters"
+            )
         if self.extra_authorization_params or self.scopes:
             raise ValueError("Home Assistant does not support extra authorization parameters")
         try:
@@ -625,9 +697,11 @@ class AuthStore:
             "client_secret": provider.client_secret,
             "revocation_endpoint": provider.revocation_endpoint,
             "token_endpoint_auth_method": provider.token_endpoint_auth_method,
+            "refresh_endpoint_auth_method": provider.refresh_endpoint_auth_method,
             "state_ttl_seconds": provider.state_ttl_seconds,
             "refresh_skew_seconds": provider.refresh_skew_seconds,
             "extra_authorization_params": dict(provider.extra_authorization_params),
+            "extra_token_params": dict(provider.extra_token_params),
             "protocol": provider.protocol,
         }
 
@@ -643,6 +717,7 @@ class AuthStore:
                 client_secret=data.get("client_secret"),
                 revocation_endpoint=data.get("revocation_endpoint"),
                 token_endpoint_auth_method=data.get("token_endpoint_auth_method", "none"),
+                refresh_endpoint_auth_method=data.get("refresh_endpoint_auth_method"),
                 state_ttl_seconds=int(data.get("state_ttl_seconds", _DEFAULT_STATE_TTL)),
                 refresh_skew_seconds=int(data.get("refresh_skew_seconds", _DEFAULT_REFRESH_SKEW)),
                 extra_authorization_params={
@@ -650,6 +725,9 @@ class AuthStore:
                     for k, v in dict(data.get("extra_authorization_params", {})).items()
                 },
                 protocol=data.get("protocol", "oauth2_pkce"),
+                extra_token_params={
+                    str(k): str(v) for k, v in dict(data.get("extra_token_params", {})).items()
+                },
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise _safe_error(
@@ -1478,7 +1556,7 @@ class AuthStore:
                     "state": state,
                 }
             )
-        else:
+        elif provider.protocol == "oauth2_pkce":
             if verifier is None:
                 raise RuntimeError("PKCE provider transaction is missing its verifier")
             params.update(
@@ -1489,6 +1567,18 @@ class AuthStore:
                     "state": state,
                     "code_challenge": self._pkce_challenge(verifier),
                     "code_challenge_method": "S256",
+                }
+            )
+            if provider.scopes:
+                params["scope"] = " ".join(provider.scopes)
+            params.update(provider.extra_authorization_params)
+        else:
+            params.update(
+                {
+                    "response_type": "code",
+                    "client_id": provider.client_id,
+                    "redirect_uri": provider.redirect_uri,
+                    "state": state,
                 }
             )
             if provider.scopes:
@@ -1836,13 +1926,21 @@ class AuthStore:
         return response.status_code, bytes(body)
 
     async def _token_request(
-        self, provider: OAuthProvider, data: Mapping[str, str]
+        self,
+        provider: OAuthProvider,
+        data: Mapping[str, str],
+        *,
+        auth_method_override: Literal["none", "client_secret_basic", "client_secret_post"]
+        | None = None,
     ) -> Mapping[str, Any]:
         payload = dict(data)
         auth: httpx.BasicAuth | None = None
-        if provider.token_endpoint_auth_method == "client_secret_basic":
+        auth_method = auth_method_override
+        if auth_method is None:
+            auth_method = provider.token_endpoint_auth_method
+        if auth_method == "client_secret_basic":
             auth = httpx.BasicAuth(provider.client_id, provider.client_secret or "")
-        elif provider.token_endpoint_auth_method == "client_secret_post":
+        elif auth_method == "client_secret_post":
             payload["client_secret"] = provider.client_secret or ""
 
         async def request(client: httpx.AsyncClient) -> tuple[int, bytes]:
@@ -1946,7 +2044,7 @@ class AuthStore:
                 "code": code,
                 "client_id": transaction.provider.client_id,
             }
-        else:
+        elif transaction.provider.protocol == "oauth2_pkce":
             if transaction.verifier is None:
                 raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
             token_request = {
@@ -1956,6 +2054,14 @@ class AuthStore:
                 "client_id": transaction.provider.client_id,
                 "code_verifier": transaction.verifier,
             }
+        else:
+            token_request = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": transaction.provider.client_id,
+            }
+        token_request.update(transaction.provider.extra_token_params)
         if transaction.account_updated_at is None:
             raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
         result = await self._token_request(
@@ -2015,7 +2121,7 @@ class AuthStore:
                 "code": code,
                 "client_id": transaction.provider.client_id,
             }
-        else:
+        elif transaction.provider.protocol == "oauth2_pkce":
             if transaction.verifier is None:
                 raise _safe_error("oauth_state_invalid", "OAuth state is invalid or expired.")
             token_request = {
@@ -2025,6 +2131,14 @@ class AuthStore:
                 "client_id": transaction.provider.client_id,
                 "code_verifier": transaction.verifier,
             }
+        else:
+            token_request = {
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": transaction.provider.client_id,
+            }
+        token_request.update(transaction.provider.extra_token_params)
         result = await self._token_request(transaction.provider, token_request)
         access_token = result["access_token"]
         try:
@@ -2253,6 +2367,7 @@ class AuthStore:
                     "refresh_token": refresh_token,
                     "client_id": provider.client_id,
                 },
+                auth_method_override=provider.refresh_endpoint_auth_method,
             )
             new_payload = {
                 "access_token": result["access_token"],
@@ -2312,6 +2427,7 @@ class AuthStore:
                     "refresh_token": refresh_token,
                     "client_id": provider.client_id,
                 },
+                auth_method_override=provider.refresh_endpoint_auth_method,
             )
             rotated_refresh = result.get("refresh_token") or refresh_token
             new_expiry = self._expiry(result, self._now())

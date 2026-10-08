@@ -483,11 +483,12 @@ def main() -> None:
         try:
             from pydantic import TypeAdapter
 
+            from .cloud_oauth import CloudEnergyOAuthConfiguration
             from .managed_oauth import HomeAssistantOAuthConfiguration
 
-            configurations = TypeAdapter(list[HomeAssistantOAuthConfiguration]).validate_python(
-                options.get("managed_oauth_configurations", []), strict=True
-            )
+            configurations = TypeAdapter(
+                list[HomeAssistantOAuthConfiguration | CloudEnergyOAuthConfiguration]
+            ).validate_python(options.get("managed_oauth_configurations", []), strict=True)
             if configurations:
                 host_options["managed_oauth_configurations"] = tuple(configurations)
             application = create_host(agent, principals, **host_options)

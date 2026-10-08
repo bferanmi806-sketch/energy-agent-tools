@@ -1,3 +1,28 @@
+# Energy Agent Tools 0.5.0 — prepared release
+
+Adds native read-only Tesla Energy and Enphase Energy authorization alongside
+Home Assistant. Approved provider applications use server-side environment
+secrets, bounded resource identifiers, provider-hosted login in a separate tab,
+verification, workspace-owned site mapping and scoped agent execution. The SDK
+adds `workspace().beginProviderAuthorization()`.
+
+Confidential authorization-code exchange supports the providers' documented
+client authentication and Tesla's regional audience. Existing PKCE and Home
+Assistant protocols remain supported. Access and refresh tokens stay encrypted;
+failed verification cannot activate a connection.
+
+Tesla exposes site information and live status. Enphase exposes system summary
+reads for eligible deployments. Both require registered applications and owner
+consent; Enphase's internal-business-use restriction must be checked before use.
+Neither integration has a documented server-side revocation endpoint. Local
+disconnect deletes gateway access; users remove provider consent separately.
+
+Python gateway, TypeScript SDK and web source use version 0.5.0. Synthetic
+acceptance does not establish live provider qualification. See
+[configuration](cloud-provider-oauth.md) and
+[qualification requirements](cloud-provider-qualification.md) and the
+[release readiness report](release-report-v050.md).
+
 # Energy Agent Tools 0.4.0 — prepared release
 
 Matching Python gateway, TypeScript SDK and self-hosted web application. Clearer

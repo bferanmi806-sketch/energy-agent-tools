@@ -22,10 +22,12 @@ import {
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import type { ManagedDashboardData } from "@/lib/types";
+import type { WorkspaceOAuthConfigurationsResponse } from "@energy-agent-tools/sdk";
 import { GatewayForm } from "./GatewayForm";
 import { ManagedConnectionActions } from "./ManagedConnectionActions";
 import { ManagedConnectionForm } from "./ManagedConnectionForm";
 import { HomeAssistantConnect } from "./HomeAssistantConnect";
+import { CloudOAuthConnect, type EnergyProvider } from "./CloudOAuthConnect";
 import { PendingConnection } from "./PendingConnection";
 import { AgentKeyPanel } from "./AgentKeyPanel";
 import { WorkspaceAssetForm, WorkspaceSiteForm } from "./WorkspaceForms";
@@ -101,9 +103,38 @@ const RUNTIME_LABELS: Record<ManagedDashboardData["toolkits"][number]["runtime"]
   "mcp-remote": "Remote MCP",
 };
 
+const NATIVE_ACCOUNT_TOOLKIT_IDS: ReadonlySet<string> = new Set([
+  "home-assistant",
+  "tesla-energy",
+  "enphase-energy",
+]);
+
 function canConnect(toolkit: ManagedDashboardData["toolkits"][number], data: ManagedDashboardData): boolean {
-  return data.connectionSetups.some(setup => setup.toolkit_id === toolkit.id)
-    || toolkit.id === "home-assistant" && data.authConfigurations.length > 0;
+  if (NATIVE_ACCOUNT_TOOLKIT_IDS.has(toolkit.id)) return true;
+  return data.connectionSetups.some(setup => setup.toolkit_id === toolkit.id);
+}
+
+function configurationsForToolkit(
+  toolkitId: string,
+  configurations: WorkspaceOAuthConfigurationsResponse["configurations"],
+): WorkspaceOAuthConfigurationsResponse["configurations"] {
+  if (toolkitId === "home-assistant") {
+    return configurations.filter(configuration => configuration.toolkit === "home-assistant" && configuration.protocol === "home_assistant");
+  }
+  if (toolkitId === "tesla-energy" || toolkitId === "enphase-energy") {
+    return configurations.filter(configuration => configuration.toolkit === toolkitId && configuration.protocol === "oauth2_confidential");
+  }
+  return [];
+}
+
+function isEnergyProvider(toolkitId: string): toolkitId is EnergyProvider {
+  switch (toolkitId) {
+    case "tesla-energy":
+    case "enphase-energy":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function ProviderMark({ toolkit }: { toolkit: ManagedDashboardData["toolkits"][number] }) {
@@ -112,13 +143,19 @@ function ProviderMark({ toolkit }: { toolkit: ManagedDashboardData["toolkits"][n
   return <span className="provider-mark" aria-hidden="true"><Icon size={20} strokeWidth={1.7} /></span>;
 }
 
-type AuthorizationResult = "connected" | "cancelled" | "invalid" | "failed";
+type AuthorizationResult =
+  | "connected"
+  | "cancelled"
+  | "invalid"
+  | "failed"
+  | "provider_connected";
 
 const AUTHORIZATION_MESSAGES: Record<AuthorizationResult, string> = {
   connected: "Home Assistant verified the selected sensor. Choose a site below to finish setup.",
-  cancelled: "Home Assistant authorization was cancelled. You can try again when you are ready.",
-  invalid: "This authorization return could not be matched to the current workspace session. Start again from a configured instance.",
-  failed: "The gateway could not complete Home Assistant authorization. Check the instance and try again.",
+  cancelled: "Provider authorization was cancelled. You can try again when you are ready.",
+  invalid: "This authorization return could not be matched to the current workspace session. Start again from an approved provider setup.",
+  failed: "The gateway could not complete provider authorization. Check the provider connection and try again.",
+  provider_connected: "Provider verified the selected sensor or energy system. Map the connection to a site to activate it.",
 };
 
 function statusClass(status: ManagedDashboardData["toolkits"][number]["status"]): string {
@@ -289,7 +326,7 @@ export function ManagedConsole({
           {stage !== "complete" && ["apps", "connections", "agent", "sites"].includes(currentViewId) ? <WorkspaceProgress stage={stage} onNavigate={navigate} /> : null}
 
           {authorizationResult ? (
-            <div className={`notice ${authorizationResult === "connected" ? "notice-neutral" : "notice-error"} managed-oauth-notice`} role={authorizationResult === "connected" ? "status" : "alert"}>
+            <div className={`notice ${authorizationResult === "connected" || authorizationResult === "provider_connected" ? "notice-neutral" : "notice-error"} managed-oauth-notice`} role={authorizationResult === "connected" || authorizationResult === "provider_connected" ? "status" : "alert"}>
               <span>{AUTHORIZATION_MESSAGES[authorizationResult]}</span>
             </div>
           ) : null}
@@ -478,7 +515,9 @@ function ToolkitSetup({
         <div><dt>Runtime</dt><dd>{RUNTIME_LABELS[toolkit.runtime]}</dd></div>
         <div><dt>Status</dt><dd><span className={`status-badge ${statusClass(toolkit.status)}`}>{toolkit.status}</span></dd></div>
       </dl>
-      {toolkit.id === "home-assistant" ? <HomeAssistantConnect configurations={configurations} /> : setup ? (
+      {toolkit.id === "home-assistant" ? <HomeAssistantConnect configurations={configurationsForToolkit(toolkit.id, configurations)} /> : isEnergyProvider(toolkit.id) ? (
+        <CloudOAuthConnect key={toolkit.id} provider={toolkit.id} configurations={configurationsForToolkit(toolkit.id, configurations)} />
+      ) : setup ? (
         <div className="managed-provider-setup">
           <div className="setup-categories">
             <h3>{setup.provider === "octopus" ? "Octopus account" : setup.provider}</h3>

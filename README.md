@@ -1,6 +1,6 @@
 # Energy Agent Tools
 
-The 0.4.0 release aligns the Python gateway, TypeScript SDK and self-hosted web app.
+The prepared 0.5.0 release aligns the Python gateway, TypeScript SDK and self-hosted web app.
 Start with the [connection guide](docs/managed-workspaces.md), then
 [connect your existing agent](docs/agent-client-setup.md).
 
@@ -19,8 +19,11 @@ Workspace managers can [connect reviewed custom MCP servers](docs/custom-mcp-onb
 The [web console](apps/web/README.md) connects supported systems, maps sites and
 assets, manages shared access and agent keys, and displays skills, jobs, and
 execution activity. It requires the current-source gateway. Octopus, approved
-Home Assistant instances, and reviewed custom MCP servers have managed connection
-flows. Other provider forms and the complete control plane remain under development.
+Home Assistant instances, Tesla Energy, eligible Enphase deployments and reviewed
+custom MCP servers have managed connection flows. See [cloud provider OAuth](docs/cloud-provider-oauth.md)
+for application registration and [qualification limits](docs/cloud-provider-qualification.md)
+before enabling a cloud provider. Other credential-based providers retain their
+documented authentication methods. Other provider forms remain under development.
 
 ## Start locally
 

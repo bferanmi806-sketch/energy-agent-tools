@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
 import httpx
@@ -187,6 +187,7 @@ async def map_managed_connection(
     connection_id: str,
     site: Site,
     authorize_write: Callable[[], None] | None = None,
+    probe: Callable[[ConnectedAccount, str], Awaitable[bool]] | None = None,
 ) -> Json:
     if authorize_write is not None:
         authorize_write()
@@ -203,7 +204,10 @@ async def map_managed_connection(
         return _managed_outcome(account, account.last_verified_at or datetime.now(UTC))
     credential = auth_store.pending_credential(user_id, workspace_id, connection_id)
     try:
-        await probe_provider(http, account, credential)
+        if probe is not None:
+            await probe(account, credential)
+        else:
+            await probe_provider(http, account, credential)
     except Exception:
         raise EnergyError("provider_verification_failed", "Provider verification failed.") from None
     verified_at = datetime.now(UTC)
@@ -221,9 +225,12 @@ async def map_managed_connection(
 
 
 def _managed_outcome(account: ConnectedAccount, verified_at: datetime) -> Json:
-    provider = {"octopus-energy-account": "octopus", "home-assistant": "home_assistant"}.get(
-        account.toolkit
-    )
+    provider = {
+        "octopus-energy-account": "octopus",
+        "home-assistant": "home_assistant",
+        "tesla-energy": "tesla",
+        "enphase-energy": "enphase",
+    }.get(account.toolkit)
     if provider is None:
         raise EnergyError("unsupported_provider", "This connection provider is unsupported.")
     health = ConnectionHealth(

@@ -1,0 +1,79 @@
+{
+  "toolkit": {
+    "id": "tesla-energy",
+    "name": "Tesla Energy",
+    "description": "Read information and live status for the Tesla Energy site selected in a connected account.",
+    "runtime": "http",
+    "status": "requires credentials",
+    "auth_required": true,
+    "docs_url": "https://developer.tesla.com/docs/fleet-api/endpoints/energy",
+    "version": "1.0.0",
+    "categories": [
+      "solar",
+      "battery",
+      "powerwall",
+      "energy"
+    ]
+  },
+  "tools": [
+    {
+      "name": "tesla_energy.get_site_info",
+      "toolkit": "tesla-energy",
+      "resource_scope": "account",
+      "description": "Read Tesla site assets, settings, and capabilities for the connected account's selected site.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "account_argument_settings": {},
+      "capabilities": [
+        "get_energy_site_info",
+        "energy site",
+        "solar",
+        "battery",
+        "powerwall"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "metered",
+      "result_unit": "mixed",
+      "dependencies": []
+    },
+    {
+      "name": "tesla_energy.get_live_status",
+      "toolkit": "tesla-energy",
+      "resource_scope": "account",
+      "description": "Read Tesla Energy live power, stored energy, grid state, and storm mode for the connected account's selected site.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "account_argument_settings": {},
+      "capabilities": [
+        "get_live_energy_status",
+        "live status",
+        "current power",
+        "storage state"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "metered",
+      "result_unit": "mixed",
+      "dependencies": []
+    }
+  ]
+}

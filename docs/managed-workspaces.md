@@ -2,7 +2,7 @@
 
 Use a managed workspace to connect a system before creating a site. This guide
 requires matching current Python, TypeScript SDK and web source. The published
-Python v0.3.0 wheel predates managed workspace routes. Use the matching 0.4.0 gateway, SDK and web release for this guide.
+Python v0.3.0 wheel predates managed workspace routes. Use the matching 0.5.0 gateway, SDK and web source for this guide.
 
 ## Explore supported questions
 
@@ -110,8 +110,8 @@ without a path prefix. External URLs require HTTPS; loopback development URLs
 may use HTTP. The client application and callback must share scheme, host and
 port. The web callback must match `ENERGY_WEB_ORIGIN` followed by
 `/api/workspace/oauth/callback`. The web form starts authorization through a
-same-origin request, shows pending/error feedback and navigates to the validated
-provider URL. The callback verifies its session-bound state before exchange and
+same-origin request, shows pending/error feedback and opens the validated
+provider URL in a separate tab. The callback verifies its session-bound state before exchange and
 returns to a clean connection page without the code or state in its URL.
 
 The SDK methods `workspace.authConfigurations()`,
@@ -242,3 +242,19 @@ Member grants are limited to 256 sites and 256 connections; a workspace supports
 256 members. Connection grants require active accounts mapped to granted sites.
 Agent key site grants further restrict membership grants. No wildcard shares
 future accounts. The TypeScript workspace client exposes the same operations.
+
+## Connect a cloud energy provider
+
+Tesla Energy and eligible Enphase deployments use operator-approved applications
+with provider-hosted owner login. Follow the [cloud provider OAuth guide](cloud-provider-oauth.md)
+to register the exact HTTPS callback and keep application credentials in the
+gateway environment. The user selects the application and numeric provider
+energy-site or system ID, authorizes in a separate tab, then maps the verified
+connection to a workspace-owned site. The SDK starts this flow with
+`workspace.beginProviderAuthorization({ configuration_id, resource_id })` and
+uses the same callback completion and site-mapping routes.
+
+These connections expose read tools only. Local disconnect immediately removes
+gateway access; provider consent must be removed separately, with
+`upstream_revoked: null` reported honestly. Review the [qualification checklist](cloud-provider-qualification.md)
+for provider registration, region, billing, license and real-owner test requirements.

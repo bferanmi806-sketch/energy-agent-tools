@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable, Iterable
 from urllib.parse import SplitResult, urlsplit
 
@@ -11,6 +12,7 @@ import httpx
 from pydantic import ConfigDict, Field, StrictStr, field_validator, model_validator
 
 from .auth import AuthorizationRequest, AuthStore, OAuthProvider
+from .cloud_oauth import CloudEnergyOAuthConfiguration
 from .models import AuthConfig, ConnectedAccount, EnergyError, Json, StrictModel
 from .onboarding import probe_provider, provider_settings, reviewed_provider_bindings
 
@@ -107,17 +109,21 @@ class ManagedHomeAssistantOAuth:
         self,
         store: AuthStore,
         http: httpx.AsyncClient,
-        configurations: Iterable[HomeAssistantOAuthConfiguration],
+        configurations: Iterable[HomeAssistantOAuthConfiguration | CloudEnergyOAuthConfiguration],
     ) -> None:
         self.store = store
         self.http = http
-        self.configurations: dict[str, HomeAssistantOAuthConfiguration] = {}
+        self.configurations: dict[
+            str, HomeAssistantOAuthConfiguration | CloudEnergyOAuthConfiguration
+        ] = {}
         for configuration in configurations:
             if configuration.id in self.configurations:
                 raise ValueError("OAuth configuration IDs must be unique")
             self.configurations[configuration.id] = configuration
 
-    def _configuration(self, configuration_id: str) -> HomeAssistantOAuthConfiguration:
+    def _configuration(
+        self, configuration_id: str
+    ) -> HomeAssistantOAuthConfiguration | CloudEnergyOAuthConfiguration:
         configuration = self.configurations.get(configuration_id)
         if configuration is None:
             raise EnergyError(
@@ -147,6 +153,10 @@ class ManagedHomeAssistantOAuth:
         telemetry: Json | None = None,
     ) -> AuthorizationRequest:
         configuration = self._configuration(configuration_id)
+        if not isinstance(configuration, HomeAssistantOAuthConfiguration):
+            raise EnergyError(
+                "oauth_configuration_unavailable", "Select a Home Assistant configuration."
+            )
         settings = provider_settings(
             "home_assistant", {"base_url": configuration.base_url, "entity_id": entity_id}
         )
@@ -184,6 +194,77 @@ class ManagedHomeAssistantOAuth:
             user_id, workspace_id, account, configuration.provider()
         )
 
+    def begin_cloud(
+        self, *, user_id: str, workspace_id: str, configuration_id: str, resource_id: str
+    ) -> AuthorizationRequest:
+        configuration = self._configuration(configuration_id)
+        if not isinstance(configuration, CloudEnergyOAuthConfiguration):
+            raise EnergyError(
+                "oauth_configuration_unavailable", "Select a cloud energy configuration."
+            )
+        if not re.fullmatch(r"[0-9]{1,32}", resource_id):
+            raise EnergyError(
+                "connection_settings_invalid", "Select a numeric energy system identifier."
+            )
+        settings: Json = {
+            "resource_id": resource_id,
+            "region": configuration.region,
+            "managed_oauth_configuration_id": configuration.id,
+            "managed_oauth_configuration_digest": configuration.fingerprint(),
+        }
+        identity = json.dumps(
+            [user_id, workspace_id, configuration.id, resource_id], separators=(",", ":")
+        )
+        account = ConnectedAccount(
+            id="managed-energy-" + hashlib.sha256(identity.encode()).hexdigest()[:32],
+            user_id=user_id,
+            toolkit=configuration.toolkit,
+            display_name=f"{configuration.name}: {resource_id}",
+            auth=AuthConfig(scheme="oauth"),
+            settings=settings,
+        )
+        return self.store.begin_managed_oauth(
+            user_id, workspace_id, account, configuration.provider()
+        )
+
+    async def probe(self, account: ConnectedAccount, credential: str) -> bool:
+        configuration = self._configuration(
+            account.settings.get("managed_oauth_configuration_id", "")
+        )
+        if (
+            account.settings.get("managed_oauth_configuration_digest")
+            != configuration.fingerprint()
+        ):
+            raise EnergyError("oauth_configuration_unavailable", "Configuration has changed.")
+        if isinstance(configuration, HomeAssistantOAuthConfiguration):
+            if (
+                account.toolkit != "home-assistant"
+                or account.settings.get("base_url") != configuration.base_url
+            ):
+                raise EnergyError("oauth_configuration_unavailable", "Configuration has changed.")
+            return await probe_provider(self.http, account, credential)
+        if (
+            account.toolkit != configuration.toolkit
+            or account.settings.get("region") != configuration.region
+        ):
+            raise EnergyError("oauth_configuration_unavailable", "Configuration has changed.")
+        if configuration.provider_name == "tesla":
+            from .connectors.tesla_energy import probe
+
+            verified = await probe(self.http, account, credential)
+        else:
+            from .connectors.enphase_energy import probe as enphase_probe
+
+            verified = await enphase_probe(
+                self.http, account, credential, api_key=configuration.api_key()
+            )
+        if verified is not True:
+            raise EnergyError(
+                "provider_verification_failed",
+                "Provider could not verify the selected energy system.",
+            )
+        return True
+
     async def complete(
         self,
         *,
@@ -197,13 +278,9 @@ class ManagedHomeAssistantOAuth:
         configuration = self._configuration(configuration_id)
 
         async def verify(account: ConnectedAccount, credential: str) -> None:
-            if (
-                account.toolkit != "home-assistant"
-                or account.settings.get("managed_oauth_configuration_id") != configuration.id
-                or account.settings.get("base_url") != configuration.base_url
-            ):
+            if account.settings.get("managed_oauth_configuration_id") != configuration.id:
                 raise EnergyError("oauth_configuration_unavailable", "Configuration has changed.")
-            await probe_provider(self.http, account, credential)
+            await self.probe(account, credential)
 
         return await self.store.complete_managed_oauth(
             user_id,

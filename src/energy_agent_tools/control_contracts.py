@@ -155,6 +155,11 @@ class WorkspaceHomeAssistantAuthorizationRequest(_ControlModel):
     mapping: ReviewedHomeAssistantMapping | None = None
 
 
+class WorkspaceProviderAuthorizationRequest(_ControlModel):
+    configuration_id: StrictStr = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
+    resource_id: StrictStr = Field(pattern=r"^[0-9]{1,32}$")
+
+
 class WorkspaceOAuthCompleteRequest(_ControlModel):
     configuration_id: StrictStr = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
     state: StrictStr = Field(min_length=1, max_length=512, repr=False)
@@ -164,8 +169,8 @@ class WorkspaceOAuthCompleteRequest(_ControlModel):
 class WorkspaceOAuthConfiguration(_ControlModel):
     id: StrictStr
     name: StrictStr
-    toolkit: Literal["home-assistant"] = "home-assistant"
-    protocol: Literal["home_assistant"] = "home_assistant"
+    toolkit: Literal["home-assistant", "tesla-energy", "enphase-energy"] = "home-assistant"
+    protocol: Literal["home_assistant", "oauth2_confidential"] = "home_assistant"
     pending_cleanup: StrictInt = Field(default=0, ge=0)
 
 

@@ -45,6 +45,9 @@ def build_agent(
         data_root = Path(config["data_root"]).resolve()
     registry = Registry()
     http.register(registry)
+    from .connectors import tesla_energy
+
+    tesla_energy.register(registry)
     weather_history.register(registry)
     engineering.register(registry)
     analytics.register(registry)

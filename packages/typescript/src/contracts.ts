@@ -1708,14 +1708,21 @@ export const WorkspaceOAuthConfigurationsResponseSchema = {
             "type": "string"
           },
           "toolkit": {
-            "const": "home-assistant",
             "default": "home-assistant",
+            "enum": [
+              "home-assistant",
+              "tesla-energy",
+              "enphase-energy"
+            ],
             "title": "Toolkit",
             "type": "string"
           },
           "protocol": {
-            "const": "home_assistant",
             "default": "home_assistant",
+            "enum": [
+              "home_assistant",
+              "oauth2_confidential"
+            ],
             "title": "Protocol",
             "type": "string"
           },
@@ -1825,6 +1832,29 @@ export const WorkspaceHomeAssistantAuthorizationRequestSchema = {
   "type": "object"
 } as const;
 export type WorkspaceHomeAssistantAuthorizationRequest = FromSchema<typeof WorkspaceHomeAssistantAuthorizationRequestSchema, { keepDefaultedPropertiesOptional: true }>;
+
+export const WorkspaceProviderAuthorizationRequestSchema = {
+  "additionalProperties": false,
+  "properties": {
+    "configuration_id": {
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "title": "Configuration Id",
+      "type": "string"
+    },
+    "resource_id": {
+      "pattern": "^[0-9]{1,32}$",
+      "title": "Resource Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "configuration_id",
+    "resource_id"
+  ],
+  "title": "WorkspaceProviderAuthorizationRequest",
+  "type": "object"
+} as const;
+export type WorkspaceProviderAuthorizationRequest = FromSchema<typeof WorkspaceProviderAuthorizationRequestSchema, { keepDefaultedPropertiesOptional: true }>;
 
 export const WorkspaceOAuthCompleteRequestSchema = {
   "additionalProperties": false,
@@ -3880,6 +3910,8 @@ export const ConnectionCreatedResponseSchema = {
           "enum": [
             "octopus",
             "home_assistant",
+            "tesla",
+            "enphase",
             "custom_mcp"
           ]
         },
@@ -3981,6 +4013,8 @@ export const ConnectionVerificationResponseSchema = {
           "enum": [
             "octopus",
             "home_assistant",
+            "tesla",
+            "enphase",
             "custom_mcp"
           ]
         },

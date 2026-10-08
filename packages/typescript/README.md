@@ -1,6 +1,6 @@
 # Energy Agent Tools TypeScript SDK
 
-Use this 0.4.0 SDK with the matching 0.4.0 Python gateway and web source.
+Use this 0.5.0 SDK with the matching 0.5.0 Python gateway and web source.
 
 This package connects TypeScript applications to the self-hosted Python gateway.
 The gateway discovers providers, checks account/site scope, executes tools and
@@ -8,7 +8,7 @@ preserves energy semantics. Provider credentials remain on the gateway.
 
 The SDK is distributed as matching source and a release tarball; it has not
 been published to the npm registry. Build it locally when using the repository.
-Use the matching 0.4.0 gateway. The REST `runSkill` and `toolkits` routes were added after v0.3.0; released v0.3.0
+Use the matching 0.5.0 gateway. The REST `runSkill` and `toolkits` routes were added after v0.3.0; released v0.3.0
 gateways can run workflows through the existing MCP `ENERGY_RUN_SKILL` helper.
 
 ```sh
@@ -168,7 +168,7 @@ for schema-derived types and [Ajv](https://ajv.js.org/guide/typescript.html) for
 runtime validation.
 
 The matching web application and persistent workspace/connection control plane
-are included in 0.4.0. This SDK does not qualify physical
+are included in 0.5.0. This SDK does not qualify physical
 meters, independent agent benchmarks or sustained deployment reliability.
 
 Current development source also exposes `energy.identity()` over authenticated

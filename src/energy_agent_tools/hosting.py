@@ -48,6 +48,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from .activity import ExecutionLogQuery, ExecutionLogScope
 from .auth import AuthStore
 from .capabilities import CapabilityRequest
+from .cloud_oauth import CloudEnergyOAuthConfiguration
 from .connection_contracts import ConnectionSetupsResponse, OctopusConnectionRequest, octopus_setup
 from .control_contracts import (
     AgentKeyAccess,
@@ -64,6 +65,7 @@ from .control_contracts import (
     WorkspaceOAuthCleanupRequest,
     WorkspaceOAuthCleanupResponse,
     WorkspaceOAuthCompleteRequest,
+    WorkspaceProviderAuthorizationRequest,
     WorkspaceSiteRequest,
 )
 from .control_store import ControlStore
@@ -417,7 +419,9 @@ class AuthenticatedHost:
         close_agent_on_shutdown: bool,
         control_store: ControlStore | None = None,
         managed_workspaces: bool = False,
-        managed_oauth_configurations: tuple[HomeAssistantOAuthConfiguration, ...] = (),
+        managed_oauth_configurations: tuple[
+            HomeAssistantOAuthConfiguration | CloudEnergyOAuthConfiguration, ...
+        ] = (),
         managed_mcp_target_approver: TargetApprover | None = None,
     ) -> None:
         if max_requests_per_minute <= 0:
@@ -454,6 +458,15 @@ class AuthenticatedHost:
             self._managed_oauth = ManagedHomeAssistantOAuth(
                 agent.auth_store, agent.http, managed_oauth_configurations
             )
+        enphase_api_keys = {
+            item.id: item.api_key()
+            for item in managed_oauth_configurations
+            if isinstance(item, CloudEnergyOAuthConfiguration) and item.provider_name == "enphase"
+        }
+        if enphase_api_keys:
+            from .connectors import enphase_energy
+
+            enphase_energy.register(agent.registry, api_keys=enphase_api_keys)
         self._operator_site_ids = frozenset(agent.sites)
         self._operator_asset_ids = frozenset(agent.assets)
         self._managed_sites: dict[str, str] = {}
@@ -493,6 +506,11 @@ class AuthenticatedHost:
                 methods=["GET"],
             ),
             Route("/workspace/authorizations", self._workspace_authorize, methods=["POST"]),
+            Route(
+                "/workspace/provider-authorizations",
+                self._workspace_authorize_provider,
+                methods=["POST"],
+            ),
             Route(
                 "/workspace/authorizations/complete",
                 self._workspace_complete_authorization,
@@ -1607,6 +1625,42 @@ class AuthenticatedHost:
         except EnergyError as exc:
             return self._energy_error(exc)
 
+    async def _workspace_authorize_provider(self, request: Request) -> Response:
+        principal = self._workspace_manager(request)
+        if isinstance(principal, Response):
+            return principal
+        assert principal.workspace_id is not None and self._managed_oauth is not None
+        parsed = await self._parse_json(request, WorkspaceProviderAuthorizationRequest)
+        if isinstance(parsed, Response):
+            return parsed
+        data = cast(WorkspaceProviderAuthorizationRequest, parsed)
+        try:
+            await self._managed_oauth.cleanup(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                configuration_id=data.configuration_id,
+            )
+            authorization = self._managed_oauth.begin_cloud(
+                user_id=principal.user_id,
+                workspace_id=principal.workspace_id,
+                configuration_id=data.configuration_id,
+                resource_id=data.resource_id,
+            )
+            return _json_response(
+                WorkspaceAuthorizationResponse(
+                    authorization=WorkspaceAuthorization(
+                        connection_id=authorization.connection_id,
+                        authorization_url=authorization.authorization_url,
+                        state=authorization.state,
+                        expires_at=authorization.expires_at,
+                    )
+                ).model_dump(mode="json"),
+                status_code=201,
+                headers={"Cache-Control": "no-store"},
+            )
+        except EnergyError as exc:
+            return self._energy_error(exc)
+
     async def _workspace_authorization_cleanup(self, request: Request) -> Response:
         principal = self._workspace_manager(request)
         if isinstance(principal, Response):
@@ -1908,6 +1962,9 @@ class AuthenticatedHost:
                     workspace_id=principal.workspace_id,
                     connection_id=request.path_params["connection_id"],
                     site=site,
+                    probe=self._managed_oauth.probe
+                    if account.auth.scheme == "oauth" and self._managed_oauth
+                    else None,
                     authorize_write=self._workspace_authorize_write(
                         request, principal, site_id=site.id
                     ),
@@ -1943,6 +2000,8 @@ class AuthenticatedHost:
             if not is_custom_mcp and account.toolkit not in {
                 "octopus-energy-account",
                 "home-assistant",
+                "tesla-energy",
+                "enphase-energy",
             }:
                 return _error(
                     "unsupported_provider", "This connection provider is unsupported.", 400
@@ -2001,6 +2060,9 @@ class AuthenticatedHost:
 
                     async def home_probe(checked: ConnectedAccount, credential: str) -> bool:
                         self._require_managed_oauth_approval(checked)
+                        if checked.auth.scheme == "oauth":
+                            assert self._managed_oauth is not None
+                            return await self._managed_oauth.probe(checked, credential)
                         return await probe_provider(self.agent.http, checked, credential)
 
                     status: Literal["healthy", "unhealthy"] = "healthy"
@@ -2025,7 +2087,11 @@ class AuthenticatedHost:
                         message = "Provider verification failed."
                     health = ConnectionHealth(
                         connection_id=account.id,
-                        provider="home_assistant",
+                        provider={
+                            "home-assistant": "home_assistant",
+                            "tesla-energy": "tesla",
+                            "enphase-energy": "enphase",
+                        }[account.toolkit],
                         status=status,
                         checked_at=datetime.now(UTC),
                         probe="provider-read",
@@ -2450,7 +2516,9 @@ def create_host(
     close_agent_on_shutdown: bool = False,
     control_store: ControlStore | None = None,
     managed_workspaces: bool = False,
-    managed_oauth_configurations: tuple[HomeAssistantOAuthConfiguration, ...] = (),
+    managed_oauth_configurations: tuple[
+        HomeAssistantOAuthConfiguration | CloudEnergyOAuthConfiguration, ...
+    ] = (),
     managed_mcp_target_approver: TargetApprover | None = None,
 ) -> AuthenticatedHost:
     """Build an authenticated multi-user ASGI host.

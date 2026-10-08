@@ -100,7 +100,7 @@ export default async function HomePage({
           : params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs" || params?.view === "settings"
             ? params.view
             : "apps";
-        const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed"
+        const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed" || params?.oauth === "provider_connected"
           ? params.oauth
           : undefined;
         return <ManagedConsole data={state.data} initialView={initialView} {...(jobStatus ? { jobStatus } : {})} {...(authorizationResult ? { authorizationResult } : {})} />;

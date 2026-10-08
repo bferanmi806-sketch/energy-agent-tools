@@ -1,0 +1,45 @@
+{
+  "toolkit": {
+    "id": "enphase-energy",
+    "name": "Enphase Energy",
+    "description": "Read a connected Enphase system's current summary and energy values.",
+    "runtime": "http",
+    "status": "requires credentials",
+    "auth_required": true,
+    "docs_url": "https://developer-v4.enphase.com/docs/monitoring_api",
+    "version": "1.0.0",
+    "categories": []
+  },
+  "tools": [
+    {
+      "name": "enphase_energy.get_summary",
+      "toolkit": "enphase-energy",
+      "resource_scope": "account",
+      "description": "Read current production, energy totals, system size and available battery summary values for the connected Enphase system.",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "account_argument_settings": {},
+      "capabilities": [
+        "get_generation",
+        "get_current_power",
+        "get_storage_state",
+        "solar",
+        "production"
+      ],
+      "actions": [
+        "external-data",
+        "read-only"
+      ],
+      "idempotent": true,
+      "version": "1.0.0",
+      "reviewed": true,
+      "result_kind": "metered",
+      "result_unit": "mixed",
+      "dependencies": []
+    }
+  ]
+}

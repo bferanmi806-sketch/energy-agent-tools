@@ -28,6 +28,7 @@ from energy_agent_tools.control_contracts import (
     WorkspaceOAuthCleanupResponse,
     WorkspaceOAuthCompleteRequest,
     WorkspaceOAuthConfigurationsResponse,
+    WorkspaceProviderAuthorizationRequest,
     WorkspaceSiteRequest,
 )
 from energy_agent_tools.control_store import IssuedKey, KeyRecord
@@ -176,6 +177,9 @@ def schemas() -> dict[str, dict[str, Any]]:
         "WorkspaceHomeAssistantAuthorizationRequest": expand_model(
             WorkspaceHomeAssistantAuthorizationRequest
         ),
+        "WorkspaceProviderAuthorizationRequest": expand_model(
+            WorkspaceProviderAuthorizationRequest
+        ),
         "WorkspaceOAuthCompleteRequest": expand_model(WorkspaceOAuthCompleteRequest),
         "WorkspaceOAuthCleanupRequest": expand_model(WorkspaceOAuthCleanupRequest),
         "WorkspaceOAuthCleanupResponse": expand_model(WorkspaceOAuthCleanupResponse),
@@ -233,7 +237,9 @@ def schemas() -> dict[str, dict[str, Any]]:
                 "health": obj(
                     {
                         "connection_id": text,
-                        "provider": {"enum": ["octopus", "home_assistant", "custom_mcp"]},
+                        "provider": {
+                            "enum": ["octopus", "home_assistant", "tesla", "enphase", "custom_mcp"]
+                        },
                         "status": {"const": "healthy"},
                         "checked_at": text,
                         "probe": {"enum": ["provider-read", "mcp-schema"]},
@@ -251,7 +257,9 @@ def schemas() -> dict[str, dict[str, Any]]:
                 "health": obj(
                     {
                         "connection_id": text,
-                        "provider": {"enum": ["octopus", "home_assistant", "custom_mcp"]},
+                        "provider": {
+                            "enum": ["octopus", "home_assistant", "tesla", "enphase", "custom_mcp"]
+                        },
                         "status": {"enum": ["healthy", "unhealthy"]},
                         "checked_at": text,
                         "probe": {"enum": ["provider-read", "mcp-schema"]},

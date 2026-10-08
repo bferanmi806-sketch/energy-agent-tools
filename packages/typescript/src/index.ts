@@ -14,7 +14,7 @@ export type {
   WorkspaceRevokedKeyResponse,
   WorkspaceMemberRequest, WorkspaceMemberGrants, WorkspaceMemberResponse,
   WorkspaceMembersResponse, WorkspaceMemberRemovedResponse,
-  WorkspaceOAuthConfigurationsResponse, WorkspaceHomeAssistantAuthorizationRequest,
+  WorkspaceOAuthConfigurationsResponse, WorkspaceHomeAssistantAuthorizationRequest, WorkspaceProviderAuthorizationRequest,
   WorkspaceOAuthCompleteRequest, WorkspaceAuthorizationResponse,
   WorkspaceOAuthCleanupRequest, WorkspaceOAuthCleanupResponse,
   MCPConnectionInspectionRequest, MCPConnectionInspectionResponse,

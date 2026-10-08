@@ -13,10 +13,12 @@ import { openWorkspaceForOAuthCallback, workspaceFailure } from "@/lib/managed";
 
 export const runtime = "nodejs";
 
-type CallbackResult = "connected" | "cancelled" | "invalid" | "failed";
+type CallbackResult = "connected" | "provider_connected" | "cancelled" | "invalid" | "failed";
 
 function redirectResult(result: CallbackResult, secure: boolean, clearFlow = false): Response {
-  const location = result === "connected"
+  const location = result === "provider_connected"
+    ? "/?view=connections&oauth=provider_connected"
+    : result === "connected"
     ? "/?view=connections&oauth=connected"
     : result === "cancelled"
       ? "/?view=apps&oauth=cancelled"
@@ -91,6 +93,9 @@ export async function GET(request: Request): Promise<Response> {
   ) return redirectResult("invalid", config.webOrigin.secure, true);
 
   try {
+    const { configurations } = await context.workspace.authConfigurations();
+    const configuration = configurations.find(item => item.id === flow.configurationId);
+    if (!configuration) return redirectResult("invalid", config.webOrigin.secure, true);
     const result = await context.workspace.completeAuthorization({
       configuration_id: flow.configurationId,
       state: flow.state,
@@ -98,17 +103,17 @@ export async function GET(request: Request): Promise<Response> {
     });
     if (
       result.account.id !== flow.connectionId ||
-      result.account.toolkit !== "home-assistant" ||
+      result.account.toolkit !== configuration.toolkit ||
       result.account.site_id !== null ||
       result.account.enabled !== false ||
       result.account.state !== "pending_mapping" ||
       result.account.verified !== true ||
       result.health.connection_id !== flow.connectionId ||
-      result.health.provider !== "home_assistant" ||
+      result.health.provider !== ({ "home-assistant": "home_assistant", "tesla-energy": "tesla", "enphase-energy": "enphase" }[configuration.toolkit]) ||
       result.health.status !== "healthy" ||
       result.health.probe !== "provider-read"
     ) return redirectResult("failed", config.webOrigin.secure, true);
-    return redirectResult("connected", config.webOrigin.secure, true);
+    return redirectResult(configuration.toolkit === "home-assistant" ? "connected" : "provider_connected", config.webOrigin.secure, true);
   } catch {
     return redirectResult("failed", config.webOrigin.secure, true);
   }
