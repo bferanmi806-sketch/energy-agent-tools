@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-08",
+  "baseline_sha": "e9438307a75570306f732ab1dc28c939c211f315",
+  "account": "fictional Octopus, preselected",
+  "new_workspace_to_active": {
+    "before": {
+      "clicks": 6,
+      "manual_reloads": 1,
+      "typed_fields": 6
+    },
+    "after": {
+      "clicks": 3,
+      "manual_reloads": 0,
+      "typed_fields": 5
+    }
+  },
+  "additional_key_creation": {
+    "before_clicks": 3,
+    "after_clicks": 3,
+    "typed_fields": 1
+  },
+  "mapping_retry": {
+    "sites_before_retry": 2,
+    "sites_after_retry": 2
+  },
+  "mcp": {
+    "discovered_tools": 11,
+    "consumption_kwh": 1.25,
+    "cross_workspace_status": 403,
+    "revoked_key_status": 401
+  },
+  "actual_viewports": {
+    "mobile": [
+      390,
+      844
+    ],
+    "fresh_desktop": [
+      1280,
+      720
+    ]
+  },
+  "limits": [
+    "Fixture-backed providers only",
+    "No live Tesla or Enphase qualification",
+    "Agent clients were not installed or modified"
+  ]
+}

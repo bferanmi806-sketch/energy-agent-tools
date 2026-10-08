@@ -645,3 +645,16 @@ code { overflow-wrap: anywhere; }
   .managed-console-shell .section-subheading h2 { margin-bottom: 6px; font-size: 17px; }
   .managed-console-shell .section-subheading p { margin-top: 0; }
 }
+
+/* Keep provider internals available without interrupting connection setup. */
+.integration-details { margin: 14px 0; color: var(--ink-soft); font-size: 13px; }
+.integration-details > summary { cursor: pointer; padding: 12px 0; min-height: 44px; }
+.integration-details[open] > summary { color: var(--ink); }
+.brand-mark:has(img) { border: 0; background: transparent; }
+.brand-mark img { object-fit: contain; }
+.signin-mascot { display: block; object-fit: contain; margin-bottom: 18px; }
+
+.connection-reference { color: var(--ink-muted); font-size: 12px; margin-top: 4px; }
+.connection-reference summary { cursor: pointer; min-height: 44px; display: list-item; align-content: center; }
+.connection-reference code { display: block; overflow-wrap: anywhere; }
+.workspace-form > details > summary { min-height: 44px; cursor: pointer; align-content: center; }

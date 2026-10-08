@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
-  Waves,
   Wrench,
   X,
   type LucideIcon,
@@ -219,7 +218,7 @@ export function ManagedConsole({
   jobStatus?: string;
 }) {
   const canManageCustomMCP = data.identity.can_manage_workspace === true && data.workspace.mode === "managed";
-  const [view, setView] = useState<ViewId>(() => initialView === "mcp" && !canManageCustomMCP ? "apps" : initialView);
+  const view = initialView === "mcp" && !canManageCustomMCP ? "apps" : initialView;
   const [catalogueMode, setCatalogueMode] = useState<"accounts" | "tools">("accounts");
   const [query, setQuery] = useState("");
   const [selectedToolkitId, setSelectedToolkitId] = useState(
@@ -242,20 +241,16 @@ export function ManagedConsole({
   const stage = workspaceStep(data);
 
   function navigate(next: ViewId) {
-    if (next === "mcp" && !canManageCustomMCP) {
-      setView("apps");
-      window.history.replaceState(null, "", "/?view=apps");
-      return;
-    }
-    setView(next);
-    window.history.replaceState(null, "", `/?view=${next}`);
+    // Load current gateway state and preserve normal browser back navigation.
+    const destination = next === "mcp" && !canManageCustomMCP ? "apps" : next;
+    window.location.assign(`/?view=${destination}`);
   }
 
   return (
     <div className="console-shell managed-console-shell">
       <aside className="sidebar">
         <a className="brand" href="/" aria-label="Energy Agent Tools home">
-          <span className="brand-mark" aria-hidden="true"><Waves size={19} strokeWidth={1.8} /></span>
+          <span className="brand-mark" aria-hidden="true"><img src="/brand/energy-mascot.png" width="31" height="31" alt="" /></span>
           <span className="brand-name">Energy Agent Tools</span>
         </a>
         <div className="managed-workspace-identity">
@@ -396,7 +391,7 @@ function WorkspaceProgress({
           </button>
         );
       })}
-      {stage === "complete" ? <span className="progress-complete-label"><Check size={13} /> Ready for your agent</span> : null}
+      {stage === "complete" ? <span className="progress-complete-label"><Check size={13} /> Agent access ready</span> : null}
     </nav>
   );
 }
@@ -461,7 +456,7 @@ function AppsView({
                     </span></span>
                     <span className="runtime-cell">{runtimeDescription(toolkit)}</span>
                     <span className="status-badge status-neutral">{canConnect(toolkit, data) ? "Account" : "Tool"}</span>
-                    <span className="toolkit-action">{canConnect(toolkit, data) ? "Connect" : "Details"} <ArrowRight size={14} aria-hidden="true" /></span>
+                    <span className="toolkit-action">{canConnect(toolkit, data) ? ((toolkit.id === "home-assistant" || isEnergyProvider(toolkit.id)) && configurationsForToolkit(toolkit.id, data.authConfigurations).length === 0 ? "Setup required" : "Connect") : "Details"} <ArrowRight size={14} aria-hidden="true" /></span>
                   </button>
                   {active ? <ToolkitSetup toolkit={toolkit} setup={selectedSetup} configurations={data.authConfigurations} mobile /> : null}
                 </Fragment>
@@ -510,11 +505,11 @@ function ToolkitSetup({
     <aside className={className} aria-label={`${toolkit.name} setup`}>
       <h2>{toolkit.name}</h2>
       <p className="setup-description">{toolkit.description}</p>
-      <dl className="metadata-list">
+      <details className="integration-details"><summary>Technical details</summary><dl className="metadata-list">
         <div><dt>Registry ID</dt><dd><code>{toolkit.id}</code></dd></div>
         <div><dt>Runtime</dt><dd>{RUNTIME_LABELS[toolkit.runtime]}</dd></div>
         <div><dt>Status</dt><dd><span className={`status-badge ${statusClass(toolkit.status)}`}>{toolkit.status}</span></dd></div>
-      </dl>
+      </dl></details>
       {toolkit.id === "home-assistant" ? <HomeAssistantConnect configurations={configurationsForToolkit(toolkit.id, configurations)} /> : isEnergyProvider(toolkit.id) ? (
         <CloudOAuthConnect key={toolkit.id} provider={toolkit.id} configurations={configurationsForToolkit(toolkit.id, configurations)} />
       ) : setup ? (
@@ -557,7 +552,7 @@ function ConnectionsView({ data, onBrowseApps }: { data: ManagedDashboardData; o
                 <article className="managed-connection-row" key={connection.id}>
                   <div className="managed-record-main">
                     <span className="record-icon"><Activity size={16} aria-hidden="true" /></span>
-                    <div><h3>{connectionDisplayName(connection)}</h3><code>{connection.id}</code></div>
+                    <div><h3>{connectionDisplayName(connection)}</h3><details className="connection-reference"><summary>Connection details</summary><code>{connection.id}</code></details></div>
                   </div>
                   <span className={`status-badge ${connectionStatusClass(connection.state)}`}>{connectionLabel(connection.state)}</span>
                   <PendingConnection connectionId={connection.id} sites={data.sites} />
@@ -568,14 +563,14 @@ function ConnectionsView({ data, onBrowseApps }: { data: ManagedDashboardData; o
           ) : null}
           {active.length > 0 ? (
             <section className="managed-record-group" aria-labelledby="active-connections-title">
-              <div className="section-subheading"><h2 id="active-connections-title">Active connections</h2><p>Mapped connections are available to site-scoped agent keys.</p></div>
+              <div className="section-subheading"><h2 id="active-connections-title">Active connections</h2><p>These connections are set up for your agents. Check a connection to confirm current provider access.</p></div>
               {active.map((connection) => {
                 const site = data.sites.find((candidate) => candidate.id === connection.site_id);
                 return (
                   <article className="managed-connection-row managed-active-row" key={connection.id}>
                     <div className="managed-record-main">
                       <span className="record-icon"><Activity size={16} aria-hidden="true" /></span>
-                      <div><h3>{connectionDisplayName(connection)}</h3><code>{connection.id}</code></div>
+                      <div><h3>{connectionDisplayName(connection)}</h3><details className="connection-reference"><summary>Connection details</summary><code>{connection.id}</code></details></div>
                     </div>
                     <span className="managed-record-site">{site?.name ?? "Site unavailable"}</span>
                     <span className={`status-badge ${connectionStatusClass(connection.state)}`}>{connectionLabel(connection.state)}</span>
@@ -592,9 +587,10 @@ function ConnectionsView({ data, onBrowseApps }: { data: ManagedDashboardData; o
                 <article className="managed-connection-row managed-inactive-row" key={connection.id}>
                   <div className="managed-record-main">
                     <span className="record-icon"><Activity size={16} aria-hidden="true" /></span>
-                    <div><h3>{connectionDisplayName(connection)}</h3><code>{connection.id}</code></div>
+                    <div><h3>{connectionDisplayName(connection)}</h3><details className="connection-reference"><summary>Connection details</summary><code>{connection.id}</code></details></div>
                   </div>
                   <span className={`status-badge ${connectionStatusClass(connection.state)}`}>{connectionLabel(connection.state)}</span>
+                  <a className="button button-secondary" href="/?view=apps">Connect again</a>
                 </article>
               ))}
             </section>

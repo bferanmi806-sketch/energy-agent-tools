@@ -1,7 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { ConnectionsResponse, WorkspaceSitesResponse } from "@energy-agent-tools/sdk";
 
 type Site = WorkspaceSitesResponse["sites"][number];
@@ -29,30 +28,43 @@ function parseSite(value: unknown): Site | null {
 export function WorkspaceSiteForm({
   onCreated,
   compact = false,
+  submitLabel,
 }: {
-  onCreated?: (site: Site) => void;
+  onCreated?: (site: Site) => void | Promise<void>;
   compact?: boolean;
+  submitLabel?: string;
 }) {
   const formId = useId();
-  const router = useRouter();
   const [state, setState] = useState<FormState>("idle");
+  const [timezone, setTimezone] = useState("UTC");
+  const timezoneWasEdited = useRef(false);
+
+  useEffect(() => {
+    try {
+      const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (browserTimezone && !timezoneWasEdited.current) setTimezone(browserTimezone);
+    } catch {
+      // Keep the UTC fallback when the browser does not provide a time zone.
+    }
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (state === "pending") return;
     const values = new FormData(event.currentTarget);
     const name = values.get("name");
-    const timezone = values.get("timezone");
-    if (typeof name !== "string" || typeof timezone !== "string" || !name.trim() || !timezone.trim()) {
+    const submittedTimezone = values.get("timezone");
+    if (typeof name !== "string" || typeof submittedTimezone !== "string" || !name.trim()) {
       setState("error");
       return;
     }
+    const timezoneValue = submittedTimezone.trim() || "UTC";
 
     setState("pending");
     try {
       const response = await fetch("/api/workspace/sites", {
         method: "POST",
-        body: new URLSearchParams({ name: name.trim(), timezone: timezone.trim() }),
+        body: new URLSearchParams({ name: name.trim(), timezone: timezoneValue }),
         credentials: "same-origin",
         cache: "no-store",
         headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
@@ -66,8 +78,7 @@ export function WorkspaceSiteForm({
       const site = isRecord(payload) ? parseSite(payload.site) : null;
       if (!site) throw new Error("Site could not be created.");
       if (onCreated) {
-        onCreated(site);
-        router.refresh();
+        await onCreated(site);
       }
       else window.location.assign("/?view=sites");
     } catch {
@@ -82,13 +93,26 @@ export function WorkspaceSiteForm({
         <label htmlFor={`${formId}-name`}>Site name</label>
         <input id={`${formId}-name`} name="name" maxLength={256} required placeholder="e.g. Home" />
       </div>
-      <div className="field-stack">
-        <label htmlFor={`${formId}-timezone`}>Time zone</label>
-        <input id={`${formId}-timezone`} name="timezone" maxLength={80} required placeholder="e.g. Europe/London" />
-        <span className="field-hint">Used to align site data with local time.</span>
-      </div>
+      <details>
+        <summary>Advanced settings</summary>
+        <div className="field-stack">
+          <label htmlFor={`${formId}-timezone`}>Time zone</label>
+          <input
+            id={`${formId}-timezone`}
+            name="timezone"
+            value={timezone}
+            maxLength={80}
+            onChange={(event) => {
+              timezoneWasEdited.current = true;
+              setTimezone(event.currentTarget.value);
+            }}
+            placeholder="e.g. Europe/London"
+          />
+          <span className="field-hint">Defaults to your browser’s time zone. Used to align site data with local time.</span>
+        </div>
+      </details>
       <button className="button button-primary" type="submit" disabled={state === "pending"}>
-        {state === "pending" ? "Creating site…" : compact ? "Create site" : "Add site"}
+        {state === "pending" ? "Creating site…" : submitLabel ?? (compact ? "Create site" : "Add site")}
       </button>
       {state === "error" ? <p className="notice notice-error" role="alert">The site could not be saved. Check the details and try again.</p> : null}
     </form>

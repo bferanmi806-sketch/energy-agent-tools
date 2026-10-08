@@ -189,6 +189,7 @@ export function HomeAssistantConnect({ configurations }: { configurations: Confi
                   <span className={styles.fieldHint} id={`${formId}-entity-hint`}>Only this entity is enrolled for the selected instance.</span>
                 </div>
 
+                <details className="integration-details"><summary>Advanced sensor mapping (optional)</summary>
                 <fieldset className="home-assistant-mapping">
                   <legend>Optional sensor mapping</legend>
                   <label className="check-row">
@@ -234,7 +235,7 @@ export function HomeAssistantConnect({ configurations }: { configurations: Confi
                     </div>
                   </fieldset>
                   <p className="field-hint">This optional sensor mapping is separate from the site mapping you’ll complete after verification.</p>
-                </fieldset>
+                </fieldset></details>
 
                 <button className="button button-primary home-assistant-submit" type="submit">
                   {authorization.kind === "pending" ? "Opening Home Assistant…" : "Authorize in a new tab"} <ArrowRight size={15} aria-hidden="true" />

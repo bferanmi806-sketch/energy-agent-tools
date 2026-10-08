@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { KeyRound, RefreshCw, ShieldCheck, Waves } from "lucide-react";
+import { RefreshCw, ShieldCheck } from "lucide-react";
 import { SignInForm } from "@/components/SignInForm";
 import { Console } from "@/components/Console";
 import { ManagedConsole } from "@/components/ManagedConsole";
@@ -23,11 +23,11 @@ function SignIn({ message }: { message: string | null }) {
   return (
     <main className="signin-page">
       <div className="signin-brand">
-        <span className="brand-mark" aria-hidden="true"><Waves size={21} strokeWidth={1.8} /></span>
+        <span className="brand-mark" aria-hidden="true"><img src="/brand/energy-mascot.png" width="31" height="31" alt="" /></span>
         <span>Energy Agent Tools</span>
       </div>
       <section className="signin-panel" aria-labelledby="signin-title">
-        <div className="signin-symbol" aria-hidden="true"><KeyRound size={20} /></div>
+        <img className="signin-mascot" src="/brand/energy-mascot.png" width="84" height="84" alt="" />
         <h1 id="signin-title">Sign in to your gateway</h1>
         <p className="signin-intro">Use the gateway access key supplied by your operator. Connect your own provider accounts after sign-in; provider API keys do not belong here.</p>
         {message ? (
@@ -54,7 +54,7 @@ function Unavailable({ message }: { message: string }) {
   return (
     <main className="status-page">
       <div className="status-brand">
-        <span className="brand-mark" aria-hidden="true"><Waves size={21} strokeWidth={1.8} /></span>
+        <span className="brand-mark" aria-hidden="true"><img src="/brand/energy-mascot.png" width="31" height="31" alt="" /></span>
         <span>Energy Agent Tools</span>
       </div>
       <section className="status-panel" aria-labelledby="unavailable-title">

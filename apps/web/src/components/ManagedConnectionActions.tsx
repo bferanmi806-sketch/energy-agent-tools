@@ -97,6 +97,7 @@ export function ManagedConnectionActions({ connectionId, enabled, state }: {
         <p className="notice notice-neutral" role="status">
           <strong>{feedback.status === "healthy" ? "Connection is healthy" : "Connection needs attention"}</strong>
           Last checked {feedback.checkedAt}.
+          {feedback.status === "unhealthy" ? <> Check your provider account and try again. If access was revoked, disconnect this connection and <a href="/?view=apps">connect the account again</a>.</> : null}
         </p>
       ) : null}
       {feedback.kind === "error" ? (

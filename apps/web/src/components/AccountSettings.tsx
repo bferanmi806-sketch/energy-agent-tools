@@ -99,8 +99,8 @@ export function AccountSettings({
         <span className={styles.introIcon} aria-hidden="true"><UserRound size={20} strokeWidth={1.8} /></span>
         <div>
           <p className={styles.eyebrow}>ACCOUNT</p>
-          <h2>Account and settings</h2>
-          <p>Review the identity, permissions and gateway details reported by this workspace.</p>
+          <h2>Your workspace</h2>
+          <p>Manage agent access and your gateway session.</p>
         </div>
       </header>
 
@@ -110,27 +110,20 @@ export function AccountSettings({
             <span className={styles.cardIcon} aria-hidden="true"><ShieldCheck size={17} /></span>
             <div>
               <h3 id="account-identity-heading">Identity and access</h3>
-              <p>Current values returned by the gateway.</p>
+              <p>Your current workspace and permissions.</p>
             </div>
           </div>
           <dl className={styles.detailsList}>
-            <div className={styles.detailRow}>
-              <dt>Gateway user ID</dt>
-              <dd><code>{data.identity.user_id}</code></dd>
-            </div>
-            <div className={styles.detailRow}>
-              <dt>Workspace</dt>
-              <dd>{data.workspace.name}</dd>
-            </div>
-            <div className={styles.detailRow}>
-              <dt>Workspace ID</dt>
-              <dd><code>{data.workspace.id}</code></dd>
-            </div>
-            <div className={styles.detailRow}>
-              <dt>Workspace mode</dt>
-              <dd>{data.workspace.mode === "managed" ? "Managed" : "Operator"}</dd>
-            </div>
+            <div className={styles.detailRow}><dt>Workspace</dt><dd>{data.workspace.name}</dd></div>
           </dl>
+          <details className="integration-details">
+            <summary>Technical account details</summary>
+            <dl className={styles.detailsList}>
+              <div className={styles.detailRow}><dt>Gateway user ID</dt><dd><code>{data.identity.user_id}</code></dd></div>
+              <div className={styles.detailRow}><dt>Workspace ID</dt><dd><code>{data.workspace.id}</code></dd></div>
+              <div className={styles.detailRow}><dt>Workspace mode</dt><dd>{data.workspace.mode === "managed" ? "Managed" : "Operator"}</dd></div>
+            </dl>
+          </details>
           <div className={styles.permissionBlock}>
             <h4>Gateway permissions</h4>
             <ul className={styles.permissionList}>

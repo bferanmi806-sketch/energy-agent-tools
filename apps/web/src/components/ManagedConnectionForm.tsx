@@ -99,6 +99,7 @@ export function ManagedConnectionForm({ setup }: { setup: ConnectionSetup }) {
         input.value = "";
       }
       setSubmission({ kind: "success" });
+      window.location.assign("/?view=connections");
     } catch {
       setSubmission({ kind: "error", reason: "gateway" });
     }

@@ -16,17 +16,19 @@ export function PendingConnection({
   const [availableSites, setAvailableSites] = useState(sites);
   const [siteId, setSiteId] = useState("");
   const [createSite, setCreateSite] = useState(false);
+  const [createdSiteId, setCreatedSiteId] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "pending" | "error" | "denied">("idle");
 
-  async function mapConnection() {
-    if (!siteId || state === "pending") return;
+  async function mapConnection(targetSiteId = siteId, newlyCreated = targetSiteId === createdSiteId) {
+    if (!targetSiteId || state === "pending") return;
     setState("pending");
     try {
       const response = await fetch("/api/workspace/connections/action", {
         method: "POST",
-        body: new URLSearchParams({ connection_id: connectionId, action: "map", site_id: siteId }),
+        body: new URLSearchParams({ connection_id: connectionId, action: "map", site_id: targetSiteId }),
         credentials: "same-origin",
         cache: "no-store",
+        signal: AbortSignal.timeout(30_000),
         headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
       });
       if (response.status === 401) {
@@ -34,7 +36,7 @@ export function PendingConnection({
         return;
       }
       if (response.status === 403) {
-        setState("denied");
+        setState(newlyCreated ? "error" : "denied");
         return;
       }
       if (!response.ok) throw new Error("Connection could not be mapped.");
@@ -42,6 +44,14 @@ export function PendingConnection({
     } catch {
       setState("error");
     }
+  }
+
+  async function handleCreatedSite(site: Site) {
+    setAvailableSites((current) => current.some((item) => item.id === site.id) ? current : [...current, site]);
+    setSiteId(site.id);
+    setCreatedSiteId(site.id);
+    setCreateSite(false);
+    await mapConnection(site.id, true);
   }
 
   return (
@@ -53,7 +63,11 @@ export function PendingConnection({
             <select
               id={`site-for-${connectionId}`}
               value={siteId}
-              onChange={(event) => setSiteId(event.currentTarget.value)}
+              disabled={state === "pending"}
+              onChange={(event) => {
+                setSiteId(event.currentTarget.value);
+                setState("idle");
+              }}
             >
               <option value="">Choose a site</option>
               {availableSites.map((site) => (
@@ -61,36 +75,35 @@ export function PendingConnection({
               ))}
             </select>
           </div>
-          <button className="button button-primary" type="button" disabled={!siteId || state === "pending"} onClick={() => void mapConnection()}>
+          <button className="button button-primary" type="button" disabled={!siteId || state === "pending" || createSite} onClick={() => void mapConnection()}>
             {state === "pending" ? "Mapping…" : "Map connection"}
           </button>
-          <button className="text-button" type="button" onClick={() => setCreateSite((visible) => !visible)}>
-            {createSite ? "Use an existing site" : "Create a site"}
+          <button className="text-button" type="button" disabled={state === "pending"} onClick={() => {
+            setCreateSite((visible) => !visible);
+            setState("idle");
+          }}>
+            {createSite ? "Use an existing site" : "Create another site"}
           </button>
         </div>
       ) : (
         <div className="mapping-first-site">
-          <p className="form-support">Create a site now, then choose it to finish mapping this connection.</p>
-          {!createSite ? (
-            <button className="button button-secondary" type="button" onClick={() => setCreateSite(true)}>
-              Create a site
-            </button>
-          ) : null}
+          <p className="form-support">Create a site to finish mapping this connection.</p>
         </div>
       )}
 
-      {createSite ? (
+      <span className="visually-hidden" role="status" aria-live="polite">
+        {state === "pending" ? "Mapping connection to the selected site." : ""}
+      </span>
+
+      {availableSites.length === 0 || createSite ? (
         <WorkspaceSiteForm
           compact
-          onCreated={(site) => {
-            setAvailableSites((current) => current.some((item) => item.id === site.id) ? current : [...current, site]);
-            setSiteId(site.id);
-            setCreateSite(false);
-          }}
+          submitLabel="Create site and connect"
+          onCreated={handleCreatedSite}
         />
       ) : null}
       {state === "denied" ? <p className="notice notice-error" role="alert">That site is outside this workspace. Choose one of the sites above.</p> : null}
-      {state === "error" ? <p className="notice notice-error" role="alert">The connection could not be mapped. Refresh the workspace and try again.</p> : null}
+      {state === "error" ? <p className="notice notice-error" role="alert">{createdSiteId === siteId ? "The site was created, but the connection could not be mapped. Select Map connection to retry." : "The connection could not be mapped. Select Map connection to retry."}</p> : null}
     </div>
   );
 }

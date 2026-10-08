@@ -15,6 +15,8 @@ type OneTimeKey = {
   siteIds: string[];
 };
 
+type SetupKey = Pick<OneTimeKey, "id" | "name" | "siteIds">;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -53,6 +55,7 @@ export function AgentKeyPanel({
   const router = useRouter();
   const [submission, setSubmission] = useState<"idle" | "pending" | "error">("idle");
   const [oneTimeKey, setOneTimeKey] = useState<OneTimeKey | null>(null);
+  const [setupKey, setSetupKey] = useState<SetupKey | null>(null);
   const [copied, setCopied] = useState<"idle" | "copied" | "error">("idle");
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -93,6 +96,11 @@ export function AgentKeyPanel({
       const parsed = parseIssuedKey(payload);
       if (!parsed) throw new Error("Agent key could not be issued.");
       setOneTimeKey(parsed);
+      setSetupKey({
+        id: parsed.id,
+        name: parsed.name,
+        siteIds: parsed.siteIds,
+      });
       setCopied("idle");
       setSubmission("idle");
       router.refresh();
@@ -143,11 +151,13 @@ export function AgentKeyPanel({
         {sites.length > 0 ? (
           <form className="workspace-form" onSubmit={issueKey} aria-busy={submission === "pending"}>
             <div className="field-stack">
-              <label htmlFor="agent-key-name">Key name</label>
-              <input id="agent-key-name" name="name" maxLength={256} required placeholder="e.g. Home energy assistant" />
+              <label htmlFor="agent-key-name">Name this key</label>
+              <input id="agent-key-name" name="name" maxLength={256} required placeholder="e.g. Codex on my laptop" />
+              <small className="field-hint">Use a name that helps you recognize the agent or device using it.</small>
             </div>
             <fieldset className="site-grants">
               <legend>Allow access to</legend>
+              <p className="form-support">Select each site this key may access. No sites are selected for you.</p>
               {sites.map((site) => (
                 <label className="check-row" key={site.id}>
                   <input type="checkbox" name="site_id" value={site.id} />
@@ -168,18 +178,40 @@ export function AgentKeyPanel({
         {oneTimeKey ? (
           <section className="one-time-key" aria-labelledby="one-time-key-title">
             <div className="one-time-key-heading">
-              <h3 id="one-time-key-title">{oneTimeKey.name} is ready</h3>
-              <button className="text-button" type="button" onClick={() => setOneTimeKey(null)}>Hide key</button>
+              <h3 id="one-time-key-title">Agent key created for {oneTimeKey.name}</h3>
+              <button className="text-button" type="button" onClick={() => {
+                setOneTimeKey(null);
+                setCopied("idle");
+              }}>Hide key</button>
             </div>
-            <p>Copy this key now. The gateway will not show it again.</p>
+            <p>This key is shown once. Copy it now and store it in a private password manager or secret store. Setup instructions remain below when you hide it.</p>
             <div className="secret-value-row">
               <code>{oneTimeKey.token}</code>
               <button className="button button-secondary" type="button" onClick={() => void copy(oneTimeKey.token)}>Copy key</button>
             </div>
             {copied === "copied" ? <p className="mutation-feedback" role="status">Copied to clipboard.</p> : null}
             {copied === "error" ? <p className="notice notice-error" role="alert">Clipboard access was unavailable. Select the text and copy it.</p> : null}
-            <AgentSetup gatewayUrl={gatewayUrl} siteIds={oneTimeKey.siteIds} token={oneTimeKey.token} />
-            <button className="text-button" type="button" onClick={() => setOneTimeKey(null)}>Done</button>
+          </section>
+        ) : null}
+
+        {setupKey ? (
+          <section className="one-time-key key-setup" aria-labelledby="agent-key-setup-title">
+            <div className="one-time-key-heading">
+              <h3 id="agent-key-setup-title">Setup instructions for {setupKey.name}</h3>
+              <button className="text-button" type="button" onClick={() => setSetupKey(null)}>Close instructions</button>
+            </div>
+            <p className="key-setup-grants">Site access: {setupKey.siteIds.map((id) => sites.find((site) => site.id === id)?.name ?? "Unknown site").join(", ") || "No sites"}</p>
+            {oneTimeKey?.id === setupKey.id ? null : (
+              <p className="notice notice-neutral" role="status">
+                The raw token is unavailable here. Use a private copy you saved. If you no longer have it, create a replacement key and revoke this one.
+              </p>
+            )}
+            <AgentSetup
+              key={`${setupKey.id}:${oneTimeKey?.id === setupKey.id ? "visible" : "hidden"}`}
+              gatewayUrl={gatewayUrl}
+              siteIds={setupKey.siteIds}
+              {...(oneTimeKey?.id === setupKey.id ? { token: oneTimeKey.token } : {})}
+            />
           </section>
         ) : null}
       </section>
@@ -216,7 +248,19 @@ export function AgentKeyPanel({
                         </button>
                       </>
                     ) : (
-                      <button className="button button-secondary" type="button" onClick={() => setConfirmingId(key.id)}>Revoke</button>
+                      <>
+                        <button
+                          className="button button-secondary"
+                          type="button"
+                          aria-label={`View setup instructions for ${key.name}`}
+                          onClick={() => {
+                            setOneTimeKey(null);
+                            setCopied("idle");
+                            setSetupKey({ id: key.id, name: key.name, siteIds: grant });
+                          }}
+                        >View setup</button>
+                        <button className="button button-secondary" type="button" onClick={() => setConfirmingId(key.id)}>Revoke</button>
+                      </>
                     )}
                   </div>
                 </li>
