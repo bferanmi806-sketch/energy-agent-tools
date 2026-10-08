@@ -42,7 +42,8 @@ code { overflow-wrap: anywhere; }
 ::-webkit-scrollbar-thumb:hover { background: #91a996; }
 
 .console-shell { min-height: 100vh; display: grid; grid-template-columns: 252px minmax(0, 1fr); }
-.sidebar { position: sticky; top: 0; height: 100vh; min-height: 640px; display: flex; flex-direction: column; padding: 24px 14px 17px; color: #e8f0e9; background: var(--pine-900); }
+.sidebar { position: sticky; top: 0; align-self: start; height: 100vh; height: 100dvh; min-height: 0; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; padding: 24px 14px 17px; color: #e8f0e9; background: var(--pine-900); }
+.sidebar > * { flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 11px; min-height: 38px; padding: 0 9px; color: #fff; text-decoration: none; }
 .brand-name { font-size: 14px; font-weight: 650; letter-spacing: -.02em; }
 .brand-mark { width: 31px; height: 31px; border: 1px solid rgba(228, 244, 231, .35); border-radius: 9px; display: inline-grid; place-items: center; color: #d5ead8; flex: 0 0 auto; }
@@ -287,7 +288,7 @@ code { overflow-wrap: anywhere; }
 @media (max-width: 700px) {
   html { scroll-behavior: auto; }
   .console-shell { display: block; }
-  .sidebar { position: relative; height: auto; min-height: 0; padding: 14px 14px 10px; }
+  .sidebar { position: relative; height: auto; min-height: 0; overflow: visible; padding: 14px 14px 10px; }
   .brand { min-height: 32px; padding: 0 2px; }
   .brand-mark { width: 29px; height: 29px; }
   .product-navigation { display: flex; flex-direction: row; gap: 16px; overflow-x: auto; margin: 14px -14px 0; padding: 0 14px 7px; scrollbar-width: thin; }
