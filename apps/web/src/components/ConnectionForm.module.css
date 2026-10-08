@@ -1,0 +1,161 @@
+.providerForm {
+  min-width: 0;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin: 2px 0 3px;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.stepNumber {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.stepCurrent {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.stepCurrent .stepNumber {
+  border-color: var(--green-700);
+  background: var(--green-700);
+  color: white;
+}
+
+.stepComplete {
+  color: var(--status-good-ink);
+}
+
+.stepComplete .stepNumber {
+  border-color: #b8d4bd;
+  background: var(--surface-green);
+  color: var(--status-good-ink);
+}
+
+.accountNote {
+  display: grid;
+  gap: 5px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.accountNote p {
+  margin: 0;
+}
+
+.accountNote strong {
+  color: var(--ink);
+  font-weight: 680;
+}
+
+.managedAccountNote {
+  margin-bottom: 2px;
+}
+
+.managedSteps {
+  margin-top: 2px;
+}
+
+.providerField {
+  gap: 5px;
+}
+
+.fieldHint {
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pendingMessage,
+.revokeNote {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.successMessage {
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid #b8d4bd;
+  border-radius: 7px;
+  background: var(--surface-green);
+  color: var(--status-good-ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.successMessage a {
+  width: fit-content;
+  margin-top: 3px;
+  color: var(--pine-900);
+  font-weight: 680;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.formContents {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.formContents > input[type="hidden"] {
+  display: none;
+}
+
+.formContents:disabled {
+  opacity: .78;
+}
+
+.homeAssistantSteps {
+  margin-top: 15px;
+}
+
+.homeAssistant {
+  min-width: 0;
+}
+
+@media (max-width: 620px) {
+  .steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 9px;
+  }
+
+  .step {
+    font-size: 12px;
+  }
+}

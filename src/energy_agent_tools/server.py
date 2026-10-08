@@ -42,12 +42,19 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         lifespan=lifespan,
         instructions="Search first. Never confuse metered, calculated, estimated, simulated or forecast data. "
         "Credentials are configured locally; do not send them in tool arguments. "
-        "Large outputs are local artifacts. Use workbench tools for analysis.",
+        "Large outputs are local artifacts. Execute discovered workbench tools with "
+        "ENERGY_MULTI_EXECUTE_TOOL, which also accepts a single call. Tool capability tags "
+        "describe discovery topics; ENERGY_EXECUTE_CAPABILITY requires a reviewed binding. "
+        "Use ENERGY_LIST_SKILLS and ENERGY_RUN_SKILL for composed workflows such as forecast-bill.",
     )
 
     @server.tool(name="ENERGY_SEARCH_TOOLS")
     async def search_tools(query: str, limit: Annotated[int, Field(ge=1, le=10)] = 5) -> Json:
-        """Discover a bounded set of relevant tools with schemas and workflow guidance."""
+        """Discover relevant tools with schemas and composed skills.
+
+        Execute canonical tools through ENERGY_MULTI_EXECUTE_TOOL. Capability tags
+        are search topics and do not establish a reviewed capability binding.
+        """
         try:
             return {"tools": agent.search(session, query, limit), "skills": search_skills(query)}
         except EnergyError as exc:
@@ -182,7 +189,14 @@ def create_server(agent: EnergyAgent, session: Session, *, port: int = 8765) -> 
         max_age_seconds: Annotated[int | None, Field(ge=1, le=86400)] = None,
         input_artifacts: Annotated[list[str] | None, Field(max_length=10)] = None,
     ) -> Json:
-        """Execute a uniquely selected reviewed capability binding through normal policies. Never substitutes incompatible schemas."""
+        """Execute a uniquely selected reviewed capability binding through normal policies.
+
+        A tool's capability tags alone do not establish a binding. Use
+        ENERGY_MULTI_EXECUTE_TOOL for discovered workbench and other canonical
+        tools. Current-power freshness applies to current observations; retrieve
+        historical samples with a history tool and its explicit time window.
+        Never substitutes incompatible schemas.
+        """
         from .capabilities import CapabilityRequest
 
         try:

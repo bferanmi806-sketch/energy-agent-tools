@@ -4,6 +4,7 @@ import { GatewayForm } from "./GatewayForm";
 import { ConnectionActions } from "./ConnectionActions";
 import { ConnectionForm } from "./ConnectionForm";
 import { JobsHistory } from "./JobsHistory";
+import { AgentSetup } from "./AgentSetup";
 import { ExecutionActivity } from "./ExecutionActivity";
 import { SkillsCatalogue } from "./SkillsCatalogue";
 
@@ -138,37 +139,17 @@ function safeDocumentationUrl(value: string | null | undefined): string | null {
   }
 }
 
-function mcpEndpoint(gatewayUrl: string | null, siteId: string | null): string | null {
-  if (!gatewayUrl || !siteId) return null;
-  try {
-    const url = new URL(gatewayUrl);
-    if (
-      (url.protocol !== "https:" && url.protocol !== "http:") ||
-      url.username !== "" ||
-      url.password !== "" ||
-      url.search !== "" ||
-      url.hash !== ""
-    ) return null;
-    const basePath = url.pathname.replace(/\/$/, "");
-    url.pathname = `${basePath}/mcp/${encodeURIComponent(siteId)}`;
-    return url.href;
-  } catch {
-    return null;
-  }
-}
-
 function siteName(data: DashboardData, siteId: string | null): string {
   if (!siteId) return "No site scope";
   const site = data.identity.sites.find((candidate) => candidate.id === siteId);
   return site?.name ?? `Site ${siteId}`;
 }
 
-export function Console({ data, initialView = "apps", jobStatus }: { data: OperatorDashboardData; initialView?: "apps" | "connections" | "skills" | "activity" | "jobs"; jobStatus?: string }) {
+export function Console({ data, initialView = "apps", jobStatus }: { data: OperatorDashboardData; initialView?: ViewId; jobStatus?: string }) {
   const [view, setView] = useState<ViewId>(initialView);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [selectedToolkitId, setSelectedToolkitId] = useState<string | null>(null);
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const currentView = VIEW_CONTENT[view];
   const selectedSite = data.identity.sites.find((site) => site.id === data.siteId) ?? null;
 
@@ -192,25 +173,6 @@ export function Console({ data, initialView = "apps", jobStatus }: { data: Opera
   }, [category, data.toolkits, query]);
 
   const selectedToolkit = filteredToolkits.find((toolkit) => toolkit.id === selectedToolkitId) ?? null;
-  const endpoint = mcpEndpoint(data.publicGatewayUrl, data.siteId);
-
-  async function copyAgentConfig() {
-    if (!endpoint) return;
-    const config = {
-      mcpServers: {
-        "energy-agent-tools": {
-          url: endpoint,
-          headers: { Authorization: "Bearer PASTE_GATEWAY_ACCESS_KEY" },
-        },
-      },
-    };
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(config, null, 2));
-      setCopyState("copied");
-    } catch {
-      setCopyState("error");
-    }
-  }
 
   return (
     <div className="console-shell">
@@ -294,10 +256,9 @@ export function Console({ data, initialView = "apps", jobStatus }: { data: Opera
           {view === "artifacts" ? <ArtifactsView data={data} /> : null}
           {view === "agents" ? (
             <AgentsView
-              copyState={copyState}
-              endpoint={endpoint}
+              gatewayUrl={data.publicGatewayUrl}
+              siteId={data.siteId}
               hasSite={data.siteId !== null}
-              onCopy={copyAgentConfig}
               onViewSites={() => setView("sites")}
             />
           ) : null}
@@ -580,63 +541,16 @@ function ArtifactsView({ data }: { data: DashboardData }) {
   );
 }
 
-function agentConfiguration(endpoint: string): string {
-  return JSON.stringify({
-    mcpServers: {
-      "energy-agent-tools": {
-        url: endpoint,
-        headers: { Authorization: "Bearer PASTE_GATEWAY_ACCESS_KEY" },
-      },
-    },
-  }, null, 2);
-}
-
-function AgentsView({
-  copyState,
-  endpoint,
-  hasSite,
-  onCopy,
-  onViewSites,
-}: {
-  copyState: "idle" | "copied" | "error";
-  endpoint: string | null;
+function AgentsView({ gatewayUrl, siteId, hasSite, onViewSites }: {
+  gatewayUrl: string | null;
+  siteId: string | null;
   hasSite: boolean;
-  onCopy: () => void;
   onViewSites: () => void;
 }) {
-  const config = endpoint ? agentConfiguration(endpoint) : null;
-  return (
-    <section className="content-section agent-config-section" aria-labelledby="agent-config-heading">
-      <div className="section-toolbar"><div><h2 id="agent-config-heading">Connect through MCP</h2><p>Use the selected site endpoint so agent calls arrive with the intended gateway scope.</p></div></div>
-      {!hasSite ? (
-        <div className="notice notice-neutral"><Building2 size={18} aria-hidden="true" /><div><strong>Select a site first</strong><p>A site-scoped MCP endpoint is only available after a site has been selected.</p><button type="button" className="text-button" onClick={onViewSites}>Choose a site <ArrowRight size={14} aria-hidden="true" /></button></div></div>
-      ) : !endpoint ? (
-        <div className="notice notice-neutral"><CircleHelp size={18} aria-hidden="true" /><div><strong>Public gateway URL is not configured</strong><p>Ask the operator to provide a safe public gateway URL before copying a remote MCP endpoint.</p></div></div>
-      ) : (
-        <>
-          <div className="config-toolbar"><div><span className="section-label">Site-scoped endpoint</span><strong>{endpoint}</strong></div><span className="scope-tag">Current site</span></div>
-          <pre className="config-block"><code>{config}</code></pre>
-          <div className="config-actions">
-            <button className="button button-primary" type="button" onClick={onCopy}>
-              {copyState === "copied" ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
-              {copyState === "copied" ? "Copied" : "Copy agent config"}
-            </button>
-            <span aria-live="polite" className={`copy-feedback${copyState === "error" ? " copy-feedback-error" : ""}`}>
-              {copyState === "copied" ? "Configuration copied. Add your gateway access key in the agent’s credential settings." : copyState === "error" ? "Clipboard access failed. Select and copy the configuration above." : "The copied config contains a placeholder, never your access key."}
-            </span>
-          </div>
-        </>
-      )}
-      <div className="agent-instructions">
-        <h3>Before your agent connects</h3>
-        <ul>
-          <li>Replace <code>PASTE_GATEWAY_ACCESS_KEY</code> in the agent’s secret or credential settings.</li>
-          <li>Keep the key private. Do not include it in a prompt, repository or shared document.</li>
-          <li>Gateway calls use the selected site and the permissions attached to this identity.</li>
-        </ul>
-      </div>
-    </section>
-  );
+  return <section className="content-section agent-config-section">
+    {!hasSite ? <div className="notice notice-neutral"><p>Select a site before configuring your agent.</p><button type="button" className="text-button" onClick={onViewSites}>Choose a site</button></div> :
+      <AgentSetup gatewayUrl={gatewayUrl} siteIds={siteId ? [siteId] : []} />}
+  </section>;
 }
 
 type UnsupportedKind = "custom-mcp";

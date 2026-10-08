@@ -241,7 +241,7 @@ export class EnergyMcpClient {
 
   static async connect(options: EnergyMcpConnectOptions): Promise<EnergyMcpClient> {
     const endpoint = parseEndpoint(options.url);
-    const client = new Client({ name: "energy-agent-tools-typescript", version: "0.1.0" });
+    const client = new Client({ name: "energy-agent-tools-typescript", version: "0.4.0" });
     const transport = new StreamableHTTPClientTransport(endpoint, {
       fetch: createAuthenticatedFetch(endpoint, options.token),
       redirectPolicy: "same-origin",

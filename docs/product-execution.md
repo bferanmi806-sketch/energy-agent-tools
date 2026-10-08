@@ -719,3 +719,11 @@ inefficiency when an agent used a capability path for unbound workbench tools.
 Those recorded scores remain unchanged. This is synthetic development evidence.
 The 100+ actual tasks, held-out evaluation, independent human relevance review,
 real-site evidence, and full project completion gates remain open.
+
+## October 8 bounded usability and release pass
+
+The gateway, SDK and web source now agree at 0.4.0. The completed usability pass
+and 978-test local regression result are recorded in the
+[release readiness report](release-report-v040.md). Matching artifacts are prepared
+for a GitHub draft release; no registry publication or external deployment is
+claimed. The larger independent qualification gates above remain open.

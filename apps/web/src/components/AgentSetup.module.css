@@ -1,0 +1,203 @@
+.setup {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid #e8dcc4;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.heading h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 680;
+}
+
+.heading p,
+.client p,
+.configuration > p,
+.chatgptNote {
+  margin: 5px 0 0;
+}
+
+.transport {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid #d5e2d7;
+  border-radius: 5px;
+  background: #f5f9f4;
+  color: var(--pine-800);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.client {
+  padding-top: 12px;
+  border-top: 1px solid #efe7d8;
+}
+
+.client h4 {
+  margin: 0 0 5px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 680;
+}
+
+.client p {
+  margin-bottom: 6px;
+}
+
+.client ol {
+  display: grid;
+  gap: 5px;
+  margin: 6px 0 8px;
+  padding-left: 18px;
+}
+
+.setup code {
+  color: var(--pine-800);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.setup pre {
+  max-height: 250px;
+  overflow: auto;
+  margin: 8px 0;
+  padding: 10px 11px;
+  border: 1px solid #dfe6df;
+  border-radius: 6px;
+  background: #f7faf6;
+  color: var(--pine-900);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.setup pre code {
+  color: inherit;
+  font-size: inherit;
+}
+
+.setup a {
+  color: var(--green-700);
+  font-size: 13px;
+  font-weight: 620;
+  text-underline-offset: 2px;
+}
+
+.setup a:hover {
+  color: var(--pine-950);
+}
+
+.configuration {
+  padding-top: 12px;
+  border-top: 1px solid #efe7d8;
+}
+
+.configuration summary {
+  width: fit-content;
+  color: var(--green-700);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.configuration > p {
+  color: var(--red-800);
+  font-size: 13px;
+}
+
+.configuration button {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--pine-800);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.configuration button:hover {
+  border-color: #97b09c;
+  background: var(--surface-green);
+}
+
+.configuration button:focus-visible,
+.configuration summary:focus-visible,
+.setup a:focus-visible {
+  outline: 2px solid var(--green-700);
+  outline-offset: 2px;
+}
+
+.feedback,
+.error {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.feedback {
+  color: var(--green-700);
+}
+
+.error {
+  color: var(--red-800);
+}
+
+.chatgptNote {
+  padding: 10px 11px;
+  border: 1px solid #e6dcc7;
+  border-radius: 6px;
+  background: #fffdf7;
+  font-size: 13px;
+}
+
+.chatgptNote strong {
+  color: var(--ink);
+}
+
+.chatgptNote a {
+  white-space: nowrap;
+}
+
+.notice {
+  margin-top: 15px;
+  padding: 11px 12px;
+  border: 1px solid #d8e2d9;
+  border-radius: 6px;
+  background: #f7faf6;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .setup pre {
+    font-size: 13px;
+  }
+
+  .chatgptNote a {
+    white-space: normal;
+  }
+}

@@ -1,3 +1,10 @@
+# Energy Agent Tools 0.4.0 — prepared release
+
+Matching Python gateway, TypeScript SDK and self-hosted web application. Clearer
+provider selection, verified connection-to-site flow, Account & settings and
+client-specific agent onboarding. See the [release readiness report](release-report-v040.md)
+for tests and remaining authentication and external qualification limits.
+
 # Energy Agent Tools v0.3.0
 
 This core release adds a provider-independent consumption forecast and bill

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { WorkspaceKeysResponse, WorkspaceSitesResponse } from "@energy-agent-tools/sdk";
+import { AgentSetup } from "./AgentSetup";
 
 type KeyRecord = WorkspaceKeysResponse["keys"][number];
 type Site = WorkspaceSitesResponse["sites"][number];
@@ -12,7 +13,6 @@ type OneTimeKey = {
   token: string;
   tokenPrefix: string;
   siteIds: string[];
-  configuration: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -38,30 +38,7 @@ function parseIssuedKey(value: unknown): OneTimeKey | null {
     token: value.token,
     tokenPrefix: key.token_prefix,
     siteIds: access.site_ids,
-    configuration: null,
   };
-}
-
-function buildConfiguration(gatewayUrl: string | null, siteIds: string[], token: string): string | null {
-  if (!gatewayUrl) return null;
-  try {
-    const url = new URL(gatewayUrl);
-    if (
-      (url.protocol !== "http:" && url.protocol !== "https:") || url.username !== "" ||
-      url.password !== "" || url.search !== "" || url.hash !== ""
-    ) return null;
-    const basePath = url.pathname.replace(/\/$/, "");
-    const mcpServers = Object.fromEntries(siteIds.map((siteId, index) => [
-      `energy-agent-tools-${index + 1}`,
-      {
-        url: `${url.origin}${basePath}/mcp/${encodeURIComponent(siteId)}`,
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    ]));
-    return JSON.stringify({ mcpServers }, null, 2);
-  } catch {
-    return null;
-  }
 }
 
 export function AgentKeyPanel({
@@ -115,10 +92,7 @@ export function AgentKeyPanel({
       const payload: unknown = await response.json();
       const parsed = parseIssuedKey(payload);
       if (!parsed) throw new Error("Agent key could not be issued.");
-      setOneTimeKey({
-        ...parsed,
-        configuration: buildConfiguration(gatewayUrl, parsed.siteIds, parsed.token),
-      });
+      setOneTimeKey(parsed);
       setCopied("idle");
       setSubmission("idle");
       router.refresh();
@@ -202,21 +176,9 @@ export function AgentKeyPanel({
               <code>{oneTimeKey.token}</code>
               <button className="button button-secondary" type="button" onClick={() => void copy(oneTimeKey.token)}>Copy key</button>
             </div>
-            {oneTimeKey.configuration ? (
-              <div className="agent-config">
-                <div className="one-time-key-heading">
-                  <h3>MCP configuration</h3>
-                  <button className="button button-secondary" type="button" onClick={() => void copy(oneTimeKey.configuration ?? "")}>
-                    Copy configuration
-                  </button>
-                </div>
-                <pre><code>{oneTimeKey.configuration}</code></pre>
-              </div>
-            ) : (
-              <p className="field-hint">Set ENERGY_PUBLIC_GATEWAY_URL to create an MCP configuration for this gateway.</p>
-            )}
             {copied === "copied" ? <p className="mutation-feedback" role="status">Copied to clipboard.</p> : null}
             {copied === "error" ? <p className="notice notice-error" role="alert">Clipboard access was unavailable. Select the text and copy it.</p> : null}
+            <AgentSetup gatewayUrl={gatewayUrl} siteIds={oneTimeKey.siteIds} token={oneTimeKey.token} />
             <button className="text-button" type="button" onClick={() => setOneTimeKey(null)}>Done</button>
           </section>
         ) : null}

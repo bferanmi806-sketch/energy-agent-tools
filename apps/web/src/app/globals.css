@@ -610,3 +610,37 @@ code { overflow-wrap: anywhere; }
   .secret-value-row { align-items: stretch; flex-direction: column; }
   .secret-value-row .button { width: 100%; }
 }
+
+/* Account selection and catalogue tools have different setup requirements. */
+.navigation-group + .navigation-group { margin-top: 22px; }
+.catalogue-switch { display: flex; gap: 4px; padding: 4px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); }
+.catalogue-switch button { flex: 1; min-height: 42px; padding: 8px 12px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: 14px; cursor: pointer; }
+.catalogue-switch button[aria-pressed="true"] { background: var(--surface); border-color: var(--line-strong); color: var(--pine-900); font-weight: 650; }
+.provider-name-group { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.provider-mark { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 8px; color: var(--pine-800); background: var(--surface-green); }
+.provider-name-group .toolkit-name-cell { min-width: 0; }
+.managed-console-shell .toolkit-description, .managed-console-shell .runtime-cell, .managed-console-shell .catalogue-categories { font-size: 12px; line-height: 1.6; }
+.managed-console-shell .toolkit-name { font-size: 15px; }
+.managed-console-shell .toolkit-action, .managed-console-shell .status-badge { font-size: 12px; }
+.managed-console-shell .field-hint, .managed-console-shell .form-support, .managed-console-shell .managed-record-main code, .managed-console-shell .managed-record-site { font-size: 12px; line-height: 1.6; }
+.managed-console-shell .field-stack label, .managed-console-shell .check-row, .managed-console-shell .section-subheading p, .managed-console-shell .setup-description { font-size: 14px; }
+.managed-console-shell .field-stack input, .managed-console-shell .field-stack select { min-height: 44px; font-size: 14px; }
+.managed-console-shell .button, .managed-console-shell .nav-item { min-height: 44px; font-size: 14px; }
+.managed-console-shell .search-field input { font-size: 14px; }
+.managed-console-shell .managed-record-main h3 { font-size: 15px; }
+@media (max-width: 700px) {
+  .managed-navigation { overflow-x: auto; align-items: flex-start; }
+  .managed-navigation .navigation-group { flex: 0 0 auto; margin: 0; }
+  .managed-navigation .nav-group-label { display: none; }
+  .managed-toolkit-row .provider-name-group { grid-column: 1 / -1; }
+  .managed-toolkit-row .runtime-cell { grid-column: 1; }
+  .managed-toolkit-row .toolkit-action { grid-row: 3; }
+  .managed-console-shell .field-stack input, .managed-console-shell .field-stack select { font-size: 16px; }
+  .workspace-progress { flex-wrap: wrap; }
+  .progress-step { font-size: 12px; min-height: 40px; }
+}
+@media (max-width: 700px) {
+  .managed-console-shell .section-subheading { display: block; }
+  .managed-console-shell .section-subheading h2 { margin-bottom: 6px; font-size: 17px; }
+  .managed-console-shell .section-subheading p { margin-top: 0; }
+}

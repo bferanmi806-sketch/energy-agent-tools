@@ -35,3 +35,13 @@ include provider names and provenance so applications can retain attribution.
 EnergyPlus is an operator-installed external executable and is not bundled. Its
 official distribution retains its own licence and dependency notices. The
 qualification downloads remain outside the source tree and release packages.
+
+## Home Assistant identification mark
+
+`apps/web/public/providers/home-assistant.svg` is the unmodified color logomark
+from [Open Home Foundation brand assets](https://github.com/OpenHomeFoundation/brand-assets/blob/main/home-assistant/logo/screen/logomark/HA-logomark-color.svg).
+The mark remains the Foundation's trademark and is used to identify the integration
+in this free, open-source project; it does not imply endorsement. See the
+[brand usage guidelines](https://brands.openhomefoundation.io). Their repository
+requires permission for commercial marketing of a product for sale; this asset
+is not relicensed under this repository's MIT license.

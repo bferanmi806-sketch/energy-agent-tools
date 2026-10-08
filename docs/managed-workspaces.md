@@ -2,7 +2,7 @@
 
 Use a managed workspace to connect a system before creating a site. This guide
 requires matching current Python, TypeScript SDK and web source. The published
-Python v0.3.0 wheel predates managed workspace routes.
+Python v0.3.0 wheel predates managed workspace routes. Use the matching 0.4.0 gateway, SDK and web release for this guide.
 
 ## Explore supported questions
 

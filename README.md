@@ -1,5 +1,9 @@
 # Energy Agent Tools
 
+The 0.4.0 release aligns the Python gateway, TypeScript SDK and self-hosted web app.
+Start with the [connection guide](docs/managed-workspaces.md), then
+[connect your existing agent](docs/agent-client-setup.md).
+
 An MIT-licensed, self-hostable gateway for agents that work with energy data and
 engineering models. Agents discover a few actions at a time, resolve reviewed
 capabilities, and execute through one runtime with user, site, account, asset and

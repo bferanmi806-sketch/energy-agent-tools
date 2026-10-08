@@ -6,6 +6,9 @@ import {
   Check,
   ChevronRight,
   CircleHelp,
+  Settings,
+  Zap,
+  Plug,
   LayoutGrid,
   LogOut,
   Search,
@@ -30,32 +33,36 @@ import { WorkspaceSharing } from "./WorkspaceSharing";
 import { JobsHistory } from "./JobsHistory";
 import { ExecutionActivity } from "./ExecutionActivity";
 import { SkillsCatalogue } from "./SkillsCatalogue";
+import { AccountSettings } from "./AccountSettings";
 import { CustomMCPConnect } from "./CustomMCPConnect";
 
-type ViewId = "apps" | "mcp" | "connections" | "sites" | "sharing" | "agent" | "skills" | "activity" | "jobs";
+type ViewId = "apps" | "mcp" | "connections" | "sites" | "sharing" | "agent" | "skills" | "activity" | "jobs" | "settings";
 
 interface NavigationItem {
   id: ViewId;
   label: string;
   icon: LucideIcon;
+  group: "Connect" | "Workspace" | "Advanced";
 }
 
 const NAVIGATION: NavigationItem[] = [
-  { id: "apps", label: "Connect apps", icon: LayoutGrid },
-  { id: "mcp", label: "Add MCP server", icon: Wrench },
-  { id: "connections", label: "Connections", icon: Activity },
-  { id: "sites", label: "Sites & assets", icon: ShieldCheck },
-  { id: "sharing", label: "Sharing", icon: Users },
-  { id: "agent", label: "Connect my agent", icon: ArrowRight },
-  { id: "skills", label: "Skills", icon: Sparkles },
-  { id: "jobs", label: "Jobs", icon: Activity },
-  { id: "activity", label: "Activity log", icon: Activity },
+  { group: "Connect", id: "apps", label: "Connect apps", icon: LayoutGrid },
+  { group: "Workspace", id: "settings", label: "Account & settings", icon: Settings },
+  { group: "Advanced", id: "mcp", label: "Add MCP server", icon: Wrench },
+  { group: "Connect", id: "connections", label: "Connections", icon: Activity },
+  { group: "Workspace", id: "sites", label: "Sites & assets", icon: ShieldCheck },
+  { group: "Advanced", id: "sharing", label: "Sharing", icon: Users },
+  { group: "Connect", id: "agent", label: "Connect my agent", icon: ArrowRight },
+  { group: "Advanced", id: "skills", label: "Skills", icon: Sparkles },
+  { group: "Advanced", id: "jobs", label: "Jobs", icon: Activity },
+  { group: "Advanced", id: "activity", label: "Activity log", icon: Activity },
 ];
 
 const VIEW_CONTENT: Record<ViewId, { title: string; description: string }> = {
+  settings: { title: "Account & settings", description: "Your gateway identity, workspace scope and agent access." },
   apps: {
     title: "Connect a system",
-    description: "Choose a system from your gateway catalogue. You can map it to a site after the gateway verifies the connection.",
+    description: "Connect your own provider account, verify access, then map it to a site.",
   },
   mcp: {
     title: "Add MCP server",
@@ -93,6 +100,17 @@ const RUNTIME_LABELS: Record<ManagedDashboardData["toolkits"][number]["runtime"]
   "mcp-local": "Local MCP",
   "mcp-remote": "Remote MCP",
 };
+
+function canConnect(toolkit: ManagedDashboardData["toolkits"][number], data: ManagedDashboardData): boolean {
+  return data.connectionSetups.some(setup => setup.toolkit_id === toolkit.id)
+    || toolkit.id === "home-assistant" && data.authConfigurations.length > 0;
+}
+
+function ProviderMark({ toolkit }: { toolkit: ManagedDashboardData["toolkits"][number] }) {
+  if (toolkit.id === "home-assistant") return <span className="provider-mark" aria-hidden="true"><img src="/providers/home-assistant.svg" alt="" width={26} height={26} /></span>;
+  const Icon = toolkit.id.startsWith("octopus") ? Zap : toolkit.runtime.startsWith("mcp") ? Plug : Wrench;
+  return <span className="provider-mark" aria-hidden="true"><Icon size={20} strokeWidth={1.7} /></span>;
+}
 
 type AuthorizationResult = "connected" | "cancelled" | "invalid" | "failed";
 
@@ -148,7 +166,7 @@ function workspaceStep(data: ManagedDashboardData): "connect" | "map" | "agent" 
   const usableConnections = data.connections.filter((connection) => connection.state !== "revoked");
   if (usableConnections.length === 0) return "connect";
   if (!usableConnections.some((connection) => connection.state === "active" && connection.site_id !== null)) return "map";
-  if (!data.keys.some((key) => key.access.kind === "agent" && !key.revoked)) return "agent";
+  if (!data.keys.some((key) => key.access.kind === "agent" && !key.revoked && (!key.expires_at || Date.parse(key.expires_at) > Date.now()))) return "agent";
   return "complete";
 }
 
@@ -165,29 +183,24 @@ export function ManagedConsole({
 }) {
   const canManageCustomMCP = data.identity.can_manage_workspace === true && data.workspace.mode === "managed";
   const [view, setView] = useState<ViewId>(() => initialView === "mcp" && !canManageCustomMCP ? "apps" : initialView);
+  const [catalogueMode, setCatalogueMode] = useState<"accounts" | "tools">("accounts");
   const [query, setQuery] = useState("");
   const [selectedToolkitId, setSelectedToolkitId] = useState(
-    () => data.toolkits.find((toolkit) => toolkit.id === "octopus-energy-account")?.id ?? data.toolkits[0]?.id ?? null,
+    () => data.toolkits.find((toolkit) => canConnect(toolkit, data))?.id ?? null,
   );
   const currentViewId = view === "mcp" && !canManageCustomMCP ? "apps" : view;
   const currentView = VIEW_CONTENT[currentViewId];
   const visibleNavigation = canManageCustomMCP ? NAVIGATION : NAVIGATION.filter((item) => item.id !== "mcp");
-  const categories = useMemo(() => {
-    const values = new Set<string>();
-    for (const toolkit of data.toolkits) {
-      for (const category of toolkit.categories ?? []) values.add(category);
-    }
-    return [...values].sort((left, right) => left.localeCompare(right));
-  }, [data.toolkits]);
   const filteredToolkits = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     return data.toolkits.filter((toolkit) => {
       const searchable = [toolkit.id, toolkit.name, toolkit.description, toolkit.runtime, ...(toolkit.categories ?? [])]
         .join(" ").toLocaleLowerCase();
-      return !normalized || searchable.includes(normalized);
+      return (catalogueMode === "accounts" ? canConnect(toolkit, data) : !canConnect(toolkit, data))
+        && (!normalized || searchable.includes(normalized));
     });
-  }, [data.toolkits, query]);
-  const selectedToolkit = filteredToolkits.find((toolkit) => toolkit.id === selectedToolkitId) ?? null;
+  }, [data, query, catalogueMode]);
+  const selectedToolkit = filteredToolkits.find((toolkit) => toolkit.id === selectedToolkitId) ?? filteredToolkits[0] ?? null;
   const selectedSetup = data.connectionSetups.find((setup) => setup.toolkit_id === selectedToolkit?.id) ?? null;
   const stage = workspaceStep(data);
 
@@ -213,9 +226,11 @@ export function ManagedConsole({
           <strong>{data.workspace.name}</strong>
         </div>
         <nav className="product-navigation managed-navigation" aria-label="Workspace sections">
-          <p className="nav-group-label">Set up</p>
+          {(["Connect", "Workspace", "Advanced"] as const).map(group => (
+          <div className="navigation-group" key={group}>
+          <p className="nav-group-label">{group}</p>
           <div className="nav-items">
-            {visibleNavigation.map((item) => {
+            {visibleNavigation.filter(item => item.group === group).map((item) => {
               const Icon = item.icon;
               return (
                 <button
@@ -235,7 +250,8 @@ export function ManagedConsole({
                 </button>
               );
             })}
-          </div>
+          </div></div>
+          ))}
           <button className="workspace-help-link" type="button" onClick={() => navigate("apps")}>
             <CircleHelp size={15} aria-hidden="true" /> Browse gateway catalogue
           </button>
@@ -270,7 +286,7 @@ export function ManagedConsole({
             </div>
           </div>
 
-          <WorkspaceProgress stage={stage} onNavigate={navigate} />
+          {stage !== "complete" && ["apps", "connections", "agent", "sites"].includes(currentViewId) ? <WorkspaceProgress stage={stage} onNavigate={navigate} /> : null}
 
           {authorizationResult ? (
             <div className={`notice ${authorizationResult === "connected" ? "notice-neutral" : "notice-error"} managed-oauth-notice`} role={authorizationResult === "connected" ? "status" : "alert"}>
@@ -280,7 +296,8 @@ export function ManagedConsole({
 
           {currentViewId === "apps" ? (
             <AppsView
-              categories={categories}
+              catalogueMode={catalogueMode}
+              onCatalogueModeChange={setCatalogueMode}
               data={data}
               filteredToolkits={filteredToolkits}
               query={query}
@@ -298,6 +315,7 @@ export function ManagedConsole({
           {currentViewId === "jobs" ? <JobsHistory jobs={data.jobs} siteNames={Object.fromEntries(data.identity.sites.map(site => [site.id, site.name]))} {...(jobStatus ? { status: jobStatus } : {})} /> : null}
           {currentViewId === "activity" ? <ExecutionActivity activity={data.activity} /> : null}
           {currentViewId === "skills" ? <SkillsCatalogue skills={data.skills} /> : null}
+          {currentViewId === "settings" ? <AccountSettings data={data} onConnectAgent={() => navigate("agent")} /> : null}
           {currentViewId === "agent" ? <AgentKeyPanel keys={data.keys} sites={data.sites} gatewayUrl={data.publicGatewayUrl} /> : null}
         </main>
         <footer className="workspace-footer">
@@ -347,7 +365,8 @@ function WorkspaceProgress({
 }
 
 function AppsView({
-  categories,
+  catalogueMode,
+  onCatalogueModeChange,
   data,
   filteredToolkits,
   query,
@@ -357,7 +376,8 @@ function AppsView({
   onQueryChange,
   onSelectToolkit,
 }: {
-  categories: string[];
+  catalogueMode: "accounts" | "tools";
+  onCatalogueModeChange: (value: "accounts" | "tools") => void;
   data: ManagedDashboardData;
   filteredToolkits: ManagedDashboardData["toolkits"];
   query: string;
@@ -370,21 +390,24 @@ function AppsView({
   return (
     <section className="apps-workbench managed-apps-workbench" aria-label="Toolkit catalogue">
       <div className="catalogue-column">
-        <HomeAssistantConnect configurations={data.authConfigurations} />
+        <div className="catalogue-switch" role="group" aria-label="Integration type">
+          <button type="button" aria-pressed={catalogueMode === "accounts"} onClick={() => onCatalogueModeChange("accounts")}>Connect accounts</button>
+          <button type="button" aria-pressed={catalogueMode === "tools"} onClick={() => onCatalogueModeChange("tools")}>Tool catalogue</button>
+        </div>
         <div className="catalogue-tools">
           <label className="search-field">
             <Search size={17} aria-hidden="true" />
             <span className="visually-hidden">Search toolkits</span>
-            <input value={query} onChange={(event) => onQueryChange(event.currentTarget.value)} placeholder="Search systems, categories or runtimes" />
+            <input value={query} onChange={(event) => onQueryChange(event.currentTarget.value)} placeholder={catalogueMode === "accounts" ? "Search providers" : "Search data and engineering tools"} />
             {query ? <button type="button" className="clear-search" aria-label="Clear search" onClick={() => onQueryChange("")}><X size={15} /></button> : null}
           </label>
-          <div className="filter-caption"><span>Hosted catalogue</span><span>{filteredToolkits.length} {filteredToolkits.length === 1 ? "system" : "systems"}</span></div>
-          {categories.length > 0 ? <p className="catalogue-categories">{categories.slice(0, 6).join(" · ")}</p> : null}
+          <div className="filter-caption"><span>{catalogueMode === "accounts" ? "Provider account connections" : "Data & engineering tools"}</span><span>{filteredToolkits.length} {filteredToolkits.length === 1 ? "system" : "systems"}</span></div>
+          <p className="catalogue-categories">{catalogueMode === "accounts" ? "Use your own account. Credentials remain encrypted in your gateway." : "These tools have no account connection form here. Availability depends on your operator’s configuration."}</p>
         </div>
 
         {filteredToolkits.length > 0 ? (
           <div className="toolkit-list" aria-label="Available toolkits">
-            <div className="toolkit-list-header managed-toolkit-header" aria-hidden="true"><span>System</span><span>Details</span><span>Registry</span><span /></div>
+            <div className="toolkit-list-header managed-toolkit-header" aria-hidden="true"><span>System</span><span>Details</span><span>Access</span><span /></div>
             {filteredToolkits.map((toolkit) => {
               const active = selectedToolkitId === toolkit.id;
               return (
@@ -395,15 +418,15 @@ function AppsView({
                     aria-pressed={active}
                     onClick={() => onSelectToolkit(toolkit.id)}
                   >
-                    <span className="toolkit-name-cell">
+                    <span className="provider-name-group"><ProviderMark toolkit={toolkit} /><span className="toolkit-name-cell">
                       <span className="toolkit-name">{toolkit.name}</span>
                       <span className="toolkit-description">{toolkit.description}</span>
-                    </span>
+                    </span></span>
                     <span className="runtime-cell">{runtimeDescription(toolkit)}</span>
-                    <span className={`status-badge ${statusClass(toolkit.status)}`}>{toolkit.status}</span>
-                    <span className="toolkit-action">{active && selectedSetup?.enabled ? "Connect" : "View setup"} <ArrowRight size={14} aria-hidden="true" /></span>
+                    <span className="status-badge status-neutral">{canConnect(toolkit, data) ? "Account" : "Tool"}</span>
+                    <span className="toolkit-action">{canConnect(toolkit, data) ? "Connect" : "Details"} <ArrowRight size={14} aria-hidden="true" /></span>
                   </button>
-                  {active ? <ToolkitSetup toolkit={toolkit} setup={selectedSetup} mobile /> : null}
+                  {active ? <ToolkitSetup toolkit={toolkit} setup={selectedSetup} configurations={data.authConfigurations} mobile /> : null}
                 </Fragment>
               );
             })}
@@ -418,7 +441,7 @@ function AppsView({
         )}
         <p className="catalogue-note"><ShieldCheck size={15} aria-hidden="true" /> Catalogue details come from this gateway. A registry entry does not mean an account is connected.</p>
       </div>
-      <ToolkitSetup toolkit={selectedToolkit} setup={selectedSetup} />
+      <ToolkitSetup toolkit={selectedToolkit} setup={selectedSetup} configurations={data.authConfigurations} />
     </section>
   );
 }
@@ -427,10 +450,12 @@ function ToolkitSetup({
   toolkit,
   setup,
   mobile = false,
+  configurations,
 }: {
   toolkit: ManagedDashboardData["toolkits"][number] | null;
   setup: ManagedDashboardData["connectionSetups"][number] | null;
   mobile?: boolean;
+  configurations: ManagedDashboardData["authConfigurations"];
 }) {
   const className = `setup-panel managed-setup-panel${mobile ? " mobile-setup" : " desktop-setup"}`;
   if (!toolkit) {
@@ -445,15 +470,15 @@ function ToolkitSetup({
     );
   }
   return (
-    <aside className={className} aria-labelledby="managed-setup-title">
-      <h2 id="managed-setup-title">{toolkit.name}</h2>
+    <aside className={className} aria-label={`${toolkit.name} setup`}>
+      <h2>{toolkit.name}</h2>
       <p className="setup-description">{toolkit.description}</p>
       <dl className="metadata-list">
         <div><dt>Registry ID</dt><dd><code>{toolkit.id}</code></dd></div>
         <div><dt>Runtime</dt><dd>{RUNTIME_LABELS[toolkit.runtime]}</dd></div>
         <div><dt>Status</dt><dd><span className={`status-badge ${statusClass(toolkit.status)}`}>{toolkit.status}</span></dd></div>
       </dl>
-      {setup ? (
+      {toolkit.id === "home-assistant" ? <HomeAssistantConnect configurations={configurations} /> : setup ? (
         <div className="managed-provider-setup">
           <div className="setup-categories">
             <h3>{setup.provider === "octopus" ? "Octopus account" : setup.provider}</h3>
@@ -463,8 +488,8 @@ function ToolkitSetup({
         </div>
       ) : (
         <div className="setup-limitation">
-          <p className="note-title">Setup unavailable</p>
-          <p>This gateway does not expose an account connection flow for this toolkit yet.</p>
+          <p className="note-title">Catalogue tool</p>
+          <p>This tool has no account connection form in this workspace. Your operator configures its runtime and access. Once available, your agent discovers it through the same gateway.</p>
         </div>
       )}
     </aside>

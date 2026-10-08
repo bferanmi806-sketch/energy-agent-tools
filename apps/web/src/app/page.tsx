@@ -28,8 +28,8 @@ function SignIn({ message }: { message: string | null }) {
       </div>
       <section className="signin-panel" aria-labelledby="signin-title">
         <div className="signin-symbol" aria-hidden="true"><KeyRound size={20} /></div>
-        <h1 id="signin-title">Bring your energy systems into reach.</h1>
-        <p className="signin-intro">Sign in to your self-hosted gateway to browse its real connector catalogue and scoped site data.</p>
+        <h1 id="signin-title">Sign in to your gateway</h1>
+        <p className="signin-intro">Use the gateway access key supplied by your operator. Connect your own provider accounts after sign-in; provider API keys do not belong here.</p>
         {message ? (
           <div className="notice notice-error" role="alert">
             <span>{message}</span>
@@ -97,7 +97,7 @@ export default async function HomePage({
         const canManageCustomMCP = state.data.identity.can_manage_workspace === true && state.data.workspace.mode === "managed";
         const initialView = canManageCustomMCP && params?.view === "mcp"
           ? "mcp"
-          : params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs"
+          : params?.view === "connections" || params?.view === "sites" || params?.view === "sharing" || params?.view === "agent" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs" || params?.view === "settings"
             ? params.view
             : "apps";
         const authorizationResult = params?.oauth === "connected" || params?.oauth === "cancelled" || params?.oauth === "invalid" || params?.oauth === "failed"
@@ -105,7 +105,7 @@ export default async function HomePage({
           : undefined;
         return <ManagedConsole data={state.data} initialView={initialView} {...(jobStatus ? { jobStatus } : {})} {...(authorizationResult ? { authorizationResult } : {})} />;
       }
-      return <Console data={state.data} {...(jobStatus ? { jobStatus } : {})} initialView={params?.view === "connections" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs" ? params.view : "apps"} />;
+      return <Console data={state.data} {...(jobStatus ? { jobStatus } : {})} initialView={params?.view === "connections" || params?.view === "skills" || params?.view === "activity" || params?.view === "jobs" || params?.view === "agents" || params?.view === "settings" ? params.view : "apps"} />;
     }
     case "unavailable":
       return <Unavailable message={state.message} />;

@@ -1,8 +1,8 @@
 # Energy Agent Tools web app
 
-This Next.js application reads the authenticated Python gateway through the TypeScript SDK. The catalogue comes from toolkit metadata; it does not have a separate provider list. Users start by browsing systems, then select setup requirements and map data to sites as the control plane is completed.
+This Next.js application reads the authenticated Python gateway through the TypeScript SDK. The catalogue comes from toolkit metadata; it does not have a separate provider list. Users start with **Connect accounts**, choose a supported provider, verify their own account and map it to a site. **Tool catalogue** separately lists data and engineering tools configured by the operator.
 
-Sign in with an operator-provisioned key, managed workspace management key or scoped member agent key. Managed workspace owners can connect an Octopus meter or an approved Home Assistant instance before creating a site, map verified connections, create sites and assets, and issue or revoke agent keys. **Sharing** enrolls existing users with explicit site and connection grants and separate member keys. Members can use their granted connections without managing the owner's workspace. The searchable **Skills** catalogue uses gateway metadata in both managed and agent consoles, including workspaces with no sites. It displays workflow requirements; the connected agent performs scoped execution. **Activity log** shows durable, currently scoped execution metadata and older-page navigation. See the [activity guide](../../docs/execution-activity.md) for retention and recording health. Follow the [managed workspace guide](../../docs/managed-workspaces.md) to bootstrap the gateway and provision users. Other provider forms, generic custom OAuth and custom MCP onboarding remain under development. Use matching current gateway source; the published Python v0.3.0 wheel predates managed workspace routes.
+Sign in with an operator-provisioned key, managed workspace management key or scoped member agent key. Managed workspace owners can connect an Octopus meter or an approved Home Assistant instance before creating a site, map verified connections, create sites and assets, and issue or revoke agent keys. **Sharing** enrolls existing users with explicit site and connection grants and separate member keys. Members can use their granted connections without managing the owner's workspace. The searchable **Skills** catalogue uses gateway metadata in both managed and agent consoles, including workspaces with no sites. It displays workflow requirements; the connected agent performs scoped execution. **Activity log** shows durable, currently scoped execution metadata and older-page navigation. See the [activity guide](../../docs/execution-activity.md) for retention and recording health. Follow the [managed workspace guide](../../docs/managed-workspaces.md) to bootstrap the gateway and provision users. Generic custom OAuth and other provider account forms remain unavailable. Use matching 0.4.0 gateway, SDK and web packages. **Account & settings** shows identity, permissions, key status and gateway configuration.
 
 ## Run locally
 
@@ -43,7 +43,7 @@ The source includes a loopback gateway fixture in `scripts/web_reference_host.py
 
 Select **Octopus Energy Account** in Connect Apps. Enter the Octopus API key,
 13-digit electricity MPAN and meter serial number. The gateway probes the fixed
-Octopus API before saving an encrypted credential. Success opens Connections.
+Octopus API before saving an encrypted credential. Success clears the secret field and links to Connections.
 For a managed workspace, the verified connection waits for site mapping. Create
 or select an owned site, then map the connection. The gateway verifies it again
 before making it available to scoped REST and MCP sessions. For an operator key,
@@ -73,7 +73,7 @@ again with a valid key to restore access.
 Open **Connect my agent**, name the key and select its sites. Create the key and
 copy the MCP configuration. The raw agent key appears once. The configuration
 uses the public gateway URL and the selected site endpoint with bearer
-authentication. Configure your client to accept that MCP transport and headers.
+authentication. Follow the [client-specific instructions](../../docs/agent-client-setup.md) for Codex CLI, Claude Code or another compatible HTTP MCP client. ChatGPT custom MCP apps cannot use this static bearer key directly.
 
 Agent keys cannot manage connections, sites, assets or keys. The key list retains
 only metadata and supports revocation. A workspace management key has broader
