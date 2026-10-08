@@ -528,6 +528,15 @@ test("production web binds Home Assistant callback to the manager session and le
     const configurations = await managerSdk.workspace().authConfigurations();
     assert.deepEqual(configurations.configurations.map((item) => item.id), ["home-assistant"]);
 
+    const handoff = await fetch(`${webUrl}/connect/home-assistant`);
+    assert.equal(handoff.status, 200);
+    assert.equal(handoff.headers.get("referrer-policy"), "no-referrer");
+    const handoffHtml = await handoff.text();
+    assert.match(handoffHtml, /Connect to Home Assistant/);
+    assert.match(handoffHtml, /check the original dashboard tab for an error/);
+    assert.ok(!handoffHtml.includes(managerToken));
+    assert.ok(!handoffHtml.includes(otherManagerToken));
+
     const managerLogin = await post("/api/auth", { token: managerToken });
     assert.equal(managerLogin.status, 303);
     const managerCookie = responseCookie(managerLogin, "energy_web_session");

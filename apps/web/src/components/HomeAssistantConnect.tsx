@@ -10,7 +10,8 @@ type Configuration = WorkspaceOAuthConfigurationsResponse["configurations"][numb
 type AuthorizationState =
   | { kind: "idle" }
   | { kind: "pending" }
-  | { kind: "error"; reason: "instance" | "access" | "gateway" };
+  | { kind: "opened" }
+  | { kind: "error"; reason: "instance" | "access" | "gateway" | "popup" };
 
 const FLOW_STEPS = ["Select provider", "Home Assistant account", "Authorize and verify", "Map to a site"] as const;
 
@@ -18,8 +19,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function authorizationError(reason: "instance" | "access" | "gateway"): string {
+function authorizationError(reason: "instance" | "access" | "gateway" | "popup"): string {
   switch (reason) {
+    case "popup":
+      return "Your browser blocked the authorization tab. Allow pop-ups for this gateway, then try again.";
     case "instance":
       return "This Home Assistant instance could not start authorization. Ask the gateway operator to check its approved OAuth setup.";
     case "access":
@@ -30,13 +33,14 @@ function authorizationError(reason: "instance" | "access" | "gateway"): string {
 }
 
 export function HomeAssistantConnect({ configurations }: { configurations: Configuration[] }) {
+  const router = useRouter();
   const formId = useId();
   const headingId = `${formId}-heading`;
   const [selectedId, setSelectedId] = useState(configurations[0]?.id ?? "");
   const [mappingReviewed, setMappingReviewed] = useState(false);
   const [authorization, setAuthorization] = useState<AuthorizationState>({ kind: "idle" });
   const selected = configurations.find((configuration) => configuration.id === selectedId) ?? configurations[0] ?? null;
-  const activeStep = authorization.kind === "pending" ? 2 : 1;
+  const activeStep = authorization.kind === "pending" || authorization.kind === "opened" ? 2 : 1;
 
   async function authorize(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,6 +53,12 @@ export function HomeAssistantConnect({ configurations }: { configurations: Confi
       }
       body.append(name, value);
     }
+    const providerTab = window.open("/connect/home-assistant", "_blank");
+    if (!providerTab) {
+      setAuthorization({ kind: "error", reason: "popup" });
+      return;
+    }
+    providerTab.opener = null;
     setAuthorization({ kind: "pending" });
     try {
       const response = await fetch("/api/workspace/authorizations", {
@@ -59,10 +69,12 @@ export function HomeAssistantConnect({ configurations }: { configurations: Confi
         signal: AbortSignal.timeout(30_000),
       });
       if (response.status === 401) {
+        providerTab.close();
         window.location.assign("/");
         return;
       }
       if (!response.ok) {
+        providerTab.close();
         setAuthorization({
           kind: "error",
           reason: response.status === 422 ? "instance" : response.status === 403 ? "access" : "gateway",
@@ -83,8 +95,11 @@ export function HomeAssistantConnect({ configurations }: { configurations: Confi
       ) {
         throw new Error("Authorization destination is invalid.");
       }
-      window.location.assign(destination.toString());
+      if (providerTab.closed) throw new Error("Authorization tab was closed.");
+      providerTab.location.replace(destination.toString());
+      setAuthorization({ kind: "opened" });
     } catch {
+      providerTab.close();
       setAuthorization({ kind: "error", reason: "gateway" });
     }
   }
@@ -136,7 +151,7 @@ export function HomeAssistantConnect({ configurations }: { configurations: Confi
                   <button
                     className={`home-assistant-instance${isSelected ? " home-assistant-instance-selected" : ""}`}
                     type="button"
-                    disabled={authorization.kind === "pending"}
+                    disabled={authorization.kind === "pending" || authorization.kind === "opened"}
                     aria-pressed={isSelected}
                     onClick={() => {
                       setSelectedId(configuration.id);
@@ -157,7 +172,7 @@ export function HomeAssistantConnect({ configurations }: { configurations: Confi
 
           {selected ? (
             <form className={`home-assistant-form ${styles.providerForm}`} action="/api/workspace/authorizations" method="post" onSubmit={authorize} aria-busy={authorization.kind === "pending"}>
-              <fieldset disabled={authorization.kind === "pending"} className={styles.formContents}>
+              <fieldset disabled={authorization.kind === "pending" || authorization.kind === "opened"} className={styles.formContents}>
                 <input type="hidden" name="configuration_id" value={selected.id} />
                 <div className={`field-stack ${styles.providerField}`}>
                   <label htmlFor={`${formId}-entity`}>Home Assistant entity ID</label>
@@ -222,10 +237,17 @@ export function HomeAssistantConnect({ configurations }: { configurations: Confi
                 </fieldset>
 
                 <button className="button button-primary home-assistant-submit" type="submit">
-                  {authorization.kind === "pending" ? "Opening Home Assistant…" : "Authorize and verify sensor"} <ArrowRight size={15} aria-hidden="true" />
+                  {authorization.kind === "pending" ? "Opening Home Assistant…" : "Authorize in a new tab"} <ArrowRight size={15} aria-hidden="true" />
                 </button>
               </fieldset>
               {authorization.kind === "pending" ? <p className={styles.pendingMessage} role="status">Opening the approved Home Assistant instance.</p> : null}
+              {authorization.kind === "opened" ? (
+                <div className={styles.accountNote} role="status">
+                  <p>Continue in the Home Assistant tab. After authorization, that tab returns here to verify the sensor and map your connection to a site.</p>
+                  <button className="button button-secondary" type="button" onClick={() => router.refresh()}>Refresh connections</button>
+                  <button className="button button-secondary" type="button" onClick={() => setAuthorization({ kind: "idle" })}>Start again if cancelled</button>
+                </div>
+              ) : null}
               {authorization.kind === "error" ? <p className="notice notice-error" role="alert">{authorizationError(authorization.reason)}</p> : null}
               <p className={styles.revokeNote}>The authorization request expires within an hour; if it does, start again here. After sensor verification, choose a site in Connections. Disconnecting turns off saved access immediately and asks Home Assistant to revoke its grant; if Home Assistant is unavailable, cleanup stays pending and can be retried here.</p>
             </form>
